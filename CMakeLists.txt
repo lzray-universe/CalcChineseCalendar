@@ -8,6 +8,17 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(WIN32)
+    set(LUNAR_DEP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dependent")
+else()
+    set(LUNAR_DEP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dependent-linux")
+endif()
+
+set(LUNAR_ERFA_ROOT "${LUNAR_DEP_ROOT}/erfa")
+if(NOT EXISTS "${LUNAR_ERFA_ROOT}/src")
+    set(LUNAR_ERFA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dependent/erfa")
+endif()
+
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
@@ -49,7 +60,7 @@ target_compile_definitions(lunar_dll PRIVATE LUNAR_BUILD_DLL)
 foreach(tgt lunar lunar_dll)
     target_include_directories(${tgt} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/include
+        ${LUNAR_DEP_ROOT}/cspice/include
     )
 
     if(MSVC)
@@ -59,15 +70,15 @@ endforeach()
 
 if(LUNAR_USE_ERFA)
     file(GLOB ERFA_SOURCES CONFIGURE_DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/dependent/erfa/src/*.c"
+        "${LUNAR_ERFA_ROOT}/src/*.c"
     )
     list(REMOVE_ITEM ERFA_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/dependent/erfa/src/t_erfa_c.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/dependent/erfa/src/t_erfa_c_extra.c"
+        "${LUNAR_ERFA_ROOT}/src/t_erfa_c.c"
+        "${LUNAR_ERFA_ROOT}/src/t_erfa_c_extra.c"
     )
     add_library(erfa STATIC ${ERFA_SOURCES})
     target_include_directories(erfa PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/dependent/erfa/src
+        ${LUNAR_ERFA_ROOT}/src
     )
     target_compile_definitions(erfa PRIVATE
         PACKAGE_VERSION=\"2.0.1\"
@@ -82,12 +93,26 @@ if(LUNAR_USE_ERFA)
     target_compile_definitions(lunar_dll PRIVATE USE_ERFA)
 endif()
 
+if(WIN32)
+    set(LUNAR_CSPICE_LIB "${LUNAR_DEP_ROOT}/cspice/lib/cspice.lib")
+    set(LUNAR_CSUPPORT_LIB "${LUNAR_DEP_ROOT}/cspice/lib/csupport.lib")
+else()
+    set(LUNAR_CSPICE_LIB "${LUNAR_DEP_ROOT}/cspice/lib/cspice.a")
+    set(LUNAR_CSUPPORT_LIB "${LUNAR_DEP_ROOT}/cspice/lib/csupport.a")
+    find_package(Threads REQUIRED)
+endif()
+
 target_link_libraries(lunar PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/lib/cspice.lib
-    ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/lib/csupport.lib
+    ${LUNAR_CSPICE_LIB}
+    ${LUNAR_CSUPPORT_LIB}
 )
 
 target_link_libraries(lunar_dll PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/lib/cspice.lib
-    ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/lib/csupport.lib
+    ${LUNAR_CSPICE_LIB}
+    ${LUNAR_CSUPPORT_LIB}
 )
+
+if(NOT WIN32)
+    target_link_libraries(lunar PRIVATE Threads::Threads)
+    target_link_libraries(lunar_dll PRIVATE Threads::Threads)
+endif()

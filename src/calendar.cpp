@@ -21,6 +21,7 @@
 #endif
 #include<windows.h>
 #else
+#include<sys/wait.h>
 #include<unistd.h>
 #endif
 
@@ -99,7 +100,17 @@ int run_wproc(const std::string&exe_path,const std::string&ephem_path,
 #else
 	std::string cmd=quote_arg(exe_path)+" __root_batch "+quote_arg(ephem_path)+
 					" "+quote_arg(input_path)+" "+quote_arg(out_path);
-	return std::system(cmd.c_str());
+	int status=std::system(cmd.c_str());
+	if(status==-1){
+		return -1;
+	}
+	if(WIFEXITED(status)){
+		return WEXITSTATUS(status);
+	}
+	if(WIFSIGNALED(status)){
+		return 128+WTERMSIG(status);
+	}
+	return status;
 #endif
 }
 
