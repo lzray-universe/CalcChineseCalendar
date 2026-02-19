@@ -12,8 +12,7 @@ if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-add_executable(lunar
-    src/main.cpp
+set(LUNAR_CORE_SOURCES
     src/math.cpp
     src/format.cpp
     src/time_scale.cpp
@@ -29,16 +28,34 @@ add_executable(lunar
     src/query.cpp
     src/interact.cpp
     src/download.cpp
+    src/entry.cpp
 )
 
-target_include_directories(lunar PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/include
+add_executable(lunar
+    src/main.cpp
+    ${LUNAR_CORE_SOURCES}
 )
 
-if(MSVC)
-    target_compile_options(lunar PRIVATE /utf-8)
-endif()
+add_library(lunar_dll SHARED
+    src/c_api.cpp
+    ${LUNAR_CORE_SOURCES}
+)
+
+set_target_properties(lunar_dll PROPERTIES
+    OUTPUT_NAME lunar
+)
+target_compile_definitions(lunar_dll PRIVATE LUNAR_BUILD_DLL)
+
+foreach(tgt lunar lunar_dll)
+    target_include_directories(${tgt} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/include
+    )
+
+    if(MSVC)
+        target_compile_options(${tgt} PRIVATE /utf-8)
+    endif()
+endforeach()
 
 if(LUNAR_USE_ERFA)
     file(GLOB ERFA_SOURCES CONFIGURE_DEPENDS
@@ -60,17 +77,17 @@ if(LUNAR_USE_ERFA)
         SOFA_VERSION=\"20231011\"
     )
     target_link_libraries(lunar PRIVATE erfa)
+    target_link_libraries(lunar_dll PRIVATE erfa)
     target_compile_definitions(lunar PRIVATE USE_ERFA)
+    target_compile_definitions(lunar_dll PRIVATE USE_ERFA)
 endif()
 
-if(MSVC)
-    target_link_libraries(lunar PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/lib/cspice.lib
-        ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/lib/csupport.lib
-    )
-else()
-    target_link_libraries(lunar PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/lib/cspice.lib
-        ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/lib/csupport.lib
-    )
-endif()
+target_link_libraries(lunar PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/lib/cspice.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/lib/csupport.lib
+)
+
+target_link_libraries(lunar_dll PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/lib/cspice.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependent/cspice/lib/csupport.lib
+)
