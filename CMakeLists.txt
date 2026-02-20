@@ -36,6 +36,7 @@ set(LUNAR_CORE_SOURCES
     src/js_writer.cpp
     src/ics.cpp
     src/cli.cpp
+    src/cli_common.cpp
     src/query.cpp
     src/interact.cpp
     src/download.cpp
