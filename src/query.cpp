@@ -8,6 +8,7 @@
 #include<cstdio>
 #include<filesystem>
 #include<fstream>
+#include<functional>
 #include<iomanip>
 #include<iostream>
 #include<limits>
@@ -17,6 +18,7 @@
 #include<stdexcept>
 #include<string>
 #include<tuple>
+#include<unordered_map>
 #include<utility>
 #include<vector>
 
@@ -81,6 +83,32 @@ using cli_util::parse_bool01;
 using cli_util::parse_int;
 using cli_util::req_val;
 using cli_util::to_low;
+
+using OptHandler=
+	std::function<void(const std::vector<std::string>&,std::size_t&,
+					   const std::string&)>;
+using OptMap=std::unordered_map<std::string,OptHandler>;
+
+void apply_opt(const OptMap&handlers,const std::vector<std::string>&args,
+			   std::size_t&idx,const std::string&opt,const std::string&ctx){
+	auto it=handlers.find(opt);
+	if(it==handlers.end()){
+		throw std::invalid_argument("unknown option for "+ctx+": "+opt);
+	}
+	it->second(args,idx,opt);
+}
+
+using FmtHandler=std::function<void()>;
+using FmtMap=std::unordered_map<std::string,FmtHandler>;
+
+void run_fmt(const FmtMap&handlers,const std::string&format,
+			 const std::string&ctx){
+	auto it=handlers.find(format);
+	if(it==handlers.end()){
+		throw std::invalid_argument("invalid --format for "+ctx+": "+format);
+	}
+	it->second();
+}
 
 double norm2pi(double angle){
 	double v=std::fmod(angle,TWO_PI);
@@ -817,19 +845,23 @@ int cmd_info(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=true;
 	bool quiet=false;
+	const OptMap handlers={
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ quiet=true; }},
+	};
 	for(std::size_t i=1;i<args.size();++i){
 		const std::string&opt=args[i];
-		if(opt=="--format"){
-			format=to_low(req_val(args,i,opt));
-		}else if(opt=="--out"){
-			out_path=req_val(args,i,opt);
-		}else if(opt=="--pretty"){
-			pretty=parse_bool01(req_val(args,i,opt),"--pretty");
-		}else if(opt=="--quiet"){
-			quiet=true;
-		}else{
-			throw std::invalid_argument("unknown option for info: "+opt);
-		}
+		apply_opt(handlers,args,i,opt,"info");
 	}
 	chk_fmt(format,{"json","txt"},"info");
 
@@ -849,69 +881,73 @@ int cmd_info(const std::vector<std::string>&args){
 	}
 
 	OutTgt out=open_out(out_path);
-	if(format=="json"){
-		JsonWriter w(*out.stream,pretty);
-		w.obj_begin();
-		write_meta(w,ephem,"Z",{"type=info"});
-		w.key("data");
-		w.obj_begin();
-		w.key("exists");
-		w.value(exists);
-		w.key("fsize_b");
-		w.value(static_cast<int>(
-			size>static_cast<std::uintmax_t>(std::numeric_limits<int>::max())
-				?std::numeric_limits<int>::max()
-				:size));
-		w.key("leap_last");
-		w.value("2017-01-01");
-		w.key("delt_str");
-		w.value("year<1970 or year>2026: em53; [1972,2026]: leap table; "
-				"[1970,1972): legacy");
-		if(has_cov){
-			w.key("spk_cov");
-			w.obj_begin();
-			w.key("jd_tstart");
-			w.value(jd_start);
-			w.key("jd_tdb_end");
-			w.value(jd_end);
-			w.key("u_sisoap");
-			w.value(fmt_iso(TimeScale::tdb_to_utc(jd_start),0,true));
-			w.key("u_eisoap");
-			w.value(fmt_iso(TimeScale::tdb_to_utc(jd_end),0,true));
-			w.obj_end();
-		}else{
-			w.key("spk_cov");
-			w.null_val();
-		}
-		w.key("tool_ver");
-		w.value(tool_ver());
-		w.key("build_time");
-		w.value(std::string(__DATE__)+" "+std::string(__TIME__));
-		w.obj_end();
-		w.obj_end();
-		*out.stream<<"\n";
-	}else{
-		std::ostream&os=*out.stream;
-		os<<"tool=lunar format=txt type=info\n";
-		os<<"ephem.path="<<ephem<<"\n";
-		os<<"ephem.exists="<<(exists?"1":"0")<<"\n";
-		os<<"ephem.fsize_b="<<size<<"\n";
-		os<<"timescale.leap_last=2017-01-01\n";
-		os<<"timescale.delt_str=year<1970 or year>2026: em53; "
-			"[1972,2026]: leap table; [1970,1972): legacy\n";
-		if(has_cov){
-			os<<"spk.jd_tstart="<<format_num(jd_start)<<"\n";
-			os<<"spk.jd_tdb_end="<<format_num(jd_end)<<"\n";
-			os<<"spk.u_sisoap="<<fmt_iso(TimeScale::tdb_to_utc(jd_start),0,true)
-			  <<"\n";
-			os<<"spk.u_eisoap="<<fmt_iso(TimeScale::tdb_to_utc(jd_end),0,true)
-			  <<"\n";
-		}else{
-			os<<"spk.coverage=not_avail\n";
-		}
-		os<<"tool.version="<<tool_ver()<<"\n";
-		os<<"tool.build_time="<<__DATE__<<" "<<__TIME__<<"\n";
-	}
+	const FmtMap fmt_handlers={
+		{"json",[&](){
+			 JsonWriter w(*out.stream,pretty);
+			 w.obj_begin();
+			 write_meta(w,ephem,"Z",{"type=info"});
+			 w.key("data");
+			 w.obj_begin();
+			 w.key("exists");
+			 w.value(exists);
+			 w.key("fsize_b");
+			 w.value(static_cast<int>(
+				 size>static_cast<std::uintmax_t>(std::numeric_limits<int>::max())
+					 ?std::numeric_limits<int>::max()
+					 :size));
+			 w.key("leap_last");
+			 w.value("2017-01-01");
+			 w.key("delt_str");
+			 w.value("year<1970 or year>2026: em53; [1972,2026]: leap table; "
+					 "[1970,1972): legacy");
+			 if(has_cov){
+				 w.key("spk_cov");
+				 w.obj_begin();
+				 w.key("jd_tstart");
+				 w.value(jd_start);
+				 w.key("jd_tdb_end");
+				 w.value(jd_end);
+				 w.key("u_sisoap");
+				 w.value(fmt_iso(TimeScale::tdb_to_utc(jd_start),0,true));
+				 w.key("u_eisoap");
+				 w.value(fmt_iso(TimeScale::tdb_to_utc(jd_end),0,true));
+				 w.obj_end();
+			 }else{
+				 w.key("spk_cov");
+				 w.null_val();
+			 }
+			 w.key("tool_ver");
+			 w.value(tool_ver());
+			 w.key("build_time");
+			 w.value(std::string(__DATE__)+" "+std::string(__TIME__));
+			 w.obj_end();
+			 w.obj_end();
+			 *out.stream<<"\n";
+		 }},
+		{"txt",[&](){
+			 std::ostream&os=*out.stream;
+			 os<<"tool=lunar format=txt type=info\n";
+			 os<<"ephem.path="<<ephem<<"\n";
+			 os<<"ephem.exists="<<(exists?"1":"0")<<"\n";
+			 os<<"ephem.fsize_b="<<size<<"\n";
+			 os<<"timescale.leap_last=2017-01-01\n";
+			 os<<"timescale.delt_str=year<1970 or year>2026: em53; "
+				 "[1972,2026]: leap table; [1970,1972): legacy\n";
+			 if(has_cov){
+				 os<<"spk.jd_tstart="<<format_num(jd_start)<<"\n";
+				 os<<"spk.jd_tdb_end="<<format_num(jd_end)<<"\n";
+				 os<<"spk.u_sisoap="
+				   <<fmt_iso(TimeScale::tdb_to_utc(jd_start),0,true)<<"\n";
+				 os<<"spk.u_eisoap="
+				   <<fmt_iso(TimeScale::tdb_to_utc(jd_end),0,true)<<"\n";
+			 }else{
+				 os<<"spk.coverage=not_avail\n";
+			 }
+			 os<<"tool.version="<<tool_ver()<<"\n";
+			 os<<"tool.build_time="<<__DATE__<<" "<<__TIME__<<"\n";
+		 }},
+	};
+	run_fmt(fmt_handlers,format,"info");
 	note_out(out_path,quiet);
 	return 0;
 }
@@ -929,19 +965,23 @@ int cmd_test(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=true;
 	bool quiet=false;
+	const OptMap handlers={
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ quiet=true; }},
+	};
 	for(std::size_t i=1;i<args.size();++i){
 		const std::string&opt=args[i];
-		if(opt=="--format"){
-			format=to_low(req_val(args,i,opt));
-		}else if(opt=="--out"){
-			out_path=req_val(args,i,opt);
-		}else if(opt=="--pretty"){
-			pretty=parse_bool01(req_val(args,i,opt),"--pretty");
-		}else if(opt=="--quiet"){
-			quiet=true;
-		}else{
-			throw std::invalid_argument("unknown option for selftest: "+opt);
-		}
+		apply_opt(handlers,args,i,opt,"selftest");
 	}
 	chk_fmt(format,{"json","txt"},"selftest");
 
@@ -1012,39 +1052,43 @@ int cmd_test(const std::vector<std::string>&args){
 	}
 
 	OutTgt out=open_out(out_path);
-	if(format=="json"){
-		JsonWriter w(*out.stream,pretty);
-		w.obj_begin();
-		write_meta(w,ephem,"Z",{"type=selftest"});
-		w.key("data");
-		w.obj_begin();
-		w.key("pass");
-		w.value(all_pass);
-		w.key("cases");
-		w.arr_begin();
-		for(const auto&c : cases){
-			w.obj_begin();
-			w.key("id");
-			w.value(c.id);
-			w.key("pass");
-			w.value(c.pass);
-			w.key("message");
-			w.value(c.message);
-			w.obj_end();
-		}
-		w.arr_end();
-		w.obj_end();
-		w.obj_end();
-		*out.stream<<"\n";
-	}else{
-		std::ostream&os=*out.stream;
-		os<<"tool=lunar format=txt type=selftest\n";
-		os<<"result.pass="<<(all_pass?"1":"0")<<"\n";
-		os<<"id\tpass\tmessage\n";
-		for(const auto&c : cases){
-			os<<c.id<<"\t"<<(c.pass?"1":"0")<<"\t"<<c.message<<"\n";
-		}
-	}
+	const FmtMap fmt_handlers={
+		{"json",[&](){
+			 JsonWriter w(*out.stream,pretty);
+			 w.obj_begin();
+			 write_meta(w,ephem,"Z",{"type=selftest"});
+			 w.key("data");
+			 w.obj_begin();
+			 w.key("pass");
+			 w.value(all_pass);
+			 w.key("cases");
+			 w.arr_begin();
+			 for(const auto&c : cases){
+				 w.obj_begin();
+				 w.key("id");
+				 w.value(c.id);
+				 w.key("pass");
+				 w.value(c.pass);
+				 w.key("message");
+				 w.value(c.message);
+				 w.obj_end();
+			 }
+			 w.arr_end();
+			 w.obj_end();
+			 w.obj_end();
+			 *out.stream<<"\n";
+		 }},
+		{"txt",[&](){
+			 std::ostream&os=*out.stream;
+			 os<<"tool=lunar format=txt type=selftest\n";
+			 os<<"result.pass="<<(all_pass?"1":"0")<<"\n";
+			 os<<"id\tpass\tmessage\n";
+			 for(const auto&c : cases){
+				 os<<c.id<<"\t"<<(c.pass?"1":"0")<<"\t"<<c.message<<"\n";
+			 }
+		 }},
+	};
+	run_fmt(fmt_handlers,format,"selftest");
 	note_out(out_path,quiet);
 	return all_pass?0:1;
 }
@@ -1059,21 +1103,25 @@ int cmd_cfg(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=true;
 	bool quiet=false;
+	const OptMap handlers={
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ quiet=true; }},
+	};
 
 	auto parse_opt=[&](std::size_t start){
 		for(std::size_t i=start;i<args.size();++i){
 			const std::string&opt=args[i];
-			if(opt=="--format"){
-				format=to_low(req_val(args,i,opt));
-			}else if(opt=="--out"){
-				out_path=req_val(args,i,opt);
-			}else if(opt=="--pretty"){
-				pretty=parse_bool01(req_val(args,i,opt),"--pretty");
-			}else if(opt=="--quiet"){
-				quiet=true;
-			}else{
-				throw std::invalid_argument("unknown option for config: "+opt);
-			}
+			apply_opt(handlers,args,i,opt,"config");
 		}
 	};
 
@@ -1082,39 +1130,43 @@ int cmd_cfg(const std::vector<std::string>&args){
 		parse_opt(1);
 		chk_fmt(format,{"json","txt"},"config show");
 		OutTgt out=open_out(out_path);
-		if(format=="json"){
-			JsonWriter w(*out.stream,pretty);
-			w.obj_begin();
-			w.key("meta");
-			w.obj_begin();
-			w.key("tool");
-			w.value("lunar");
-			w.key("schema");
-			w.value("lunar.v1");
-			w.obj_end();
-			w.key("data");
-			w.obj_begin();
-			w.key("def_bsp");
-			w.value(cfg.def_bsp);
-			w.key("bsp_dir");
-			w.value(cfg.bsp_dir);
-			w.key("default_tz");
-			w.value(cfg.default_tz);
-			w.key("def_fmt");
-			w.value(cfg.def_fmt);
-			w.key("def_prety");
-			w.value(cfg.def_prety);
-			w.obj_end();
-			w.obj_end();
-			*out.stream<<"\n";
-		}else{
-			*out.stream<<"tool=lunar format=txt type=config\n";
-			*out.stream<<"def_bsp="<<cfg.def_bsp<<"\n";
-			*out.stream<<"bsp_dir="<<cfg.bsp_dir<<"\n";
-			*out.stream<<"default_tz="<<cfg.default_tz<<"\n";
-			*out.stream<<"def_fmt="<<cfg.def_fmt<<"\n";
-			*out.stream<<"def_prety="<<(cfg.def_prety?"1":"0")<<"\n";
-		}
+		const FmtMap fmt_handlers={
+			{"json",[&](){
+				 JsonWriter w(*out.stream,pretty);
+				 w.obj_begin();
+				 w.key("meta");
+				 w.obj_begin();
+				 w.key("tool");
+				 w.value("lunar");
+				 w.key("schema");
+				 w.value("lunar.v1");
+				 w.obj_end();
+				 w.key("data");
+				 w.obj_begin();
+				 w.key("def_bsp");
+				 w.value(cfg.def_bsp);
+				 w.key("bsp_dir");
+				 w.value(cfg.bsp_dir);
+				 w.key("default_tz");
+				 w.value(cfg.default_tz);
+				 w.key("def_fmt");
+				 w.value(cfg.def_fmt);
+				 w.key("def_prety");
+				 w.value(cfg.def_prety);
+				 w.obj_end();
+				 w.obj_end();
+				 *out.stream<<"\n";
+			 }},
+			{"txt",[&](){
+				 *out.stream<<"tool=lunar format=txt type=config\n";
+				 *out.stream<<"def_bsp="<<cfg.def_bsp<<"\n";
+				 *out.stream<<"bsp_dir="<<cfg.bsp_dir<<"\n";
+				 *out.stream<<"default_tz="<<cfg.default_tz<<"\n";
+				 *out.stream<<"def_fmt="<<cfg.def_fmt<<"\n";
+				 *out.stream<<"def_prety="<<(cfg.def_prety?"1":"0")<<"\n";
+			 }},
+		};
+		run_fmt(fmt_handlers,format,"config show");
 		note_out(out_path,quiet);
 		return 0;
 	}
@@ -1126,22 +1178,25 @@ int cmd_cfg(const std::vector<std::string>&args){
 		std::string key=to_low(args[1]);
 		std::string value=args[2];
 		parse_opt(3);
-		if(key=="def_bsp"){
-			cfg.def_bsp=value;
-		}else if(key=="bsp_dir"){
-			cfg.bsp_dir=value;
-		}else if(key=="default_tz"){
-			parse_tz(value);
-			cfg.default_tz=value;
-		}else if(key=="def_fmt"){
-			std::string v=to_low(value);
-			chk_fmt(v,{"txt","json","csv","jsonl","ics"},"config def_fmt");
-			cfg.def_fmt=v;
-		}else if(key=="def_prety"){
-			cfg.def_prety=parse_bool01(value,"def_prety");
-		}else{
+		const std::unordered_map<std::string,std::function<void()>> key_handlers={
+			{"def_bsp",[&](){ cfg.def_bsp=value; }},
+			{"bsp_dir",[&](){ cfg.bsp_dir=value; }},
+			{"default_tz",[&](){
+				 parse_tz(value);
+				 cfg.default_tz=value;
+			 }},
+			{"def_fmt",[&](){
+				 std::string v=to_low(value);
+				 chk_fmt(v,{"txt","json","csv","jsonl","ics"},"config def_fmt");
+				 cfg.def_fmt=v;
+			 }},
+			{"def_prety",[&](){ cfg.def_prety=parse_bool01(value,"def_prety"); }},
+		};
+		auto it=key_handlers.find(key);
+		if(it==key_handlers.end()){
 			throw std::invalid_argument("unknown config key: "+key);
 		}
+		it->second();
 		if(!save_cfg(cfg)){
 			throw std::runtime_error("failed to save config: "+CFG_FILE);
 		}
@@ -1342,24 +1397,23 @@ void cli_at(const AtArgs&args){
 		at_ftxt(eph,args.time_raw,args.input_tz,tz_disp,args.tz,args.events);
 
 	OutTgt out=open_out(args.out);
-	if(format=="json"){
-		JsonWriter w(*out.stream,args.pretty);
-		w.obj_begin();
-		write_meta(
-			w,args.ephem,args.tz,
-			{"农历判日固定按UTC+8民用日执行；--input-tz仅用于解析无时区输入"});
-
-		w.key("input");
-		wr_aijs(w,result);
-
-		w.key("data");
-		wr_adjs(w,result);
-
-		w.obj_end();
-		*out.stream<<"\n";
-	}else{
-		wr_atxt(*out.stream,result,true);
-	}
+	const FmtMap fmt_handlers={
+		{"json",[&](){
+			 JsonWriter w(*out.stream,args.pretty);
+			 w.obj_begin();
+			 write_meta(
+				 w,args.ephem,args.tz,
+				 {"农历判日固定按UTC+8民用日执行；--input-tz仅用于解析无时区输入"});
+			 w.key("input");
+			 wr_aijs(w,result);
+			 w.key("data");
+			 wr_adjs(w,result);
+			 w.obj_end();
+			 *out.stream<<"\n";
+		 }},
+		{"txt",[&](){ wr_atxt(*out.stream,result,true); }},
+	};
+	run_fmt(fmt_handlers,format,"at");
 	note_out(args.out,args.quiet);
 }
 
@@ -1385,128 +1439,139 @@ void cli_conv(const ConvArgs&args){
 		std::string utc_iso=fmt_iso(parsed.jd_utc,0,true);
 		std::string local_iso=fmt_iso(parsed.jd_utc,tz_disp,true);
 
-		if(format=="json"){
-			JsonWriter w(*out.stream,args.pretty);
-			w.obj_begin();
-			write_meta(w,args.ephem,args.tz,{note});
+		const FmtMap fmt_handlers={
+			{"json",[&](){
+				 JsonWriter w(*out.stream,args.pretty);
+				 w.obj_begin();
+				 write_meta(w,args.ephem,args.tz,{note});
 
-			w.key("input");
-			w.obj_begin();
-			w.key("direction");
-			w.value("greg2lun");
-			w.key("value_raw");
-			w.value(args.in_value);
-			w.key("input_tz");
-			w.value(tz_in);
-			w.key("display_tz");
-			w.value(args.tz);
-			w.key("jd_utc");
-			w.value(parsed.jd_utc);
-			w.key("utc_iso");
-			w.value(utc_iso);
-			w.key("loc_iso");
-			w.value(local_iso);
-			w.obj_end();
+				 w.key("input");
+				 w.obj_begin();
+				 w.key("direction");
+				 w.value("greg2lun");
+				 w.key("value_raw");
+				 w.value(args.in_value);
+				 w.key("input_tz");
+				 w.value(tz_in);
+				 w.key("display_tz");
+				 w.value(args.tz);
+				 w.key("jd_utc");
+				 w.value(parsed.jd_utc);
+				 w.key("utc_iso");
+				 w.value(utc_iso);
+				 w.key("loc_iso");
+				 w.value(local_iso);
+				 w.obj_end();
 
-			w.key("data");
-			w.obj_begin();
-			w.key("lunar_date");
-			wr_ljson(w,lunar_date);
+				 w.key("data");
+				 w.obj_begin();
+				 w.key("lunar_date");
+				 wr_ljson(w,lunar_date);
 
-			w.key("greg_date");
-			w.obj_begin();
-			w.key("cst_date");
-			w.value(ymd_str(lunar_date.cst_year,lunar_date.cst_month,
-							lunar_date.cst_day));
-			w.key("cstday_jd");
-			w.value(lunar_date.cstday_jd);
-			w.key("cst_uiso");
-			w.value(fmt_iso(lunar_date.cstday_jd,0,true));
-			w.key("cst_liso");
-			w.value(fmt_iso(lunar_date.cstday_jd,tz_disp,true));
-			w.obj_end();
-			w.obj_end();
+				 w.key("greg_date");
+				 w.obj_begin();
+				 w.key("cst_date");
+				 w.value(ymd_str(lunar_date.cst_year,lunar_date.cst_month,
+								 lunar_date.cst_day));
+				 w.key("cstday_jd");
+				 w.value(lunar_date.cstday_jd);
+				 w.key("cst_uiso");
+				 w.value(fmt_iso(lunar_date.cstday_jd,0,true));
+				 w.key("cst_liso");
+				 w.value(fmt_iso(lunar_date.cstday_jd,tz_disp,true));
+				 w.obj_end();
+				 w.obj_end();
 
-			w.obj_end();
-			*out.stream<<"\n";
-		}else{
-			std::ostream&os=*out.stream;
-			os<<"tool=lunar format=txt type=convert tz_display="<<args.tz<<"\n";
-			os<<"input.direction=greg2lun\n";
-			os<<"input.value_raw="<<args.in_value<<"\n";
-			os<<"input.input_tz="<<tz_in<<"\n";
-			os<<"input.jd_utc="<<format_num(parsed.jd_utc)<<"\n";
-			os<<"input.utc_iso="<<utc_iso<<"\n";
-			os<<"input.loc_iso="<<local_iso<<"\n";
-			os<<"data.lunar_year="<<lunar_date.lunar_year<<"\n";
-			os<<"data.lun_mno="<<lunar_date.lun_mno<<"\n";
-			os<<"data.lun_leap="<<(lunar_date.is_leap?"1":"0")<<"\n";
-			os<<"data.lun_mlab="<<lunar_date.lun_mlab<<"\n";
-			os<<"data.lunar_day="<<lunar_date.lunar_day<<"\n";
-			os<<"data.lun_label="<<lunar_date.lun_label<<"\n";
-			os<<"data.gcst_date="
-			  <<ymd_str(lunar_date.cst_year,lunar_date.cst_month,
-						lunar_date.cst_day)
-			  <<"\n";
-			os<<"data.gcst_jd="<<format_num(lunar_date.cstday_jd)<<"\n";
-		}
+				 w.obj_end();
+				 *out.stream<<"\n";
+			 }},
+			{"txt",[&](){
+				 std::ostream&os=*out.stream;
+				 os<<"tool=lunar format=txt type=convert tz_display="<<args.tz
+				   <<"\n";
+				 os<<"input.direction=greg2lun\n";
+				 os<<"input.value_raw="<<args.in_value<<"\n";
+				 os<<"input.input_tz="<<tz_in<<"\n";
+				 os<<"input.jd_utc="<<format_num(parsed.jd_utc)<<"\n";
+				 os<<"input.utc_iso="<<utc_iso<<"\n";
+				 os<<"input.loc_iso="<<local_iso<<"\n";
+				 os<<"data.lunar_year="<<lunar_date.lunar_year<<"\n";
+				 os<<"data.lun_mno="<<lunar_date.lun_mno<<"\n";
+				 os<<"data.lun_leap="<<(lunar_date.is_leap?"1":"0")<<"\n";
+				 os<<"data.lun_mlab="<<lunar_date.lun_mlab<<"\n";
+				 os<<"data.lunar_day="<<lunar_date.lunar_day<<"\n";
+				 os<<"data.lun_label="<<lunar_date.lun_label<<"\n";
+				 os<<"data.gcst_date="
+				   <<ymd_str(lunar_date.cst_year,lunar_date.cst_month,
+							 lunar_date.cst_day)
+				   <<"\n";
+				 os<<"data.gcst_jd="<<format_num(lunar_date.cstday_jd)<<"\n";
+			 }},
+		};
+		run_fmt(fmt_handlers,format,"convert");
 	}else{
 		GregDate g=
 			res_greg(eph,args.lunar_year,args.lun_mno,args.lunar_day,args.leap);
 		LunDate l_check=res_lun(eph,g.cstday_jd);
 
-		if(format=="json"){
-			JsonWriter w(*out.stream,args.pretty);
-			w.obj_begin();
-			write_meta(w,args.ephem,args.tz,{note});
+		const FmtMap fmt_handlers={
+			{"json",[&](){
+				 JsonWriter w(*out.stream,args.pretty);
+				 w.obj_begin();
+				 write_meta(w,args.ephem,args.tz,{note});
 
-			w.key("input");
-			w.obj_begin();
-			w.key("direction");
-			w.value("lun2greg");
-			w.key("lunar_year");
-			w.value(args.lunar_year);
-			w.key("lun_mno");
-			w.value(args.lun_mno);
-			w.key("lunar_day");
-			w.value(args.lunar_day);
-			w.key("is_leap");
-			w.value(args.leap);
-			w.obj_end();
+				 w.key("input");
+				 w.obj_begin();
+				 w.key("direction");
+				 w.value("lun2greg");
+				 w.key("lunar_year");
+				 w.value(args.lunar_year);
+				 w.key("lun_mno");
+				 w.value(args.lun_mno);
+				 w.key("lunar_day");
+				 w.value(args.lunar_day);
+				 w.key("is_leap");
+				 w.value(args.leap);
+				 w.obj_end();
 
-			w.key("data");
-			w.obj_begin();
-			w.key("greg_date");
-			w.obj_begin();
-			w.key("cst_date");
-			w.value(ymd_str(g.year,g.month,g.day));
-			w.key("cstday_jd");
-			w.value(g.cstday_jd);
-			w.key("cst_uiso");
-			w.value(fmt_iso(g.cstday_jd,0,true));
-			w.key("cst_liso");
-			w.value(fmt_iso(g.cstday_jd,tz_disp,true));
-			w.obj_end();
-			w.key("lunar_date");
-			wr_ljson(w,l_check);
-			w.obj_end();
+				 w.key("data");
+				 w.obj_begin();
+				 w.key("greg_date");
+				 w.obj_begin();
+				 w.key("cst_date");
+				 w.value(ymd_str(g.year,g.month,g.day));
+				 w.key("cstday_jd");
+				 w.value(g.cstday_jd);
+				 w.key("cst_uiso");
+				 w.value(fmt_iso(g.cstday_jd,0,true));
+				 w.key("cst_liso");
+				 w.value(fmt_iso(g.cstday_jd,tz_disp,true));
+				 w.obj_end();
+				 w.key("lunar_date");
+				 wr_ljson(w,l_check);
+				 w.obj_end();
 
-			w.obj_end();
-			*out.stream<<"\n";
-		}else{
-			std::ostream&os=*out.stream;
-			os<<"tool=lunar format=txt type=convert tz_display="<<args.tz<<"\n";
-			os<<"input.direction=lun2greg\n";
-			os<<"input.lunar_year="<<args.lunar_year<<"\n";
-			os<<"input.lun_mno="<<args.lun_mno<<"\n";
-			os<<"input.lunar_day="<<args.lunar_day<<"\n";
-			os<<"input.lun_leap="<<(args.leap?"1":"0")<<"\n";
-			os<<"data.gcst_date="<<ymd_str(g.year,g.month,g.day)<<"\n";
-			os<<"data.gcst_jd="<<format_num(g.cstday_jd)<<"\n";
-			os<<"data.gcst_uiso="<<fmt_iso(g.cstday_jd,0,true)<<"\n";
-			os<<"data.gcst_liso="<<fmt_iso(g.cstday_jd,tz_disp,true)<<"\n";
-			os<<"data.lun_label="<<l_check.lun_label<<"\n";
-		}
+				 w.obj_end();
+				 *out.stream<<"\n";
+			 }},
+			{"txt",[&](){
+				 std::ostream&os=*out.stream;
+				 os<<"tool=lunar format=txt type=convert tz_display="<<args.tz
+				   <<"\n";
+				 os<<"input.direction=lun2greg\n";
+				 os<<"input.lunar_year="<<args.lunar_year<<"\n";
+				 os<<"input.lun_mno="<<args.lun_mno<<"\n";
+				 os<<"input.lunar_day="<<args.lunar_day<<"\n";
+				 os<<"input.lun_leap="<<(args.leap?"1":"0")<<"\n";
+				 os<<"data.gcst_date="<<ymd_str(g.year,g.month,g.day)<<"\n";
+				 os<<"data.gcst_jd="<<format_num(g.cstday_jd)<<"\n";
+				 os<<"data.gcst_uiso="<<fmt_iso(g.cstday_jd,0,true)<<"\n";
+				 os<<"data.gcst_liso="<<fmt_iso(g.cstday_jd,tz_disp,true)
+				   <<"\n";
+				 os<<"data.lun_label="<<l_check.lun_label<<"\n";
+			 }},
+		};
+		run_fmt(fmt_handlers,format,"convert");
 	}
 
 	note_out(args.out,args.quiet);
@@ -1561,87 +1626,93 @@ int run_abcli(const AtArgs&args){
 	}
 
 	OutTgt out=open_out(args.out);
-	if(format=="jsonl"){
-		if(args.meta_once){
-			JsonWriter wm(*out.stream,false);
-			wm.obj_begin();
-			wm.key("meta");
-			write_meta(wm,args.ephem,args.tz,{"batch=true","schema=lunar.v1"});
-			wm.obj_end();
-			*out.stream<<"\n";
-		}
-		for(const auto&row : rows){
-			JsonWriter w(*out.stream,false);
-			w.obj_begin();
-			if(!args.meta_once){
-				write_meta(w,args.ephem,args.tz,
-						   {"batch=true","schema=lunar.v1"});
-			}
-			w.key("line_no");
-			w.value(row.line_no);
-			w.key("raw");
-			w.value(row.raw);
-			if(row.ok){
-				w.key("input");
-				wr_aijs(w,row.data);
-				w.key("data");
-				wr_adjs(w,row.data);
-			}else{
-				w.key("error");
-				w.obj_begin();
-				w.key("message");
-				w.value(row.error);
-				w.obj_end();
-			}
-			w.obj_end();
-			*out.stream<<"\n";
-		}
-	}else if(format=="json"){
-		JsonWriter w(*out.stream,args.pretty);
-		w.obj_begin();
-		write_meta(w,args.ephem,args.tz,{"batch=true","schema=lunar.v1"});
-		w.key("data");
-		w.arr_begin();
-		for(const auto&row : rows){
-			w.obj_begin();
-			w.key("line_no");
-			w.value(row.line_no);
-			w.key("raw");
-			w.value(row.raw);
-			if(row.ok){
-				w.key("input");
-				wr_aijs(w,row.data);
-				w.key("data");
-				wr_adjs(w,row.data);
-			}else{
-				w.key("error");
-				w.obj_begin();
-				w.key("message");
-				w.value(row.error);
-				w.obj_end();
-			}
-			w.obj_end();
-		}
-		w.arr_end();
-		w.obj_end();
-		*out.stream<<"\n";
-	}else{
-		std::ostream&os=*out.stream;
-		os<<"tool=lunar format=txt type=at-batch tz_display="<<args.tz<<"\n";
-		os<<"line_no\tstatus\traw\till_pct\tphase_name\tlunar_"
-			"date\tmessage\n";
-		for(const auto&row : rows){
-			os<<row.line_no<<"\t";
-			if(row.ok){
-				os<<"ok\t"<<row.raw<<"\t"<<format_num(row.data.ill_pct)<<"\t"
-				  <<row.data.phase_name<<"\t"<<row.data.lunar_date.lun_label
-				  <<"\t"
-				  <<"\n";
-			}else{
-				os<<"error\t"<<row.raw<<"\t\t\t\t"<<row.error<<"\n";
-			}
-		}
-	}
+	const FmtMap fmt_handlers={
+		{"jsonl",[&](){
+			 if(args.meta_once){
+				 JsonWriter wm(*out.stream,false);
+				 wm.obj_begin();
+				 wm.key("meta");
+				 write_meta(wm,args.ephem,args.tz,
+							{"batch=true","schema=lunar.v1"});
+				 wm.obj_end();
+				 *out.stream<<"\n";
+			 }
+			 for(const auto&row : rows){
+				 JsonWriter w(*out.stream,false);
+				 w.obj_begin();
+				 if(!args.meta_once){
+					 write_meta(w,args.ephem,args.tz,
+								{"batch=true","schema=lunar.v1"});
+				 }
+				 w.key("line_no");
+				 w.value(row.line_no);
+				 w.key("raw");
+				 w.value(row.raw);
+				 if(row.ok){
+					 w.key("input");
+					 wr_aijs(w,row.data);
+					 w.key("data");
+					 wr_adjs(w,row.data);
+				 }else{
+					 w.key("error");
+					 w.obj_begin();
+					 w.key("message");
+					 w.value(row.error);
+					 w.obj_end();
+				 }
+				 w.obj_end();
+				 *out.stream<<"\n";
+			 }
+		 }},
+		{"json",[&](){
+			 JsonWriter w(*out.stream,args.pretty);
+			 w.obj_begin();
+			 write_meta(w,args.ephem,args.tz,{"batch=true","schema=lunar.v1"});
+			 w.key("data");
+			 w.arr_begin();
+			 for(const auto&row : rows){
+				 w.obj_begin();
+				 w.key("line_no");
+				 w.value(row.line_no);
+				 w.key("raw");
+				 w.value(row.raw);
+				 if(row.ok){
+					 w.key("input");
+					 wr_aijs(w,row.data);
+					 w.key("data");
+					 wr_adjs(w,row.data);
+				 }else{
+					 w.key("error");
+					 w.obj_begin();
+					 w.key("message");
+					 w.value(row.error);
+					 w.obj_end();
+				 }
+				 w.obj_end();
+			 }
+			 w.arr_end();
+			 w.obj_end();
+			 *out.stream<<"\n";
+		 }},
+		{"txt",[&](){
+			 std::ostream&os=*out.stream;
+			 os<<"tool=lunar format=txt type=at-batch tz_display="<<args.tz
+			   <<"\n";
+			 os<<"line_no\tstatus\traw\till_pct\tphase_name\tlunar_"
+				 "date\tmessage\n";
+			 for(const auto&row : rows){
+				 os<<row.line_no<<"\t";
+				 if(row.ok){
+					 os<<"ok\t"<<row.raw<<"\t"<<format_num(row.data.ill_pct)
+					   <<"\t"<<row.data.phase_name<<"\t"
+					   <<row.data.lunar_date.lun_label<<"\t\n";
+				 }else{
+					 os<<"error\t"<<row.raw<<"\t\t\t\t"<<row.error<<"\n";
+				 }
+			 }
+		 }},
+	};
+	run_fmt(fmt_handlers,format,"at");
 	note_out(args.out,args.quiet);
 	return (err_cnt==0)?0:1;
 }
@@ -1742,117 +1813,122 @@ int run_cbcli(const ConvArgs&args){
 
 	OutTgt out=open_out(args.out);
 	const std::string note="农历判日固定按UTC+8民用日执行；--tz仅影响显示";
-	if(format=="jsonl"){
-		if(args.meta_once){
-			JsonWriter wm(*out.stream,false);
-			wm.obj_begin();
-			wm.key("meta");
-			write_meta(wm,args.ephem,args.tz,{note,"batch=true"});
-			wm.obj_end();
-			*out.stream<<"\n";
-		}
-		for(const auto&row : rows){
-			JsonWriter w(*out.stream,false);
-			w.obj_begin();
-			if(!args.meta_once){
-				write_meta(w,args.ephem,args.tz,{note,"batch=true"});
-			}
-			w.key("line_no");
-			w.value(row.line_no);
-			w.key("raw");
-			w.value(row.raw);
-			if(!row.ok){
-				w.key("error");
-				w.obj_begin();
-				w.key("message");
-				w.value(row.error);
-				w.obj_end();
-			}else{
-				w.key("input");
-				w.obj_begin();
-				w.key("direction");
-				w.value(row.direction);
-				w.key("input_tz");
-				w.value(row.tz_in);
-				w.key("jd_utc");
-				w.value(row.jd_utc);
-				w.obj_end();
-				w.key("data");
-				w.obj_begin();
-				w.key("lunar_date");
-				wr_ljson(w,row.lunar_date);
-				w.key("gcst_date");
-				w.value(ymd_str(row.greg_date.year,row.greg_date.month,
-								row.greg_date.day));
-				w.key("gcst_jd");
-				w.value(row.greg_date.cstday_jd);
-				w.obj_end();
-			}
-			w.obj_end();
-			*out.stream<<"\n";
-		}
-	}else if(format=="json"){
-		JsonWriter w(*out.stream,args.pretty);
-		w.obj_begin();
-		write_meta(w,args.ephem,args.tz,{note,"batch=true"});
-		w.key("data");
-		w.arr_begin();
-		for(const auto&row : rows){
-			w.obj_begin();
-			w.key("line_no");
-			w.value(row.line_no);
-			w.key("raw");
-			w.value(row.raw);
-			if(!row.ok){
-				w.key("error");
-				w.obj_begin();
-				w.key("message");
-				w.value(row.error);
-				w.obj_end();
-			}else{
-				w.key("input");
-				w.obj_begin();
-				w.key("direction");
-				w.value(row.direction);
-				w.key("input_tz");
-				w.value(row.tz_in);
-				w.key("jd_utc");
-				w.value(row.jd_utc);
-				w.obj_end();
-				w.key("data");
-				w.obj_begin();
-				w.key("lunar_date");
-				wr_ljson(w,row.lunar_date);
-				w.key("gcst_date");
-				w.value(ymd_str(row.greg_date.year,row.greg_date.month,
-								row.greg_date.day));
-				w.key("gcst_jd");
-				w.value(row.greg_date.cstday_jd);
-				w.obj_end();
-			}
-			w.obj_end();
-		}
-		w.arr_end();
-		w.obj_end();
-		*out.stream<<"\n";
-	}else{
-		std::ostream&os=*out.stream;
-		os<<"tool=lunar format=txt type=convert-batch tz_display="<<args.tz
-		  <<"\n";
-		os<<"line_no\tstatus\traw\tdirection\tgregorian_cst_date\tlunar_"
-			"date\tmessage\n";
-		for(const auto&row : rows){
-			os<<row.line_no<<"\t";
-			if(row.ok){
-				os<<"ok\t"<<row.raw<<"\t"<<row.direction<<"\t"
-				  <<ymd_str(row.greg_date.year,row.greg_date.month,
-							row.greg_date.day)
-				  <<"\t"<<row.lunar_date.lun_label<<"\t\n";
-			}else{
-				os<<"error\t"<<row.raw<<"\t\t\t\t"<<row.error<<"\n";
-			}
-		}
-	}
+	const FmtMap fmt_handlers={
+		{"jsonl",[&](){
+			 if(args.meta_once){
+				 JsonWriter wm(*out.stream,false);
+				 wm.obj_begin();
+				 wm.key("meta");
+				 write_meta(wm,args.ephem,args.tz,{note,"batch=true"});
+				 wm.obj_end();
+				 *out.stream<<"\n";
+			 }
+			 for(const auto&row : rows){
+				 JsonWriter w(*out.stream,false);
+				 w.obj_begin();
+				 if(!args.meta_once){
+					 write_meta(w,args.ephem,args.tz,{note,"batch=true"});
+				 }
+				 w.key("line_no");
+				 w.value(row.line_no);
+				 w.key("raw");
+				 w.value(row.raw);
+				 if(!row.ok){
+					 w.key("error");
+					 w.obj_begin();
+					 w.key("message");
+					 w.value(row.error);
+					 w.obj_end();
+				 }else{
+					 w.key("input");
+					 w.obj_begin();
+					 w.key("direction");
+					 w.value(row.direction);
+					 w.key("input_tz");
+					 w.value(row.tz_in);
+					 w.key("jd_utc");
+					 w.value(row.jd_utc);
+					 w.obj_end();
+					 w.key("data");
+					 w.obj_begin();
+					 w.key("lunar_date");
+					 wr_ljson(w,row.lunar_date);
+					 w.key("gcst_date");
+					 w.value(ymd_str(row.greg_date.year,row.greg_date.month,
+									 row.greg_date.day));
+					 w.key("gcst_jd");
+					 w.value(row.greg_date.cstday_jd);
+					 w.obj_end();
+				 }
+				 w.obj_end();
+				 *out.stream<<"\n";
+			 }
+		 }},
+		{"json",[&](){
+			 JsonWriter w(*out.stream,args.pretty);
+			 w.obj_begin();
+			 write_meta(w,args.ephem,args.tz,{note,"batch=true"});
+			 w.key("data");
+			 w.arr_begin();
+			 for(const auto&row : rows){
+				 w.obj_begin();
+				 w.key("line_no");
+				 w.value(row.line_no);
+				 w.key("raw");
+				 w.value(row.raw);
+				 if(!row.ok){
+					 w.key("error");
+					 w.obj_begin();
+					 w.key("message");
+					 w.value(row.error);
+					 w.obj_end();
+				 }else{
+					 w.key("input");
+					 w.obj_begin();
+					 w.key("direction");
+					 w.value(row.direction);
+					 w.key("input_tz");
+					 w.value(row.tz_in);
+					 w.key("jd_utc");
+					 w.value(row.jd_utc);
+					 w.obj_end();
+					 w.key("data");
+					 w.obj_begin();
+					 w.key("lunar_date");
+					 wr_ljson(w,row.lunar_date);
+					 w.key("gcst_date");
+					 w.value(ymd_str(row.greg_date.year,row.greg_date.month,
+									 row.greg_date.day));
+					 w.key("gcst_jd");
+					 w.value(row.greg_date.cstday_jd);
+					 w.obj_end();
+				 }
+				 w.obj_end();
+			 }
+			 w.arr_end();
+			 w.obj_end();
+			 *out.stream<<"\n";
+		 }},
+		{"txt",[&](){
+			 std::ostream&os=*out.stream;
+			 os<<"tool=lunar format=txt type=convert-batch tz_display="
+			   <<args.tz<<"\n";
+			 os<<"line_no\tstatus\traw\tdirection\tgregorian_cst_date\tlunar_"
+				 "date\tmessage\n";
+			 for(const auto&row : rows){
+				 os<<row.line_no<<"\t";
+				 if(row.ok){
+					 os<<"ok\t"<<row.raw<<"\t"<<row.direction<<"\t"
+					   <<ymd_str(row.greg_date.year,row.greg_date.month,
+								 row.greg_date.day)
+					   <<"\t"<<row.lunar_date.lun_label<<"\t\n";
+				 }else{
+					 os<<"error\t"<<row.raw<<"\t\t\t\t"<<row.error<<"\n";
+				 }
+			 }
+		 }},
+	};
+	run_fmt(fmt_handlers,format,"convert");
 
 	note_out(args.out,args.quiet);
 	return (err_cnt==0)?0:1;
@@ -1886,42 +1962,59 @@ int cmd_at(const std::vector<std::string>&args){
 		a.time_raw=args[i];
 		++i;
 	}
+	const OptMap handlers={
+		{"--time",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 a.time_raw=req_val(src,idx,opt);
+		 }},
+		{"--stdin",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ a.from_stdin=true; }},
+		{"--file",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 a.input_file=req_val(src,idx,opt);
+		 }},
+		{"--input-tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+						  const std::string&opt){
+			 a.input_tz=req_val(src,idx,opt);
+		 }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ a.tz=req_val(src,idx,opt); }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 a.format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ a.out=req_val(src,idx,opt); }},
+		{"--jobs",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 a.jobs=parse_int(req_val(src,idx,opt),"--jobs");
+			 if(a.jobs<1){
+				 throw std::invalid_argument("--jobs must be >= 1");
+			 }
+		 }},
+		{"--meta-once",[&](const std::vector<std::string>&src,std::size_t&idx,
+						   const std::string&opt){
+			 a.meta_once=parse_bool01(req_val(src,idx,opt),"--meta-once");
+		 }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 a.pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ a.quiet=true; }},
+		{"--events",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 a.events=parse_bool01(req_val(src,idx,opt),"--events");
+		 }},
+	};
 
 	for(;i<args.size();++i){
 		const std::string&opt=args[i];
-		if(opt=="--time"){
-			a.time_raw=req_val(args,i,opt);
-		}else if(opt=="--stdin"){
-			a.from_stdin=true;
-		}else if(opt=="--file"){
-			a.input_file=req_val(args,i,opt);
-		}else if(opt=="--input-tz"){
-			a.input_tz=req_val(args,i,opt);
-		}else if(opt=="--tz"){
-			a.tz=req_val(args,i,opt);
-		}else if(opt=="--format"){
-			a.format=to_low(req_val(args,i,opt));
-		}else if(opt=="--out"){
-			a.out=req_val(args,i,opt);
-		}else if(opt=="--jobs"){
-			a.jobs=parse_int(req_val(args,i,opt),"--jobs");
-			if(a.jobs<1){
-				throw std::invalid_argument("--jobs must be >= 1");
-			}
-		}else if(opt=="--meta-once"){
-			a.meta_once=parse_bool01(req_val(args,i,opt),"--meta-once");
-		}else if(opt=="--pretty"){
-			a.pretty=parse_bool01(req_val(args,i,opt),"--pretty");
-		}else if(opt=="--quiet"){
-			a.quiet=true;
-		}else if(opt=="--events"){
-			a.events=parse_bool01(req_val(args,i,opt),"--events");
-		}else if(opt=="-h"||opt=="--help"){
+		if(opt=="-h"||opt=="--help"){
 			use_at();
 			return 0;
-		}else{
-			throw std::invalid_argument("unknown option for at: "+opt);
 		}
+		apply_opt(handlers,args,i,opt,"at");
 	}
 
 	if(a.from_stdin&&!a.input_file.empty()){
@@ -1982,49 +2075,66 @@ int cmd_conv(const std::vector<std::string>&args){
 		c.has_in=true;
 		++i;
 	}
+	const OptMap handlers={
+		{"--from-lunar",[&](const std::vector<std::string>&src,std::size_t&idx,
+							const std::string&){
+			 if(idx+3>=src.size()){
+				 throw std::invalid_argument(
+					 "--from-lunar requires: <year> <month_no> <day>");
+			 }
+			 c.from_lunar=true;
+			 c.lunar_year=parse_int(src[++idx],"lunar_year");
+			 c.lun_mno=parse_int(src[++idx],"lun_mno");
+			 c.lunar_day=parse_int(src[++idx],"lunar_day");
+		 }},
+		{"--stdin",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ c.from_stdin=true; }},
+		{"--file",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 c.input_file=req_val(src,idx,opt);
+		 }},
+		{"--leap",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 c.leap=parse_bool01(req_val(src,idx,opt),"--leap");
+		 }},
+		{"--input-tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+						  const std::string&opt){
+			 c.input_tz=req_val(src,idx,opt);
+		 }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ c.tz=req_val(src,idx,opt); }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 c.format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ c.out=req_val(src,idx,opt); }},
+		{"--jobs",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 c.jobs=parse_int(req_val(src,idx,opt),"--jobs");
+			 if(c.jobs<1){
+				 throw std::invalid_argument("--jobs must be >= 1");
+			 }
+		 }},
+		{"--meta-once",[&](const std::vector<std::string>&src,std::size_t&idx,
+						   const std::string&opt){
+			 c.meta_once=parse_bool01(req_val(src,idx,opt),"--meta-once");
+		 }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 c.pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ c.quiet=true; }},
+	};
 
 	for(;i<args.size();++i){
 		const std::string&opt=args[i];
-		if(opt=="--from-lunar"){
-			if(i+3>=args.size()){
-				throw std::invalid_argument(
-					"--from-lunar requires: <year> <month_no> <day>");
-			}
-			c.from_lunar=true;
-			c.lunar_year=parse_int(args[++i],"lunar_year");
-			c.lun_mno=parse_int(args[++i],"lun_mno");
-			c.lunar_day=parse_int(args[++i],"lunar_day");
-		}else if(opt=="--stdin"){
-			c.from_stdin=true;
-		}else if(opt=="--file"){
-			c.input_file=req_val(args,i,opt);
-		}else if(opt=="--leap"){
-			c.leap=parse_bool01(req_val(args,i,opt),"--leap");
-		}else if(opt=="--input-tz"){
-			c.input_tz=req_val(args,i,opt);
-		}else if(opt=="--tz"){
-			c.tz=req_val(args,i,opt);
-		}else if(opt=="--format"){
-			c.format=to_low(req_val(args,i,opt));
-		}else if(opt=="--out"){
-			c.out=req_val(args,i,opt);
-		}else if(opt=="--jobs"){
-			c.jobs=parse_int(req_val(args,i,opt),"--jobs");
-			if(c.jobs<1){
-				throw std::invalid_argument("--jobs must be >= 1");
-			}
-		}else if(opt=="--meta-once"){
-			c.meta_once=parse_bool01(req_val(args,i,opt),"--meta-once");
-		}else if(opt=="--pretty"){
-			c.pretty=parse_bool01(req_val(args,i,opt),"--pretty");
-		}else if(opt=="--quiet"){
-			c.quiet=true;
-		}else if(opt=="-h"||opt=="--help"){
+		if(opt=="-h"||opt=="--help"){
 			use_conv();
 			return 0;
-		}else{
-			throw std::invalid_argument("unknown option for convert: "+opt);
 		}
+		apply_opt(handlers,args,i,opt,"convert");
 	}
 
 	if(c.from_lunar&&c.has_in){
@@ -2296,26 +2406,32 @@ int cmd_day(const std::vector<std::string>&args){
 	bool quiet=false;
 	std::string at_time="12:00:00";
 	bool inc_ev=true;
+	const OptMap handlers={
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ tz=req_val(src,idx,opt); }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ quiet=true; }},
+		{"--at",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ at_time=req_val(src,idx,opt); }},
+		{"--events",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 inc_ev=parse_bool01(req_val(src,idx,opt),"--events");
+		 }},
+	};
 
 	for(std::size_t i=2;i<args.size();++i){
 		const std::string&opt=args[i];
-		if(opt=="--tz"){
-			tz=req_val(args,i,opt);
-		}else if(opt=="--format"){
-			format=to_low(req_val(args,i,opt));
-		}else if(opt=="--out"){
-			out_path=req_val(args,i,opt);
-		}else if(opt=="--pretty"){
-			pretty=parse_bool01(req_val(args,i,opt),"--pretty");
-		}else if(opt=="--quiet"){
-			quiet=true;
-		}else if(opt=="--at"){
-			at_time=req_val(args,i,opt);
-		}else if(opt=="--events"){
-			inc_ev=parse_bool01(req_val(args,i,opt),"--events");
-		}else{
-			throw std::invalid_argument("unknown option for day: "+opt);
-		}
+		apply_opt(handlers,args,i,opt,"day");
 	}
 	chk_fmt(format,{"json","txt","csv","jsonl"},"day");
 
@@ -2351,8 +2467,8 @@ int cmd_day(const std::vector<std::string>&args){
 	}
 
 	OutTgt out=open_out(out_path);
-	if(format=="json"||format=="jsonl"){
-		JsonWriter w(*out.stream,(format=="json")?pretty:false);
+	auto write_json=[&](bool json_pretty){
+		JsonWriter w(*out.stream,json_pretty);
 		w.obj_begin();
 		write_meta(w,ephem,tz,{"type=day","农历判日固定UTC+8"});
 		w.key("input");
@@ -2385,40 +2501,47 @@ int cmd_day(const std::vector<std::string>&args){
 		w.obj_end();
 		w.obj_end();
 		*out.stream<<"\n";
-	}else if(format=="csv"){
-		std::string summary;
-		for(std::size_t i=0;i<day_events.size();++i){
-			if(i!=0){
-				summary+="|";
-			}
-			summary+=day_events[i].name;
-		}
-		*out.stream<<"date,lun_label,lun_mlab,is_leap,lunar_"
-					 "day,ill_pct,phase_name,smp_tloc"
-					 "iso,ev_sum\n";
-		*out.stream<<csv_quote(date_text)<<","
-				   <<csv_quote(atd.lunar_date.lun_label)<<","
-				   <<csv_quote(atd.lunar_date.lun_mlab)<<","
-				   <<(atd.lunar_date.is_leap?"1":"0")<<","
-				   <<atd.lunar_date.lunar_day<<","<<format_num(atd.ill_pct)<<","
-				   <<csv_quote(atd.phase_name)<<","<<csv_quote(atd.local_iso)
-				   <<","<<csv_quote(summary)<<"\n";
-	}else{
-		std::ostream&os=*out.stream;
-		os<<"tool=lunar format=txt type=day tz_display="<<tz<<"\n";
-		os<<"input.date="<<date_text<<"\n";
-		os<<"input.smp_time="<<at_time<<"\n";
-		os<<"data.lun_label="<<atd.lunar_date.lun_label<<"\n";
-		os<<"data.ill_pct="<<format_num(atd.ill_pct)<<"\n";
-		os<<"data.phase_name="<<atd.phase_name<<"\n";
-		os<<"data.smp_liso="<<atd.local_iso<<"\n";
-		os<<"[events]\n";
-		os<<"kind\tcode\tname\tjd_utc\ttm_liso\n";
-		for(const auto&ev : day_events){
-			os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"
-			  <<format_num(ev.jd_utc)<<"\t"<<ev.loc_iso<<"\n";
-		}
-	}
+	};
+	const FmtMap fmt_handlers={
+		{"json",[&](){ write_json(pretty); }},
+		{"jsonl",[&](){ write_json(false); }},
+		{"csv",[&](){
+			 std::string summary;
+			 for(std::size_t i=0;i<day_events.size();++i){
+				 if(i!=0){
+					 summary+="|";
+				 }
+				 summary+=day_events[i].name;
+			 }
+			 *out.stream<<"date,lun_label,lun_mlab,is_leap,lunar_"
+						  "day,ill_pct,phase_name,smp_tloc"
+						  "iso,ev_sum\n";
+			 *out.stream<<csv_quote(date_text)<<","
+						<<csv_quote(atd.lunar_date.lun_label)<<","
+						<<csv_quote(atd.lunar_date.lun_mlab)<<","
+						<<(atd.lunar_date.is_leap?"1":"0")<<","
+						<<atd.lunar_date.lunar_day<<","<<format_num(atd.ill_pct)
+						<<","<<csv_quote(atd.phase_name)<<","
+						<<csv_quote(atd.local_iso)<<","<<csv_quote(summary)<<"\n";
+		 }},
+		{"txt",[&](){
+			 std::ostream&os=*out.stream;
+			 os<<"tool=lunar format=txt type=day tz_display="<<tz<<"\n";
+			 os<<"input.date="<<date_text<<"\n";
+			 os<<"input.smp_time="<<at_time<<"\n";
+			 os<<"data.lun_label="<<atd.lunar_date.lun_label<<"\n";
+			 os<<"data.ill_pct="<<format_num(atd.ill_pct)<<"\n";
+			 os<<"data.phase_name="<<atd.phase_name<<"\n";
+			 os<<"data.smp_liso="<<atd.local_iso<<"\n";
+			 os<<"[events]\n";
+			 os<<"kind\tcode\tname\tjd_utc\ttm_liso\n";
+			 for(const auto&ev : day_events){
+				 os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"
+				   <<format_num(ev.jd_utc)<<"\t"<<ev.loc_iso<<"\n";
+			 }
+		 }},
+	};
+	run_fmt(fmt_handlers,format,"day");
 	note_out(out_path,quiet);
 	return 0;
 }
@@ -2443,22 +2566,26 @@ int cmd_mview(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=cfg.def_prety;
 	bool quiet=false;
+	const OptMap handlers={
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ tz=req_val(src,idx,opt); }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ quiet=true; }},
+	};
 
 	for(std::size_t i=2;i<args.size();++i){
 		const std::string&opt=args[i];
-		if(opt=="--tz"){
-			tz=req_val(args,i,opt);
-		}else if(opt=="--format"){
-			format=to_low(req_val(args,i,opt));
-		}else if(opt=="--out"){
-			out_path=req_val(args,i,opt);
-		}else if(opt=="--pretty"){
-			pretty=parse_bool01(req_val(args,i,opt),"--pretty");
-		}else if(opt=="--quiet"){
-			quiet=true;
-		}else{
-			throw std::invalid_argument("unknown option for monthview: "+opt);
-		}
+		apply_opt(handlers,args,i,opt,"monthview");
 	}
 	chk_fmt(format,{"json","txt","csv"},"monthview");
 	int year=0;
@@ -2511,57 +2638,64 @@ int cmd_mview(const std::vector<std::string>&args){
 	}
 
 	OutTgt out=open_out(out_path);
-	if(format=="json"){
-		JsonWriter w(*out.stream,pretty);
-		w.obj_begin();
-		write_meta(w,ephem,tz,{"type=monthview","农历判日固定UTC+8"});
-		w.key("input");
-		w.obj_begin();
-		w.key("month");
-		w.value(ym);
-		w.obj_end();
-		w.key("data");
-		w.arr_begin();
-		for(const auto&row : rows){
-			w.obj_begin();
-			w.key("greg_date");
-			w.value(row.greg_date);
-			w.key("lun_label");
-			w.value(row.lun_label);
-			w.key("is_leap");
-			w.value(row.is_leap);
-			w.key("lun_mlab");
-			w.value(row.lun_mlab);
-			w.key("ill_pct");
-			w.value(row.ill_pct);
-			w.key("ev_sum");
-			w.value(row.ev_sum);
-			w.obj_end();
-		}
-		w.arr_end();
-		w.obj_end();
-		*out.stream<<"\n";
-	}else if(format=="csv"){
-		*out.stream<<"greg_date,lun_label,is_leap,lun_m_"
-					 "label,ill_pct,ev_sum\n";
-		for(const auto&row : rows){
-			*out.stream<<csv_quote(row.greg_date)<<","<<csv_quote(row.lun_label)
-					   <<","<<(row.is_leap?"1":"0")<<","
-					   <<csv_quote(row.lun_mlab)<<","<<format_num(row.ill_pct)
-					   <<","<<csv_quote(row.ev_sum)<<"\n";
-		}
-	}else{
-		std::ostream&os=*out.stream;
-		os<<"tool=lunar format=txt type=monthview tz_display="<<tz<<"\n";
-		os<<"input.month="<<ym<<"\n";
-		os<<"greg_date\tlunar_date_label\tis_leap\tlunar_month_"
-			"label\till_pct\tevents_summary\n";
-		for(const auto&row : rows){
-			os<<row.greg_date<<"\t"<<row.lun_label<<"\t"<<(row.is_leap?"1":"0")
-			  <<"\t"<<row.lun_mlab<<"\t"<<format_num(row.ill_pct)<<"\t"
-			  <<row.ev_sum<<"\n";
-		}
-	}
+	const FmtMap fmt_handlers={
+		{"json",[&](){
+			 JsonWriter w(*out.stream,pretty);
+			 w.obj_begin();
+			 write_meta(w,ephem,tz,{"type=monthview","农历判日固定UTC+8"});
+			 w.key("input");
+			 w.obj_begin();
+			 w.key("month");
+			 w.value(ym);
+			 w.obj_end();
+			 w.key("data");
+			 w.arr_begin();
+			 for(const auto&row : rows){
+				 w.obj_begin();
+				 w.key("greg_date");
+				 w.value(row.greg_date);
+				 w.key("lun_label");
+				 w.value(row.lun_label);
+				 w.key("is_leap");
+				 w.value(row.is_leap);
+				 w.key("lun_mlab");
+				 w.value(row.lun_mlab);
+				 w.key("ill_pct");
+				 w.value(row.ill_pct);
+				 w.key("ev_sum");
+				 w.value(row.ev_sum);
+				 w.obj_end();
+			 }
+			 w.arr_end();
+			 w.obj_end();
+			 *out.stream<<"\n";
+		 }},
+		{"csv",[&](){
+			 *out.stream<<"greg_date,lun_label,is_leap,lun_m_"
+						  "label,ill_pct,ev_sum\n";
+			 for(const auto&row : rows){
+				 *out.stream<<csv_quote(row.greg_date)<<","
+						   <<csv_quote(row.lun_label)<<","
+						   <<(row.is_leap?"1":"0")<<","
+						   <<csv_quote(row.lun_mlab)<<","
+						   <<format_num(row.ill_pct)<<","
+						   <<csv_quote(row.ev_sum)<<"\n";
+			 }
+		 }},
+		{"txt",[&](){
+			 std::ostream&os=*out.stream;
+			 os<<"tool=lunar format=txt type=monthview tz_display="<<tz<<"\n";
+			 os<<"input.month="<<ym<<"\n";
+			 os<<"greg_date\tlunar_date_label\tis_leap\tlunar_month_"
+				 "label\till_pct\tevents_summary\n";
+			 for(const auto&row : rows){
+				 os<<row.greg_date<<"\t"<<row.lun_label<<"\t"
+				   <<(row.is_leap?"1":"0")<<"\t"<<row.lun_mlab<<"\t"
+				   <<format_num(row.ill_pct)<<"\t"<<row.ev_sum<<"\n";
+			 }
+		 }},
+	};
+	run_fmt(fmt_handlers,format,"monthview");
 	note_out(out_path,quiet);
 	return 0;
 }
@@ -2589,31 +2723,39 @@ int cmd_next(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=cfg.def_prety;
 	bool quiet=false;
+	const OptMap handlers={
+		{"--from",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 from_time=req_val(src,idx,opt);
+		 }},
+		{"--count",[&](const std::vector<std::string>&src,std::size_t&idx,
+					   const std::string&opt){
+			 count=parse_int(req_val(src,idx,opt),"--count");
+			 if(count<1){
+				 throw std::invalid_argument("--count must be >=1");
+			 }
+		 }},
+		{"--kinds",[&](const std::vector<std::string>&src,std::size_t&idx,
+					   const std::string&opt){ kinds=req_val(src,idx,opt); }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ tz=req_val(src,idx,opt); }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ quiet=true; }},
+	};
 
 	for(std::size_t i=1;i<args.size();++i){
 		const std::string&opt=args[i];
-		if(opt=="--from"){
-			from_time=req_val(args,i,opt);
-		}else if(opt=="--count"){
-			count=parse_int(req_val(args,i,opt),"--count");
-			if(count<1){
-				throw std::invalid_argument("--count must be >=1");
-			}
-		}else if(opt=="--kinds"){
-			kinds=req_val(args,i,opt);
-		}else if(opt=="--tz"){
-			tz=req_val(args,i,opt);
-		}else if(opt=="--format"){
-			format=to_low(req_val(args,i,opt));
-		}else if(opt=="--out"){
-			out_path=req_val(args,i,opt);
-		}else if(opt=="--pretty"){
-			pretty=parse_bool01(req_val(args,i,opt),"--pretty");
-		}else if(opt=="--quiet"){
-			quiet=true;
-		}else{
-			throw std::invalid_argument("unknown option for next: "+opt);
-		}
+		apply_opt(handlers,args,i,opt,"next");
 	}
 	if(from_time.empty()){
 		throw std::invalid_argument("next requires --from <time>");
@@ -2653,17 +2795,14 @@ int cmd_next(const std::vector<std::string>&args){
 	}
 
 	OutTgt out=open_out(out_path);
-	if(format=="json"){
-		wr_eljs(*out.stream,ephem,tz,pretty,picked,"next");
-	}else if(format=="txt"){
-		wr_eltxt(*out.stream,tz,picked,"next");
-	}else if(format=="csv"){
-		wr_elcsv(*out.stream,picked);
-	}else if(format=="jsonl"){
-		wr_eljsl(*out.stream,ephem,tz,picked,"next");
-	}else{
-		wr_elics(*out.stream,ephem,"lunar-next",picked);
-	}
+	const FmtMap fmt_handlers={
+		{"json",[&](){ wr_eljs(*out.stream,ephem,tz,pretty,picked,"next"); }},
+		{"txt",[&](){ wr_eltxt(*out.stream,tz,picked,"next"); }},
+		{"csv",[&](){ wr_elcsv(*out.stream,picked); }},
+		{"jsonl",[&](){ wr_eljsl(*out.stream,ephem,tz,picked,"next"); }},
+		{"ics",[&](){ wr_elics(*out.stream,ephem,"lunar-next",picked); }},
+	};
+	run_fmt(fmt_handlers,format,"next");
 	note_out(out_path,quiet);
 	return 0;
 }
@@ -2691,28 +2830,34 @@ int cmd_range(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=cfg.def_prety;
 	bool quiet=false;
+	const OptMap handlers={
+		{"--from",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 from_time=req_val(src,idx,opt);
+		 }},
+		{"--to",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ to_time=req_val(src,idx,opt); }},
+		{"--kinds",[&](const std::vector<std::string>&src,std::size_t&idx,
+					   const std::string&opt){ kinds=req_val(src,idx,opt); }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ tz=req_val(src,idx,opt); }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ quiet=true; }},
+	};
 
 	for(std::size_t i=1;i<args.size();++i){
 		const std::string&opt=args[i];
-		if(opt=="--from"){
-			from_time=req_val(args,i,opt);
-		}else if(opt=="--to"){
-			to_time=req_val(args,i,opt);
-		}else if(opt=="--kinds"){
-			kinds=req_val(args,i,opt);
-		}else if(opt=="--tz"){
-			tz=req_val(args,i,opt);
-		}else if(opt=="--format"){
-			format=to_low(req_val(args,i,opt));
-		}else if(opt=="--out"){
-			out_path=req_val(args,i,opt);
-		}else if(opt=="--pretty"){
-			pretty=parse_bool01(req_val(args,i,opt),"--pretty");
-		}else if(opt=="--quiet"){
-			quiet=true;
-		}else{
-			throw std::invalid_argument("unknown option for range: "+opt);
-		}
+		apply_opt(handlers,args,i,opt,"range");
 	}
 	if(from_time.empty()||to_time.empty()){
 		throw std::invalid_argument(
@@ -2732,17 +2877,14 @@ int cmd_range(const std::vector<std::string>&args){
 										  filter,tz_off,quiet,false);
 
 	OutTgt out=open_out(out_path);
-	if(format=="json"){
-		wr_eljs(*out.stream,ephem,tz,pretty,picked,"range");
-	}else if(format=="txt"){
-		wr_eltxt(*out.stream,tz,picked,"range");
-	}else if(format=="csv"){
-		wr_elcsv(*out.stream,picked);
-	}else if(format=="jsonl"){
-		wr_eljsl(*out.stream,ephem,tz,picked,"range");
-	}else{
-		wr_elics(*out.stream,ephem,"lunar-range",picked);
-	}
+	const FmtMap fmt_handlers={
+		{"json",[&](){ wr_eljs(*out.stream,ephem,tz,pretty,picked,"range"); }},
+		{"txt",[&](){ wr_eltxt(*out.stream,tz,picked,"range"); }},
+		{"csv",[&](){ wr_elcsv(*out.stream,picked); }},
+		{"jsonl",[&](){ wr_eljsl(*out.stream,ephem,tz,picked,"range"); }},
+		{"ics",[&](){ wr_elics(*out.stream,ephem,"lunar-range",picked); }},
+	};
+	run_fmt(fmt_handlers,format,"range");
 	note_out(out_path,quiet);
 	return 0;
 }
@@ -2765,26 +2907,34 @@ int cmd_search(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=true;
 	bool quiet=false;
+	const OptMap handlers={
+		{"--from",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 from_time=req_val(src,idx,opt);
+		 }},
+		{"--count",[&](const std::vector<std::string>&src,std::size_t&idx,
+					   const std::string&opt){
+			 count=parse_int(req_val(src,idx,opt),"--count");
+		 }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ tz=req_val(src,idx,opt); }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ quiet=true; }},
+	};
 
 	for(std::size_t i=2;i<args.size();++i){
 		const std::string&opt=args[i];
-		if(opt=="--from"){
-			from_time=req_val(args,i,opt);
-		}else if(opt=="--count"){
-			count=parse_int(req_val(args,i,opt),"--count");
-		}else if(opt=="--format"){
-			format=to_low(req_val(args,i,opt));
-		}else if(opt=="--tz"){
-			tz=req_val(args,i,opt);
-		}else if(opt=="--out"){
-			out_path=req_val(args,i,opt);
-		}else if(opt=="--pretty"){
-			pretty=parse_bool01(req_val(args,i,opt),"--pretty");
-		}else if(opt=="--quiet"){
-			quiet=true;
-		}else{
-			throw std::invalid_argument("unknown option for search: "+opt);
-		}
+		apply_opt(handlers,args,i,opt,"search");
 	}
 
 	std::istringstream iss(to_low(query));
@@ -2815,20 +2965,18 @@ int cmd_search(const std::vector<std::string>&args){
 		next_args.push_back("--quiet");
 	}
 
-	if(b=="full_moon"||b=="new_moon"||b=="fst_qtr"||b=="lst_qtr"){
+	const std::unordered_map<std::string,std::string> kind_hints={
+		{"full_moon","lunar_phase"},
+		{"new_moon","lunar_phase"},
+		{"fst_qtr","lunar_phase"},
+		{"lst_qtr","lunar_phase"},
+		{"solar_term","solar_term"},
+		{"lunar_phase","lunar_phase"},
+	};
+	auto it=kind_hints.find(b);
+	if(it!=kind_hints.end()){
 		next_args.push_back("--kinds");
-		next_args.push_back("lunar_phase");
-		return cmd_next(next_args);
-	}
-	if(b=="solar_term"){
-		next_args.push_back("--kinds");
-		next_args.push_back("solar_term");
-		return cmd_next(next_args);
-	}
-	if(b=="lunar_phase"){
-		next_args.push_back("--kinds");
-		next_args.push_back("lunar_phase");
-		return cmd_next(next_args);
+		next_args.push_back(it->second);
 	}
 	return cmd_next(next_args);
 }
@@ -2852,22 +3000,26 @@ int cmd_fest(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=cfg.def_prety;
 	bool quiet=false;
+	const OptMap handlers={
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ tz=req_val(src,idx,opt); }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ quiet=true; }},
+	};
 
 	for(std::size_t i=2;i<args.size();++i){
 		const std::string&opt=args[i];
-		if(opt=="--tz"){
-			tz=req_val(args,i,opt);
-		}else if(opt=="--format"){
-			format=to_low(req_val(args,i,opt));
-		}else if(opt=="--out"){
-			out_path=req_val(args,i,opt);
-		}else if(opt=="--pretty"){
-			pretty=parse_bool01(req_val(args,i,opt),"--pretty");
-		}else if(opt=="--quiet"){
-			quiet=true;
-		}else{
-			throw std::invalid_argument("unknown option for festival: "+opt);
-		}
+		apply_opt(handlers,args,i,opt,"festival");
 	}
 	chk_fmt(format,{"json","txt","csv"},"festival");
 
@@ -2876,13 +3028,14 @@ int cmd_fest(const std::vector<std::string>&args){
 	std::vector<EventRec> festivals=bld_fest(eph,year,tz_off);
 
 	OutTgt out=open_out(out_path);
-	if(format=="json"){
-		wr_eljs(*out.stream,ephem,tz,pretty,festivals,"festival");
-	}else if(format=="csv"){
-		wr_elcsv(*out.stream,festivals);
-	}else{
-		wr_eltxt(*out.stream,tz,festivals,"festival");
-	}
+	const FmtMap fmt_handlers={
+		{"json",[&](){
+			 wr_eljs(*out.stream,ephem,tz,pretty,festivals,"festival");
+		 }},
+		{"csv",[&](){ wr_elcsv(*out.stream,festivals); }},
+		{"txt",[&](){ wr_eltxt(*out.stream,tz,festivals,"festival"); }},
+	};
+	run_fmt(fmt_handlers,format,"festival");
 	note_out(out_path,quiet);
 	return 0;
 }
@@ -2906,22 +3059,26 @@ int cmd_alm(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=cfg.def_prety;
 	bool quiet=false;
+	const OptMap handlers={
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ tz=req_val(src,idx,opt); }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ quiet=true; }},
+	};
 
 	for(std::size_t i=2;i<args.size();++i){
 		const std::string&opt=args[i];
-		if(opt=="--tz"){
-			tz=req_val(args,i,opt);
-		}else if(opt=="--format"){
-			format=to_low(req_val(args,i,opt));
-		}else if(opt=="--out"){
-			out_path=req_val(args,i,opt);
-		}else if(opt=="--pretty"){
-			pretty=parse_bool01(req_val(args,i,opt),"--pretty");
-		}else if(opt=="--quiet"){
-			quiet=true;
-		}else{
-			throw std::invalid_argument("unknown option for almanac: "+opt);
-		}
+		apply_opt(handlers,args,i,opt,"almanac");
 	}
 	chk_fmt(format,{"json","txt","csv"},"almanac");
 
@@ -2954,75 +3111,82 @@ int cmd_alm(const std::vector<std::string>&args){
 	}
 
 	OutTgt out=open_out(out_path);
-	if(format=="json"){
-		JsonWriter w(*out.stream,pretty);
-		w.obj_begin();
-		write_meta(w,ephem,tz,{"type=almanac","农历判日固定UTC+8"});
-		w.key("input");
-		w.obj_begin();
-		w.key("date");
-		w.value(date_text);
-		w.obj_end();
-		w.key("data");
-		w.obj_begin();
-		w.key("lunar_date");
-		wr_ljson(w,atd.lunar_date);
-		w.key("ill_pct");
-		w.value(atd.ill_pct);
-		w.key("phase_name");
-		w.value(atd.phase_name);
-		w.key("events");
-		w.arr_begin();
-		for(const auto&ev : day_events){
-			wr_ejson(w,ev);
-		}
-		w.arr_end();
-		w.key("festivals");
-		w.arr_begin();
-		for(const auto&ev : day_fest){
-			wr_ejson(w,ev);
-		}
-		w.arr_end();
-		w.obj_end();
-		w.obj_end();
-		*out.stream<<"\n";
-	}else if(format=="csv"){
-		std::string ev_sum2;
-		for(std::size_t i=0;i<day_events.size();++i){
-			if(i!=0){
-				ev_sum2+="|";
-			}
-			ev_sum2+=day_events[i].name;
-		}
-		std::string fest_sum;
-		for(std::size_t i=0;i<day_fest.size();++i){
-			if(i!=0){
-				fest_sum+="|";
-			}
-			fest_sum+=day_fest[i].name;
-		}
-		*out.stream<<"date,lun_label,ill_pct,phase_name,"
-					 "events,festivals\n";
-		*out.stream<<csv_quote(date_text)<<","
-				   <<csv_quote(atd.lunar_date.lun_label)<<","
-				   <<format_num(atd.ill_pct)<<","<<csv_quote(atd.phase_name)
-				   <<","<<csv_quote(ev_sum2)<<","<<csv_quote(fest_sum)<<"\n";
-	}else{
-		std::ostream&os=*out.stream;
-		os<<"tool=lunar format=txt type=almanac tz_display="<<tz<<"\n";
-		os<<"input.date="<<date_text<<"\n";
-		os<<"data.lun_label="<<atd.lunar_date.lun_label<<"\n";
-		os<<"data.ill_pct="<<format_num(atd.ill_pct)<<"\n";
-		os<<"data.phase_name="<<atd.phase_name<<"\n";
-		os<<"[events]\n";
-		for(const auto&ev : day_events){
-			os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"<<ev.loc_iso<<"\n";
-		}
-		os<<"[festivals]\n";
-		for(const auto&ev : day_fest){
-			os<<ev.name<<"\t"<<ev.loc_iso<<"\n";
-		}
-	}
+	const FmtMap fmt_handlers={
+		{"json",[&](){
+			 JsonWriter w(*out.stream,pretty);
+			 w.obj_begin();
+			 write_meta(w,ephem,tz,{"type=almanac","农历判日固定UTC+8"});
+			 w.key("input");
+			 w.obj_begin();
+			 w.key("date");
+			 w.value(date_text);
+			 w.obj_end();
+			 w.key("data");
+			 w.obj_begin();
+			 w.key("lunar_date");
+			 wr_ljson(w,atd.lunar_date);
+			 w.key("ill_pct");
+			 w.value(atd.ill_pct);
+			 w.key("phase_name");
+			 w.value(atd.phase_name);
+			 w.key("events");
+			 w.arr_begin();
+			 for(const auto&ev : day_events){
+				 wr_ejson(w,ev);
+			 }
+			 w.arr_end();
+			 w.key("festivals");
+			 w.arr_begin();
+			 for(const auto&ev : day_fest){
+				 wr_ejson(w,ev);
+			 }
+			 w.arr_end();
+			 w.obj_end();
+			 w.obj_end();
+			 *out.stream<<"\n";
+		 }},
+		{"csv",[&](){
+			 std::string ev_sum2;
+			 for(std::size_t i=0;i<day_events.size();++i){
+				 if(i!=0){
+					 ev_sum2+="|";
+				 }
+				 ev_sum2+=day_events[i].name;
+			 }
+			 std::string fest_sum;
+			 for(std::size_t i=0;i<day_fest.size();++i){
+				 if(i!=0){
+					 fest_sum+="|";
+				 }
+				 fest_sum+=day_fest[i].name;
+			 }
+			 *out.stream<<"date,lun_label,ill_pct,phase_name,"
+						  "events,festivals\n";
+			 *out.stream<<csv_quote(date_text)<<","
+						<<csv_quote(atd.lunar_date.lun_label)<<","
+						<<format_num(atd.ill_pct)<<","
+						<<csv_quote(atd.phase_name)<<","
+						<<csv_quote(ev_sum2)<<","<<csv_quote(fest_sum)<<"\n";
+		 }},
+		{"txt",[&](){
+			 std::ostream&os=*out.stream;
+			 os<<"tool=lunar format=txt type=almanac tz_display="<<tz<<"\n";
+			 os<<"input.date="<<date_text<<"\n";
+			 os<<"data.lun_label="<<atd.lunar_date.lun_label<<"\n";
+			 os<<"data.ill_pct="<<format_num(atd.ill_pct)<<"\n";
+			 os<<"data.phase_name="<<atd.phase_name<<"\n";
+			 os<<"[events]\n";
+			 for(const auto&ev : day_events){
+				 os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"<<ev.loc_iso
+				   <<"\n";
+			 }
+			 os<<"[festivals]\n";
+			 for(const auto&ev : day_fest){
+				 os<<ev.name<<"\t"<<ev.loc_iso<<"\n";
+			 }
+		 }},
+	};
+	run_fmt(fmt_handlers,format,"almanac");
 	note_out(out_path,quiet);
 	return 0;
 }

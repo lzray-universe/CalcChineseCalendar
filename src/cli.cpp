@@ -7,6 +7,7 @@
 #include<cmath>
 #include<filesystem>
 #include<fstream>
+#include<functional>
 #include<iomanip>
 #include<iostream>
 #include<limits>
@@ -15,6 +16,7 @@
 #include<sstream>
 #include<stdexcept>
 #include<tuple>
+#include<unordered_map>
 #include<utility>
 
 #include "lunar/calendar.hpp"
@@ -54,6 +56,32 @@ using cli_util::parse_bool01;
 using cli_util::parse_int;
 using cli_util::req_val;
 using cli_util::to_low;
+
+using OptHandler=
+	std::function<void(const std::vector<std::string>&,std::size_t&,
+					   const std::string&)>;
+using OptMap=std::unordered_map<std::string,OptHandler>;
+
+void apply_opt(const OptMap&handlers,const std::vector<std::string>&args,
+			   std::size_t&idx,const std::string&opt,const std::string&ctx){
+	auto it=handlers.find(opt);
+	if(it==handlers.end()){
+		throw std::invalid_argument("unknown option for "+ctx+": "+opt);
+	}
+	it->second(args,idx,opt);
+}
+
+using FmtHandler=std::function<void()>;
+using FmtMap=std::unordered_map<std::string,FmtHandler>;
+
+void run_fmt(const FmtMap&handlers,const std::string&format,
+			 const std::string&ctx){
+	auto it=handlers.find(format);
+	if(it==handlers.end()){
+		throw std::invalid_argument("invalid --format for "+ctx+": "+format);
+	}
+	it->second();
+}
 
 MonthRec mk_mrec(const LunarMonth&m,int tz_off){
 	MonthRec rec;
@@ -434,15 +462,12 @@ std::tuple<int,int,int> parse_ld(const std::string&s){
 void run_mout(const MonthsArgs&args,const std::vector<MonYrData>&data,
 			  const std::string&format,const std::string&out_path){
 	OutTgt out=open_out(out_path);
-	if(format=="json"){
-		wr_mjs(*out.stream,data,args.ephem,args.tz,args.pretty);
-	}else if(format=="txt"){
-		wr_mtxt(*out.stream,data,args.tz);
-	}else if(format=="csv"){
-		wr_mcsv(*out.stream,data);
-	}else{
-		throw std::invalid_argument("invalid --format for months: "+format);
-	}
+	const FmtMap handlers={
+		{"json",[&](){ wr_mjs(*out.stream,data,args.ephem,args.tz,args.pretty); }},
+		{"txt",[&](){ wr_mtxt(*out.stream,data,args.tz); }},
+		{"csv",[&](){ wr_mcsv(*out.stream,data); }},
+	};
+	run_fmt(handlers,format,"months");
 	note_out(out_path,args.quiet);
 }
 
@@ -572,31 +597,35 @@ void cli_cal(const CalArgs&args){
 	}
 
 	OutTgt out=open_out(args.out);
-	if(format=="json"){
-		wr_caljs(*out.stream,out_data,args.ephem,args.tz,args.pretty);
-	}else if(format=="ics"){
-		std::vector<EventRec> merged;
-		for(const auto&item : out_data){
-			merged.insert(merged.end(),item.sol_terms.begin(),
-						  item.sol_terms.end());
-			merged.insert(merged.end(),item.lun_phase.begin(),
-						  item.lun_phase.end());
-		}
-		std::sort(
-			merged.begin(),merged.end(),
-			[](const EventRec&a,const EventRec&b){ return a.jd_utc<b.jd_utc; });
-		std::ostringstream name;
-		name<<"lunar-calendar";
-		if(!years.empty()){
-			name<<"-"<<years.front();
-			if(years.size()>1){
-				name<<"-to-"<<years.back();
-			}
-		}
-		wr_eics(*out.stream,args.ephem,name.str(),merged);
-	}else{
-		wr_caltx(*out.stream,out_data,args.tz);
-	}
+	const FmtMap handlers={
+		{"json",[&](){
+			 wr_caljs(*out.stream,out_data,args.ephem,args.tz,args.pretty);
+		 }},
+		{"ics",[&](){
+			 std::vector<EventRec> merged;
+			 for(const auto&item : out_data){
+				 merged.insert(merged.end(),item.sol_terms.begin(),
+							   item.sol_terms.end());
+				 merged.insert(merged.end(),item.lun_phase.begin(),
+							   item.lun_phase.end());
+			 }
+			 std::sort(merged.begin(),merged.end(),[](const EventRec&a,
+													 const EventRec&b){
+				 return a.jd_utc<b.jd_utc;
+			 });
+			 std::ostringstream name;
+			 name<<"lunar-calendar";
+			 if(!years.empty()){
+				 name<<"-"<<years.front();
+				 if(years.size()>1){
+					 name<<"-to-"<<years.back();
+				 }
+			 }
+			 wr_eics(*out.stream,args.ephem,name.str(),merged);
+		 }},
+		{"txt",[&](){ wr_caltx(*out.stream,out_data,args.tz); }},
+	};
+	run_fmt(handlers,format,"calendar");
 	note_out(args.out,args.quiet);
 }
 
@@ -623,19 +652,22 @@ void cli_year(const YearArgs&args){
 	data.months=bld_mrec(months,tz_off);
 
 	OutTgt out=open_out(args.out);
-	if(format=="json"){
-		wr_yjs(*out.stream,data,args.ephem,args.tz,args.pretty);
-	}else if(format=="ics"){
-		std::vector<EventRec> merged=data.sol_terms;
-		merged.insert(merged.end(),data.lun_phase.begin(),data.lun_phase.end());
-		std::sort(
-			merged.begin(),merged.end(),
-			[](const EventRec&a,const EventRec&b){ return a.jd_utc<b.jd_utc; });
-		wr_eics(*out.stream,args.ephem,"lunar-year-"+std::to_string(args.year),
-				merged);
-	}else{
-		wr_ytxt(*out.stream,data,args.tz);
-	}
+	const FmtMap handlers={
+		{"json",[&](){ wr_yjs(*out.stream,data,args.ephem,args.tz,args.pretty); }},
+		{"ics",[&](){
+			 std::vector<EventRec> merged=data.sol_terms;
+			 merged.insert(merged.end(),data.lun_phase.begin(),
+						   data.lun_phase.end());
+			 std::sort(merged.begin(),merged.end(),[](const EventRec&a,
+													 const EventRec&b){
+				 return a.jd_utc<b.jd_utc;
+			 });
+			 wr_eics(*out.stream,args.ephem,
+					 "lunar-year-"+std::to_string(args.year),merged);
+		 }},
+		{"txt",[&](){ wr_ytxt(*out.stream,data,args.tz); }},
+	};
+	run_fmt(handlers,format,"year");
 	note_out(args.out,args.quiet);
 }
 
@@ -689,14 +721,15 @@ void cli_event(const EventArgs&args){
 	}
 
 	OutTgt out=open_out(args.out);
-	if(format=="json"){
-		wr_ejdoc(*out.stream,ev,args.ephem,args.tz,args.pretty);
-	}else if(format=="ics"){
-		std::vector<EventRec> one{ev};
-		wr_eics(*out.stream,args.ephem,"lunar-event",one);
-	}else{
-		wr_setxt(*out.stream,ev,args.tz);
-	}
+	const FmtMap handlers={
+		{"json",[&](){ wr_ejdoc(*out.stream,ev,args.ephem,args.tz,args.pretty); }},
+		{"ics",[&](){
+			 std::vector<EventRec> one{ev};
+			 wr_eics(*out.stream,args.ephem,"lunar-event",one);
+		 }},
+		{"txt",[&](){ wr_setxt(*out.stream,ev,args.tz); }},
+	};
+	run_fmt(handlers,format,"event");
 	note_out(args.out,args.quiet);
 }
 
@@ -757,31 +790,42 @@ int cmd_month(const std::vector<std::string>&args){
 	MonthsArgs margs;
 	margs.ephem=args[0];
 	margs.years=args[1];
+	const OptMap handlers={
+		{"--mode",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 margs.mode=to_low(req_val(src,idx,opt));
+		 }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 margs.format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ margs.out=req_val(src,idx,opt); }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ margs.tz=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 margs.pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ margs.quiet=true; }},
+		{"--output",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 margs.out_json=req_val(src,idx,opt);
+		 }},
+		{"--output-txt",[&](const std::vector<std::string>&src,std::size_t&idx,
+							const std::string&opt){
+			 margs.out_txt=req_val(src,idx,opt);
+		 }},
+	};
 
 	for(std::size_t i=2;i<args.size();++i){
 		const std::string&a=args[i];
-		if(a=="--mode"){
-			margs.mode=to_low(req_val(args,i,a));
-		}else if(a=="--format"){
-			margs.format=to_low(req_val(args,i,a));
-		}else if(a=="--out"){
-			margs.out=req_val(args,i,a);
-		}else if(a=="--tz"){
-			margs.tz=req_val(args,i,a);
-		}else if(a=="--pretty"){
-			margs.pretty=parse_bool01(req_val(args,i,a),"--pretty");
-		}else if(a=="--quiet"){
-			margs.quiet=true;
-		}else if(a=="--output"){
-			margs.out_json=req_val(args,i,a);
-		}else if(a=="--output-txt"){
-			margs.out_txt=req_val(args,i,a);
-		}else if(a=="-h"||a=="--help"){
+		if(a=="-h"||a=="--help"){
 			use_month();
 			return 0;
-		}else{
-			throw std::invalid_argument("unknown option for months: "+a);
 		}
+		apply_opt(handlers,args,i,a,"months");
 	}
 
 	if((!margs.out_json.empty()||!margs.out_txt.empty())&&!margs.out.empty()){
@@ -810,26 +854,33 @@ int cmd_cal(const std::vector<std::string>&args){
 		cargs.has_years=true;
 		++i;
 	}
+	const OptMap handlers={
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 cargs.format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ cargs.out=req_val(src,idx,opt); }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ cargs.tz=req_val(src,idx,opt); }},
+		{"--include-months",[&](const std::vector<std::string>&src,
+								std::size_t&idx,const std::string&opt){
+			 cargs.inc_month=parse_bool01(req_val(src,idx,opt),"--include-months");
+		 }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 cargs.pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ cargs.quiet=true; }},
+	};
 	for(;i<args.size();++i){
 		const std::string&a=args[i];
-		if(a=="--format"){
-			cargs.format=to_low(req_val(args,i,a));
-		}else if(a=="--out"){
-			cargs.out=req_val(args,i,a);
-		}else if(a=="--tz"){
-			cargs.tz=req_val(args,i,a);
-		}else if(a=="--include-months"){
-			cargs.inc_month=parse_bool01(req_val(args,i,a),"--include-months");
-		}else if(a=="--pretty"){
-			cargs.pretty=parse_bool01(req_val(args,i,a),"--pretty");
-		}else if(a=="--quiet"){
-			cargs.quiet=true;
-		}else if(a=="-h"||a=="--help"){
+		if(a=="-h"||a=="--help"){
 			use_cal();
 			return 0;
-		}else{
-			throw std::invalid_argument("unknown option for calendar: "+a);
 		}
+		apply_opt(handlers,args,i,a,"calendar");
 	}
 
 	cli_cal(cargs);
@@ -848,27 +899,34 @@ int cmd_year(const std::vector<std::string>&args){
 	YearArgs yargs;
 	yargs.ephem=args[0];
 	yargs.year=parse_int(args[1],"year");
+	const OptMap handlers={
+		{"--mode",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 yargs.mode=to_low(req_val(src,idx,opt));
+		 }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 yargs.format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ yargs.out=req_val(src,idx,opt); }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ yargs.tz=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 yargs.pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ yargs.quiet=true; }},
+	};
 
 	for(std::size_t i=2;i<args.size();++i){
 		const std::string&a=args[i];
-		if(a=="--mode"){
-			yargs.mode=to_low(req_val(args,i,a));
-		}else if(a=="--format"){
-			yargs.format=to_low(req_val(args,i,a));
-		}else if(a=="--out"){
-			yargs.out=req_val(args,i,a);
-		}else if(a=="--tz"){
-			yargs.tz=req_val(args,i,a);
-		}else if(a=="--pretty"){
-			yargs.pretty=parse_bool01(req_val(args,i,a),"--pretty");
-		}else if(a=="--quiet"){
-			yargs.quiet=true;
-		}else if(a=="-h"||a=="--help"){
+		if(a=="-h"||a=="--help"){
 			use_year();
 			return 0;
-		}else{
-			throw std::invalid_argument("unknown option for year: "+a);
 		}
+		apply_opt(handlers,args,i,a,"year");
 	}
 
 	cli_year(yargs);
@@ -902,27 +960,34 @@ int cmd_event(const std::vector<std::string>&args){
 		throw std::invalid_argument(
 			"event category must be solar-term or lunar-phase");
 	}
+	const OptMap handlers={
+		{"--near",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 eargs.near_date=req_val(src,idx,opt);
+		 }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 eargs.format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ eargs.out=req_val(src,idx,opt); }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ eargs.tz=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 eargs.pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ eargs.quiet=true; }},
+	};
 
 	for(;i<args.size();++i){
 		const std::string&a=args[i];
-		if(a=="--near"){
-			eargs.near_date=req_val(args,i,a);
-		}else if(a=="--format"){
-			eargs.format=to_low(req_val(args,i,a));
-		}else if(a=="--out"){
-			eargs.out=req_val(args,i,a);
-		}else if(a=="--tz"){
-			eargs.tz=req_val(args,i,a);
-		}else if(a=="--pretty"){
-			eargs.pretty=parse_bool01(req_val(args,i,a),"--pretty");
-		}else if(a=="--quiet"){
-			eargs.quiet=true;
-		}else if(a=="-h"||a=="--help"){
+		if(a=="-h"||a=="--help"){
 			use_event();
 			return 0;
-		}else{
-			throw std::invalid_argument("unknown option for event: "+a);
 		}
+		apply_opt(handlers,args,i,a,"event");
 	}
 
 	if(eargs.category=="lunar-phase"&&eargs.near_date.empty()){
@@ -952,19 +1017,20 @@ int cmd_dl(const std::vector<std::string>&args){
 	}else if(dargs.action!="list"){
 		throw std::invalid_argument("download action must be list or get");
 	}
+	const OptMap handlers={
+		{"--dir",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ dargs.dir=req_val(src,idx,opt); }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ dargs.quiet=true; }},
+	};
 
 	for(;i<args.size();++i){
 		const std::string&a=args[i];
-		if(a=="--dir"){
-			dargs.dir=req_val(args,i,a);
-		}else if(a=="--quiet"){
-			dargs.quiet=true;
-		}else if(a=="-h"||a=="--help"){
+		if(a=="-h"||a=="--help"){
 			use_dl();
 			return 0;
-		}else{
-			throw std::invalid_argument("unknown option for download: "+a);
 		}
+		apply_opt(handlers,args,i,a,"download");
 	}
 
 	cli_dl(dargs);
