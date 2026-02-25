@@ -13,14 +13,15 @@ static constexpr double K_JD_J2000=2451545.0;
 static constexpr double K_DAYS_PER_CENTURY=36525.0;
 
 static inline void fastSinCos(double x,double&s,double&c){
-#if defined(__GNUC__) || defined(__clang__)
+#if defined(__has_builtin)
+#	if __has_builtin(__builtin_sincos)
 	__builtin_sincos(x,&s,&c);
-#else
+	return;
+#	endif
+#endif
 	s=sin(x);
 	c=cos(x);
-#endif
 }
-
 extern "C"{
 
 void eraIr(double r[3][3]){
