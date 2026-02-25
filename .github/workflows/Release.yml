@@ -3,36 +3,103 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag name'
+        description: "Tag name"
         required: true
         type: string
       prerelease:
-        description: 'Is prerelease'
+        description: "Is prerelease"
         required: true
         type: boolean
         default: false
+
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
+          
           - os: ubuntu-latest
-            name: linux-x64
-            cmake_args: '-DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc" -DCMAKE_SHARED_LINKER_FLAGS="-static-libstdc++ -static-libgcc"'
+            name: linux-x64-musl
+            kind: musl
+
+          
           - os: windows-latest
             name: windows-x64
-            cmake_args: ''
+            kind: native
+            cmake_args: ""
+
+          
           - os: macos-latest
             name: macos-universal
+            kind: native
             cmake_args: '-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"'
+
     runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v4
-      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_args }}
-      - run: cmake --build build --config Release -j
-      - shell: bash
+
+    
+      - name: Configure (native)
+        if: matrix.kind == 'native'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_args }}
+
+      - name: Build (native)
+        if: matrix.kind == 'native'
+        run: cmake --build build --config Release -j
+
+      
+      - name: Setup Zig (musl)
+        if: matrix.kind == 'musl'
+        uses: goto-bus-stop/setup-zig@v2
+
+      - name: Configure (musl static)
+        if: matrix.kind == 'musl'
+        shell: bash
         run: |
+          set -euxo pipefail
+
+          cat > zigcc <<'EOF'
+          #!/usr/bin/env bash
+          exec zig cc -target x86_64-linux-musl "$@"
+          EOF
+
+          cat > zigcxx <<'EOF'
+          #!/usr/bin/env bash
+          exec zig c++ -target x86_64-linux-musl "$@"
+          EOF
+
+          chmod +x zigcc zigcxx
+
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER="$PWD/zigcc" \
+            -DCMAKE_CXX_COMPILER="$PWD/zigcxx" \
+            -DCMAKE_EXE_LINKER_FLAGS="-static"
+
+      - name: Build (musl static)
+        if: matrix.kind == 'musl'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake --build build -j
+
+      - name: Verify static (musl)
+        if: matrix.kind == 'musl'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          file build/lunar || true
+          ldd build/lunar || true
+
+      
+      - name: Package
+        shell: bash
+        run: |
+          set -euxo pipefail
           mkdir -p package
+
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp build/Release/lunar.exe package/
             cp build/Release/lunar.dll package/ || true
@@ -46,10 +113,12 @@ jobs:
             cd package
             tar -czvf ../lunar-${{ matrix.name }}.tar.gz *
           fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: lunar-${{ matrix.name }}
           path: lunar-${{ matrix.name }}.*
+
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -60,6 +129,7 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag }}
