@@ -123,7 +123,6 @@ void write_meta(JsonWriter&w,const std::string&ephem,
 	w.value(tz_display);
 	w.key("notes");
 	w.arr_begin();
-	w.value("算法不变，仅格式化输出和CLI能力增强");
 	w.value("--tz仅影响显示，不改变农历规则与计算流程");
 	w.arr_end();
 	w.obj_end();

@@ -1,7 +1,7 @@
 
 # CalcChineseCalendar（lunar）
 
-> 一个基于 NASA/NAIF SPICE & JPL Ephemeris 的中国传统历法/天文历工具：可计算农历月、二十四节气、月相（朔/上弦/望/下弦），并提供 CLI、可嵌入的 C API（DLL/SO）与 JSON/CSV/ICS 等多种输出格式。
+> 一个基于 JPL DE 星历（BSP）与仓库内置天文算法实现的中国传统历法/天文历工具：可计算农历月、二十四节气、月相（朔/上弦/望/下弦），并提供 CLI、可嵌入的 C API（DLL/SO）与 JSON/CSV/ICS 等多种输出格式。
 
 ---
 
@@ -32,30 +32,18 @@
 
 ## 依赖与精度说明
 
-release中可直接下载Windows、linux版本。
+Release 中可直接下载 Windows/Linux 版本。
 
-### 1) 必需：NAIF CSPICE
-项目通过 CSPICE 读取并计算 JPL DE 星历（`.bsp`）。构建时需要：
-- 头文件：`SpiceUsr.h`
-- 库：`cspice`、`csupport`（静态或动态均可，CMake 里按 `find_library` 查找）
+### 1) 构建依赖
+- CMake `>= 3.20`
+- 支持 C++20 的编译器
+- 当前版本**不再依赖外部** CSPICE/ERFA
 
-> **注意**：本仓库的 CMake 期望 CSPICE 目录形如：  
-> `.../cspice/include/SpiceUsr.h`  
-> `.../cspice/lib/(lib)cspice.*` & `.../cspice/lib/(lib)csupport.*`
-
-默认查找逻辑（见 `CMakeLists.txt`）：
-- Windows：`<repo>/dependent/cspice`
-- Linux/macOS：优先 `$LUNAR_DEP_ROOT/cspice`（默认 `/usr/local/cspice`），找不到则回退 `<repo>/dependent-linux/cspice`
-
-### 2) 可选：ERFA（更好的岁差/章动长期模型）
-`-DLUNAR_USE_ERFA=ON` 时会链接 ERFA（见 `src/frames.cpp`），用于更精细的岁差/章动计算（尤其长期跨度）。
-- 期望路径：`$LUNAR_DEP_ROOT/erfa` 或 `<repo>/dependent/erfa`
-- 需要 `include/erfa.h` 以及 `src/` 中的 ERFA C 源
-
-### 3) 星历文件（`.bsp`）
+### 2) 星历文件（`.bsp`）
 运行时需要一个 JPL DE 的 `.bsp` 文件，例如 `de440s.bsp / de442s.bsp`（覆盖 1850–2150 年，约 31MB）。
 
-项目内置 `lunar download` 可直接下载 NAIF 公开地址（需要系统有 `curl` 或 `wget`）。
+### 3) 下载工具（可选）
+项目内置 `lunar download` 可直接下载 NAIF 公开地址（需要系统有 `curl` 或 `wget`；没有时可手动下载 `.bsp` 并传入路径）。
 
 ---
 
@@ -68,7 +56,7 @@ lunar download list
 
 # 下载到当前目录（或用 --dir 指定目录）
 lunar download get de442s --dir .
-````
+```
 
 ### 2) 生成 2025 年节气 + 月相（并导出 ICS）
 
@@ -114,7 +102,7 @@ lunar <subcommand> [args...] [options...]
 | ------------ | --------------------------- |
 | `months`     | 输出某年/年份区间的农历月（或公历月枚举）       |
 | `calendar`   | 输出某年/年份区间：节气 + 月相（可选包含月份）   |
-| `year`       | 输出某一年的节气 + 月相 +（可选）农历月      |
+| `year`       | 输出某一年的节气 + 月相 + 月份表（由 `--mode` 控制）      |
 | `event`      | 计算单个事件（某节气 / 某月相，靠近某日期）     |
 | `download`   | 列出/下载星历 BSP                 |
 | `at`         | 查询某时刻的月相/照明率等（支持批处理）        |
@@ -342,10 +330,11 @@ lunar months <bsp> <years>
 
 ```bash
 lunar calendar <bsp> [<years>]
-  [--mode lunar|gregorian]
   [--format json|txt|ics] [--out <path>] [--tz ...]
   [--include-months 0|1] [--pretty 0|1] [--quiet]
 ```
+
+* 若省略 `<years>`，默认按 `2025` 计算
 
 **TXT 输出**
 
@@ -356,17 +345,16 @@ lunar calendar <bsp> [<years>]
 ```json
 {
   "meta": {...},
-  "data": [
-    {
-      "year": 2025,
-      "mode": "lunar",
-      "sol_terms": [ EventRec(A), ... ],
-      "lun_phase": [ EventRec(A), ... ],
-      "months": [ MonthRec, ... ]   // 仅 include-months=1
-    }
-  ]
+  "data": {
+    "year": 2025,
+    "sol_terms": [ EventRec(A), ... ],
+    "lun_phase": [ EventRec(A), ... ],
+    "months": [ MonthRec, ... ]   // 仅 include-months=1
+  }
 }
 ```
+
+* 单年时 `data` 为对象；多年份区间时 `data` 为数组
 
 **ICS 输出**
 
@@ -380,12 +368,13 @@ lunar calendar <bsp> [<years>]
 
 ```bash
 lunar year <bsp> <year>
-  [--months 0|1]
+  [--mode lunar|gregorian]
   [--format json|txt|ics] [--out ...] [--tz ...]
   [--pretty 0|1] [--quiet]
 ```
 
-JSON 结构与 `calendar` 类似，但顶层 `data` 是单个对象（不是数组）。
+* `year` 命令始终包含月份表，`--mode` 决定输出农历月或公历月枚举。
+* JSON 结构与 `calendar` 类似，但顶层 `data` 是单个对象（不是数组）。
 
 ---
 
@@ -452,8 +441,10 @@ lunar download get <id> [--dir <path>]
 lunar at <bsp> <time>
   [--input-tz Z|+08:00|-05:00] [--tz Z|+08:00|-05:00]
   [--events 0|1]
-  [--format json|txt] [--out ...] [--pretty 0|1] [--quiet]
+  [--format json|txt|jsonl] [--out ...] [--pretty 0|1] [--quiet]
 ```
+
+* 单次模式下若指定 `--format jsonl`，会自动按 `json` 输出。
 
 **JSON 输出（单次）**
 
@@ -465,7 +456,7 @@ lunar at <bsp> <time>
     "schema": "lunar.v1",
     "ephem": "/var/task/de442.bsp",
     "tz_display": "+08:00",
-    "notes": []
+    "notes": ["..."]
   },
   "input": {
     "time_raw": "2025-06-01T00:00:00+08:00",
@@ -539,10 +530,10 @@ lunar at <bsp> <time>
 
 * `sun_lam` / `moon_lam`：太阳/月球黄经（弧度）
 * `elongation_*`：日月黄经差（角距）
-* `illum_*`：月面照明率（0–1 / 0–100）
+* `ill_*`：月面照明率（0–1 / 0–100）
 * `waxing`：是否在“盈”（照明率上升），用黄经变化率近似判断
 * `phase_name`：由角距判断的相位名称（如“朔”“望”“上弦”“下弦”“盈凸月”等）
-* `near_events`：最近节气/月相事件（仅 `--events 1` 时出现）
+* `near_ev`：最近节气/月相事件（仅 `--events 1` 时出现）
 
 #### 批处理模式（stdin / file）
 
@@ -597,14 +588,19 @@ lunar convert <bsp> --from-lunar <lunar_year> <month_no> <day> [--leap 0|1]
   },
   "data": {
     "lunar_date": LunDate,
-    "gcst_date": "YYYY-MM-DD",
-    "gcst_jd": 2460xxx.x
+    "greg_date": {
+      "cst_date": "YYYY-MM-DD",
+      "cstday_jd": 2460xxx.x,
+      "cst_uiso": "....Z",
+      "cst_liso": "....+08:00"
+    }
   }
 }
 ```
 
-* `gcst_date`：对应的“UTC+8 民用日”（即“中原时区日”的公历日期）
-* `gcst_jd`：该民用日 00:00（UTC+8）对应的 UTC Julian Day（实现上为 `cstday_jd`）
+* `input` 字段会随方向变化：`greg2lun` 包含 `input_tz/jd_utc`；`lun2greg` 包含 `lunar_year/lun_mno/lunar_day/is_leap`
+* `greg_date.cst_date`：对应的“UTC+8 民用日”（即中原时区日）的公历日期
+* `greg_date.cstday_jd`：该民用日 00:00（UTC+8）对应的 UTC Julian Day
 
 #### 批处理
 
@@ -851,7 +847,7 @@ lunar info <bsp> [--format json|txt] [--out ...] [--pretty 0|1] [--quiet]
 **用法**
 
 ```bash
-lunar selftest <bsp> [--format json|txt] [--out ...]
+lunar selftest <bsp> [--format json|txt] [--out ...] [--pretty 0|1] [--quiet]
 ```
 
 `json.data`：
@@ -868,7 +864,7 @@ lunar selftest <bsp> [--format json|txt] [--out ...]
 **查看**
 
 ```bash
-lunar config show [--format json|txt]
+lunar config show [--format json|txt] [--out ...] [--pretty 0|1] [--quiet]
 ```
 
 **设置**
@@ -911,33 +907,12 @@ lunar
 
 ## 构建（CMake）
 
-> 下面给的是推荐方式。可以根据自己的 CSPICE 安装方式调整。
+> 当前 CMake 不要求本机安装 CSPICE 或 ERFA。
 
 ### Linux/macOS
 
-从此处下载[NAIF CSPICE Toolkit for linux GCC](https://naif.jpl.nasa.gov/pub/naif/toolkit//C/PC_Linux_GCC_64bit/packages/cspice.tar.Z)
-
-可选下载ERFA:
-
-- [仓库地址](https://github.com/liberfa/erfa)
-
-1. 确保 CSPICE 安装在 `/usr/local/cspice`，或设置环境变量：
-
-```bash
-export LUNAR_DEP_ROOT=/path/to/deps   # 其中包含 cspice/ 与可选的 erfa/
-```
-
-2. 构建：
-
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-```
-
-可选开启 ERFA：
-
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLUNAR_USE_ERFA=ON
 cmake --build build -j
 ```
 
@@ -945,34 +920,11 @@ cmake --build build -j
 
 推荐使用MSVC环境，可从[此处下载Visual Studio](https://visualstudio.microsoft.com/)。
 
-从此处下载[NAIF CSPICE Toolkit for MSVC](https://naif.jpl.nasa.gov/pub/naif/toolkit//C/PC_Windows_VisualC_64bit/packages/cspice.zip)
-
-推荐重新编译CSPICE：
-
-- 解压CSPICE，找到`makeall.bat`所在目录。
-
-- 打开x64 Native Tools Command Prompt for VS，cd到`makeall.bat`所在目录，直接运行`makeall.bat`。
-
-- 待执行完毕后将`makeall.bat`所在目录所有文件拷贝到`<repo>/dependent/cspice/`中
-
-可选下载ERFA:
-
-- [仓库地址](https://github.com/liberfa/erfa)
-- 解压，将所有文件拷贝到`<repo>/dependent/erfa/`中。
-
-然后：
-
 ```powershell
-  # 1) 配置（启用 ERFA），若不用可关闭ERFA
-  VS26:cmake -S . -B build -G "Visual Studio 18 2026" -A x64 -DLUNAR_USE_ERFA=ON
-  VS22:cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DLUNAR_USE_ERFA=ON
-
-  # 2) 先编译 ERFA 静态库，若不用可关闭忽略
-  cmake --build build --config Release --target erfa --parallel
-
-  # 3) 再编译主程序（静态 CRT + USE_ERFA）
-  cmake --build build --config Release --target lunar --parallel
-
+# Visual Studio 2022
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release --target lunar --parallel
+cmake --build build --config Release --target lunar_dll --parallel
 ```
 
 ---
@@ -1030,6 +982,6 @@ MIT LICENSE
 
 ## 致谢
 
-* NASA/NAIF SPICE Toolkit
 * JPL Development Ephemeris
-* ERFA / IAU SOFA 
+* NASA/NAIF 公共星历数据发布站点
+* IAU SOFA / ERFA（算法模型参考）

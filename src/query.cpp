@@ -32,10 +32,6 @@
 #include "lunar/math.hpp"
 #include "lunar/time_scale.hpp"
 
-extern "C"{
-#include "SpiceUsr.h"
-}
-
 namespace{
 
 struct LunDate{
@@ -3197,34 +3193,22 @@ bool parse_spk(const std::string&ephem,double&jd_start,double&jd_end){
 	EphRead reader(ephem);
 	reader.load_kern();
 
-	SPICEINT_CELL(ids,10000);
-	scard_c(0,&ids);
-	spkobj_c(ephem.c_str(),&ids);
-	chk_spice("spkobj_c failed");
-	SpiceInt nids=card_c(&ids);
-	if(nids<=0){
+	std::vector<int> ids=reader.spk_objects();
+	if(ids.empty()){
 		return false;
 	}
 
 	double min_et=std::numeric_limits<double>::infinity();
 	double max_et=-std::numeric_limits<double>::infinity();
 
-	for(SpiceInt i=0;i<nids;++i){
-		SpiceInt obj=SPICE_CELL_ELEM_I(&ids,i);
-		SPICEDOUBLE_CELL(cover,400000);
-		scard_c(0,&cover);
-		spkcov_c(ephem.c_str(),obj,&cover);
-		chk_spice("spkcov_c failed");
-		SpiceInt nint=wncard_c(&cover);
-		for(SpiceInt k=0;k<nint;++k){
-			SpiceDouble b=0.0;
-			SpiceDouble e=0.0;
-			wnfetd_c(&cover,k,&b,&e);
-			if(b<min_et){
-				min_et=b;
+	for(int obj : ids){
+		std::vector<std::pair<double,double>> cov=reader.spk_coverage(obj);
+		for(const auto&it : cov){
+			if(it.first<min_et){
+				min_et=it.first;
 			}
-			if(e>max_et){
-				max_et=e;
+			if(it.second>max_et){
+				max_et=it.second;
 			}
 		}
 	}
