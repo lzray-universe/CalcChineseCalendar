@@ -1,31 +1,15 @@
 #include "lunar/calendar.hpp"
 
 #include<algorithm>
-#include<chrono>
 #include<cmath>
-#include<cstdlib>
-#include<cstring>
-#include<filesystem>
 #include<fstream>
 #include<iomanip>
 #include<iostream>
 #include<limits>
-#include<sstream>
+#include<memory>
 #include<stdexcept>
 #include<thread>
 #include<vector>
-
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include<windows.h>
-#else
-#include<sys/wait.h>
-#include<unistd.h>
-#endif
-
-namespace fs=std::filesystem;
 
 namespace{
 
@@ -54,83 +38,6 @@ bool parse_tsv(const std::string&line,std::vector<std::string>&fields,
 	}
 	fields.push_back(current);
 	return fields.size()>=min_fields;
-}
-
-std::string quote_arg(const std::string&arg){
-	std::string q="\"";
-	for(char c : arg){
-		if(c=='"'){
-			q+="\\\"";
-		}else{
-			q.push_back(c);
-		}
-	}
-	q.push_back('"');
-	return q;
-}
-
-int run_wproc(const std::string&exe_path,const std::string&ephem_path,
-			  const std::string&input_path,const std::string&out_path){
-#ifdef _WIN32
-	STARTUPINFOA si;
-	PROCESS_INFORMATION pi;
-	std::memset(&si,0,sizeof(si));
-	std::memset(&pi,0,sizeof(pi));
-	si.cb=sizeof(si);
-
-	std::string cmd=quote_arg(exe_path)+" __root_batch "+quote_arg(ephem_path)+
-					" "+quote_arg(input_path)+" "+quote_arg(out_path);
-	std::vector<char> cmd_buf(cmd.begin(),cmd.end());
-	cmd_buf.push_back('\0');
-
-	BOOL ok=CreateProcessA(exe_path.c_str(),cmd_buf.data(),nullptr,nullptr,
-						   FALSE,CREATE_NO_WINDOW,nullptr,nullptr,&si,&pi);
-	if(!ok){
-		return -1;
-	}
-
-	WaitForSingleObject(pi.hProcess,INFINITE);
-	DWORD exit_code=1;
-	if(!GetExitCodeProcess(pi.hProcess,&exit_code)){
-		exit_code=1;
-	}
-	CloseHandle(pi.hThread);
-	CloseHandle(pi.hProcess);
-	return static_cast<int>(exit_code);
-#else
-	std::string cmd=quote_arg(exe_path)+" __root_batch "+quote_arg(ephem_path)+
-					" "+quote_arg(input_path)+" "+quote_arg(out_path);
-	int status=std::system(cmd.c_str());
-	if(status==-1){
-		return -1;
-	}
-	if(WIFEXITED(status)){
-		return WEXITSTATUS(status);
-	}
-	if(WIFSIGNALED(status)){
-		return 128+WTERMSIG(status);
-	}
-	return status;
-#endif
-}
-
-std::string exe_path(){
-#ifdef _WIN32
-	char buf[4096];
-	DWORD len=GetModuleFileNameA(nullptr,buf,static_cast<DWORD>(sizeof(buf)));
-	if(len==0||len>=sizeof(buf)){
-		throw std::runtime_error("failed to query executable path");
-	}
-	return std::string(buf,len);
-#else
-	char buf[4096];
-	ssize_t len=readlink("/proc/self/exe",buf,sizeof(buf)-1);
-	if(len<=0){
-		throw std::runtime_error("failed to query executable path");
-	}
-	buf[len]='\0';
-	return std::string(buf);
-#endif
 }
 
 }
@@ -418,163 +325,44 @@ SolLunCal::run_roots(const std::vector<RootTask>&tasks){
 		return {results,errors};
 	}
 
+	unsigned int hc=std::thread::hardware_concurrency();
+	std::size_t wk_count=hc==0?4:static_cast<std::size_t>(hc);
+	wk_count=std::min<std::size_t>(wk_count,tasks.size());
+	wk_count=std::min<std::size_t>(wk_count,kMaxWork);
+	if(wk_count<=1){
+		run_serial();
+		return {results,errors};
+	}
+
 	try{
-		const std::string exe_file=exe_path();
-		const std::string ephem_path=fs::absolute(eph.filepath).string();
-
-		unsigned int hc=std::thread::hardware_concurrency();
-		std::size_t wk_count=hc==0?4:static_cast<std::size_t>(hc);
-		wk_count=std::min<std::size_t>(wk_count,tasks.size());
-		wk_count=std::min<std::size_t>(wk_count,kMaxWork);
-		if(wk_count==0){
-			wk_count=1;
-		}
-		if(wk_count<=1){
-			run_serial();
-			return {results,errors};
+		std::vector<std::unique_ptr<SolLunCal>> workers;
+		workers.reserve(wk_count);
+		for(std::size_t i=0;i<wk_count;++i){
+			workers.push_back(std::make_unique<SolLunCal>(eph));
 		}
 
-		std::error_code ec;
-		fs::path tmp_root=fs::temp_directory_path(ec);
-		if(ec){
-			throw std::runtime_error("failed to get temporary directory");
-		}
-		fs::path tmp_dir=tmp_root/"lunar_rb";
-		fs::create_directories(tmp_dir,ec);
-		if(ec){
-			throw std::runtime_error("failed to create temporary directory");
-		}
+		std::atomic<std::size_t> cursor{0};
+		std::vector<RootCtx> ctxs(wk_count);
+		std::vector<std::thread> threads;
+		threads.reserve(wk_count);
 
-		struct BatchJob{
-			std::vector<std::size_t> task_idx;
-			fs::path input_path;
-			fs::path out_path;
-			int exit_code=-1;
-		};
-
-		std::vector<BatchJob> jobs(wk_count);
-		for(std::size_t idx=0;idx<tasks.size();++idx){
-			jobs[idx%wk_count].task_idx.push_back(idx);
-		}
-
-#ifdef _WIN32
-		unsigned long pid=static_cast<unsigned long>(GetCurrentProcessId());
-#else
-		unsigned long pid=static_cast<unsigned long>(getpid());
-#endif
-		auto now_ticks=static_cast<unsigned long long>(
-			std::chrono::steady_clock::now().time_since_epoch().count());
-
-		for(std::size_t i=0;i<jobs.size();++i){
-			if(jobs[i].task_idx.empty()){
-				continue;
+		try{
+			for(std::size_t i=0;i<wk_count;++i){
+				ctxs[i]={workers[i].get(),&tasks,&results,&errors,&cursor};
+				threads.emplace_back(run_wkr,&ctxs[i]);
 			}
-			jobs[i].input_path=tmp_dir/("root_batch_in_"+std::to_string(pid)+
-										"_"+std::to_string(now_ticks)+"_"+
-										std::to_string(i)+".tsv");
-			jobs[i].out_path=tmp_dir/("root_batch_out_"+std::to_string(pid)+"_"+
-									  std::to_string(now_ticks)+"_"+
-									  std::to_string(i)+".tsv");
-
-			std::ofstream ofs(jobs[i].input_path);
-			if(!ofs){
-				throw std::runtime_error("failed to write batch task file");
+		}catch(...){
+			for(auto&th : threads){
+				if(th.joinable()){
+					th.join();
+				}
 			}
-			ofs<<std::setprecision(17);
-			for(std::size_t idx : jobs[i].task_idx){
-				const auto&task=tasks[idx];
-				ofs<<idx<<'\t'<<task.kind<<'\t'<<task.target<<'\t'
-				   <<task.jd_initial<<'\t'<<task.eps_days<<'\t'<<task.max_iter
-				   <<'\n';
-			}
+			throw;
 		}
 
-		std::vector<std::thread> launchers;
-		for(std::size_t i=0;i<jobs.size();++i){
-			if(jobs[i].task_idx.empty()){
-				continue;
-			}
-			launchers.emplace_back([&,i](){
-				jobs[i].exit_code=
-					run_wproc(exe_file,ephem_path,jobs[i].input_path.string(),
-							  jobs[i].out_path.string());
-			});
-		}
-		for(auto&th : launchers){
+		for(auto&th : threads){
 			th.join();
 		}
-
-		std::vector<bool> got_result(tasks.size(),false);
-		std::vector<std::string> fields;
-
-		for(std::size_t i=0;i<jobs.size();++i){
-			if(jobs[i].task_idx.empty()){
-				continue;
-			}
-			if(jobs[i].exit_code!=0){
-				for(std::size_t idx : jobs[i].task_idx){
-					errors[idx]="root worker process failed with code "+
-								std::to_string(jobs[i].exit_code);
-				}
-				continue;
-			}
-
-			std::ifstream ifs(jobs[i].out_path);
-			if(!ifs){
-				for(std::size_t idx : jobs[i].task_idx){
-					errors[idx]="root worker output missing";
-				}
-				continue;
-			}
-
-			std::string line;
-			while(std::getline(ifs,line)){
-				if(line.empty()){
-					continue;
-				}
-				if(!parse_tsv(line,fields,3)){
-					continue;
-				}
-
-				std::size_t idx=0;
-				try{
-					idx=static_cast<std::size_t>(std::stoull(fields[0]));
-				}catch(...){
-					continue;
-				}
-				if(idx>=tasks.size()){
-					continue;
-				}
-
-				if(fields[1]=="OK"){
-					try{
-						results[idx]=std::stod(fields[2]);
-						got_result[idx]=true;
-					}catch(...){
-						errors[idx]="failed to parse worker root value";
-					}
-				}else if(fields[1]=="ERR"){
-					errors[idx]=fields[2];
-					got_result[idx]=true;
-				}
-			}
-
-			for(std::size_t idx : jobs[i].task_idx){
-				if(!got_result[idx]&&errors[idx].empty()){
-					errors[idx]="root worker returned no result";
-				}
-			}
-		}
-
-		for(const auto&job : jobs){
-			if(!job.input_path.empty()){
-				fs::remove(job.input_path,ec);
-			}
-			if(!job.out_path.empty()){
-				fs::remove(job.out_path,ec);
-			}
-		}
-
 	}catch(...){
 		run_serial();
 	}

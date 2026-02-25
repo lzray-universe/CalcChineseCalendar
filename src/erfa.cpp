@@ -22,6 +22,7 @@ static inline void fastSinCos(double x,double&s,double&c){
 	s=sin(x);
 	c=cos(x);
 }
+
 extern "C"{
 
 void eraIr(double r[3][3]){

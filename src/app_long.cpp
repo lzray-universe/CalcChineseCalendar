@@ -12,9 +12,9 @@ RetProp AberCorr::geo_prop(EphRead&eph,int target,double jd_tdb,int max_iter){
 	double tr=jd_tdb;
 
 	for(int i=0;i<max_iter;++i){
-		Vec3 xt=eph.get_pos(target,eph.SSB,tr);
-		Vec3 xE=eph.get_pos(eph.EARTH,eph.SSB,tr);
-		Vec3 X=xt-xE;
+		auto tgt_state=eph.get_state(target,eph.SSB,tr);
+		auto earth_state=eph.get_state(eph.EARTH,eph.SSB,tr);
+		Vec3 X=tgt_state.first-earth_state.first;
 		double lt=lightday(X);
 		double tr_new=jd_tdb-lt;
 		if(std::fabs(tr_new-tr)<1e-12){
@@ -24,13 +24,10 @@ RetProp AberCorr::geo_prop(EphRead&eph,int target,double jd_tdb,int max_iter){
 		tr=tr_new;
 	}
 
-	Vec3 xt=eph.get_pos(target,eph.SSB,tr);
-	Vec3 xE=eph.get_pos(eph.EARTH,eph.SSB,tr);
-	Vec3 X=xt-xE;
-
-	Vec3 vt=eph.get_vel(target,eph.SSB,tr);
-	Vec3 vE=eph.get_vel(eph.EARTH,eph.SSB,tr);
-	Vec3 V=vt-vE;
+	auto tgt_state=eph.get_state(target,eph.SSB,tr);
+	auto earth_state=eph.get_state(eph.EARTH,eph.SSB,tr);
+	Vec3 X=tgt_state.first-earth_state.first;
+	Vec3 V=tgt_state.second-earth_state.second;
 
 	return {X,V,tr};
 }
@@ -41,8 +38,9 @@ Vec3 AberCorr::geo_app(EphRead&eph,int target,double jd_tdb,int max_iter){
 
 Vec3 AberCorr::geo_app(EphRead&eph,int target,double jd_tdb,double*tr_out,
 					   int max_iter){
-	Vec3 xE_t=eph.get_pos(eph.EARTH,eph.SSB,jd_tdb);
-	Vec3 vE_t=eph.get_vel(eph.EARTH,eph.SSB,jd_tdb);
+	auto earth_state=eph.get_state(eph.EARTH,eph.SSB,jd_tdb);
+	Vec3 xE_t=earth_state.first;
+	Vec3 vE_t=earth_state.second;
 
 	double tr=jd_tdb;
 	Vec3 xt=eph.get_pos(target,eph.SSB,tr);

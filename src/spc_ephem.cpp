@@ -2668,8 +2668,16 @@ struct SpkFile{
 			return State6{};
 		}
 
-		std::unordered_map<int,State6> memo;
-		std::unordered_set<int> active;
+		thread_local std::unordered_map<int,State6> memo;
+		thread_local std::unordered_set<int> active;
+		memo.clear();
+		active.clear();
+		if(memo.bucket_count()<32U){
+			memo.reserve(32U);
+		}
+		if(active.bucket_count()<32U){
+			active.reserve(32U);
+		}
 		State6 t=to_ssb(target,et,memo,active);
 		State6 o=to_ssb(observer,et,memo,active);
 		return t-o;
