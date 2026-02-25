@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/github/license/lzray-universe/CalcChineseCalendar)](LICENSE)
 
 
-特别感谢 [@ytliu0](https://github.com/ytliu0) 
+- 特别感谢 [@ytliu0](https://github.com/ytliu0) 
 ---
 
 ## 适用场景
