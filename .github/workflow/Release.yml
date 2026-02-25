@@ -1,0 +1,67 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name'
+        required: true
+        type: string
+      prerelease:
+        description: 'Is prerelease'
+        required: true
+        type: boolean
+        default: false
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x64
+            cmake_args: '-DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc" -DCMAKE_SHARED_LINKER_FLAGS="-static-libstdc++ -static-libgcc"'
+          - os: windows-latest
+            name: windows-x64
+            cmake_args: ''
+          - os: macos-latest
+            name: macos-universal
+            cmake_args: '-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_args }}
+      - run: cmake --build build --config Release -j
+      - shell: bash
+        run: |
+          mkdir -p package
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp build/Release/lunar.exe package/
+            cp build/Release/lunar.dll package/ || true
+            cp build/Release/lunar.lib package/ || true
+            cd package
+            7z a ../lunar-${{ matrix.name }}.zip *
+          else
+            cp build/lunar package/
+            cp build/liblunar.so package/ 2>/dev/null || true
+            cp build/liblunar.dylib package/ 2>/dev/null || true
+            cd package
+            tar -czvf ../lunar-${{ matrix.name }}.tar.gz *
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lunar-${{ matrix.name }}
+          path: lunar-${{ matrix.name }}.*
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          prerelease: ${{ inputs.prerelease }}
+          files: artifacts/*
