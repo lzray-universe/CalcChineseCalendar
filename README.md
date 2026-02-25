@@ -3,6 +3,8 @@
 
 > 一个基于 JPL DE 星历（BSP）与仓库内置天文算法实现的中国传统历法/天文历工具：可计算农历月、二十四节气、月相（朔/上弦/望/下弦），并提供 CLI、可嵌入的 C API（DLL/SO）与 JSON/CSV/ICS 等多种输出格式。
 
+[![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Ftokei.kojix2.net%2Fbadge%2Fgithub%2Flzray-universe%2FCalcChineseCalendar%2Flines)](https://tokei.kojix2.net/github/lzray-universe/CalcChineseCalendar)
+[![License](https://img.shields.io/github/license/lzray-universe/CalcChineseCalendar)](LICENSE)
 ---
 
 ## 适用场景
