@@ -1,6 +1,7 @@
 #include<cmath>
 #include<cstddef>
 
+using std::atan2;
 using std::cos;
 using std::fmod;
 using std::sin;
@@ -14,10 +15,10 @@ static constexpr double K_DAYS_PER_CENTURY=36525.0;
 
 static inline void fastSinCos(double x,double&s,double&c){
 #if defined(__has_builtin)
-#	if __has_builtin(__builtin_sincos)
+#if __has_builtin(__builtin_sincos)
 	__builtin_sincos(x,&s,&c);
 	return;
-#	endif
+#endif
 #endif
 	s=sin(x);
 	c=cos(x);
@@ -110,9 +111,7 @@ void eraPxp(double a[3],double b[3],double axb[3]){
 	axb[2]=ax*by-ay*bx;
 }
 
-double eraFae03(double t){
-	return fmod(1.753470314+628.3075849991*t,K_TWO_PI);
-}
+double eraFae03(double t){ return fmod(1.753470314+628.3075849991*t,K_TWO_PI); }
 
 double eraFaf03(double t){
 	return fmod(335779.526232+t*(1739527262.8478+
@@ -121,9 +120,7 @@ double eraFaf03(double t){
 		   K_ARCSEC_TO_RAD;
 }
 
-double eraFaju03(double t){
-	return fmod(0.599546497+52.9690962641*t,K_TWO_PI);
-}
+double eraFaju03(double t){ return fmod(0.599546497+52.9690962641*t,K_TWO_PI); }
 
 double eraFal03(double t){
 	return fmod(485868.249036+t*(1717915923.2178+
@@ -149,9 +146,7 @@ double eraFaom03(double t){
 
 double eraFapa03(double t){ return (0.024381750+0.00000538691*t)*t; }
 
-double eraFasa03(double t){
-	return fmod(0.874016757+21.3299104960*t,K_TWO_PI);
-}
+double eraFasa03(double t){ return fmod(0.874016757+21.3299104960*t,K_TWO_PI); }
 
 double eraFaur03(double t){ return fmod(5.481293872+7.4781598567*t,K_TWO_PI); }
 
@@ -159,7 +154,8 @@ double eraFave03(double t){
 	return fmod(3.176146697+1021.3285546211*t,K_TWO_PI);
 }
 
-void eraFw2m(double rotZ0,double rotX0,double rotZ1,double rotX1,double outMat[3][3]){
+void eraFw2m(double rotZ0,double rotX0,double rotZ1,double rotX1,
+			 double outMat[3][3]){
 	eraIr(outMat);
 	eraRz(rotZ0,outMat);
 	eraRx(rotX0,outMat);
@@ -311,27 +307,36 @@ double eraObl06(double jdPartA,double jdPartB){
 	return eps0;
 }
 
-void eraPfw06(double jdPartA,double jdPartB,double*outZ0,double*outX0,double*outZ1,
-			  double*outX1){
+void eraPfw06(double jdPartA,double jdPartB,double*outZ0,double*outX0,
+			  double*outZ1,double*outX1){
 	const double julianCent=((jdPartA-K_JD_J2000)+jdPartB)/K_DAYS_PER_CENTURY;
 
 	*outZ0=(-0.052928+
-		   (10.556378+
-			(0.4932044+(-0.00031238+(-0.000002788+(0.0000000260)*julianCent)*julianCent)*julianCent)*julianCent)*
-			   julianCent)*
-		  K_ARCSEC_TO_RAD;
+			(10.556378+
+			 (0.4932044+
+			  (-0.00031238+(-0.000002788+(0.0000000260)*julianCent)*julianCent)*
+				  julianCent)*
+				 julianCent)*
+				julianCent)*
+		   K_ARCSEC_TO_RAD;
 
 	*outX0=(84381.412819+
-		   (-46.811016+
-			(0.0511268+(0.00053289+(-0.000000440+(-0.0000000176)*julianCent)*julianCent)*julianCent)*julianCent)*
-			   julianCent)*
-		  K_ARCSEC_TO_RAD;
+			(-46.811016+
+			 (0.0511268+
+			  (0.00053289+(-0.000000440+(-0.0000000176)*julianCent)*julianCent)*
+				  julianCent)*
+				 julianCent)*
+				julianCent)*
+		   K_ARCSEC_TO_RAD;
 
 	*outZ1=(-0.041775+
-		   (5038.481484+
-			(1.5584175+(-0.00018522+(-0.000026452+(-0.0000000148)*julianCent)*julianCent)*julianCent)*julianCent)*
-			   julianCent)*
-		  K_ARCSEC_TO_RAD;
+			(5038.481484+
+			 (1.5584175+(-0.00018522+
+						 (-0.000026452+(-0.0000000148)*julianCent)*julianCent)*
+							julianCent)*
+				 julianCent)*
+				julianCent)*
+		   K_ARCSEC_TO_RAD;
 
 	*outX1=eraObl06(jdPartA,jdPartB);
 }
@@ -349,8 +354,10 @@ void eraPmat06(double jdPartA,double jdPartB,double rbp[3][3]){
 void eraNut00a(double jdPartA,double jdPartB,double*dpsi,double*deps)
 
 {
-	double t,moonAnomIers,sunAnomMhb,moonLatArgIers,moonElongIers,nodeLonIers,argRad,accLon,accObl,argSin,argCos,moonAnomMhb,moonLatArgMhb,moonElongMhb,
-		nodeLonMhb,mercuryLon,venusLon,earthLon,marsLon,jupiterLon,saturnLon,uranusLon,neptuneLon,precAccumLon,luniLonRad,luniOblRad,
+	double t,moonAnomIers,sunAnomMhb,moonLatArgIers,moonElongIers,nodeLonIers,
+		argRad,accLon,accObl,argSin,argCos,moonAnomMhb,moonLatArgMhb,
+		moonElongMhb,nodeLonMhb,mercuryLon,venusLon,earthLon,marsLon,jupiterLon,
+		saturnLon,uranusLon,neptuneLon,precAccumLon,luniLonRad,luniOblRad,
 		planetLonRad,planetOblRad;
 
 	const double unit01uasToRad=K_ARCSEC_TO_RAD/1e7;
@@ -1110,10 +1117,8 @@ void eraNut00a(double jdPartA,double jdPartB,double*dpsi,double*deps)
 	const int kLuniTermCount=(int)(sizeof luniTerms/sizeof luniTerms[0]);
 
 	static const struct{
-		int mulL,
-			mulF,mulD,mulOm,mulMe,
-			mulVe,mulEa,mulMa,mulJu,mulSa,mulUr,mulNe,
-			mulPa;
+		int mulL,mulF,mulD,mulOm,mulMe,mulVe,mulEa,mulMa,mulJu,mulSa,mulUr,
+			mulNe,mulPa;
 		int lonSin,lonCos;
 		int oblSin,oblCos;
 	} planetTerms[]={
@@ -1880,17 +1885,18 @@ void eraNut00a(double jdPartA,double jdPartB,double*dpsi,double*deps)
 
 	moonAnomIers=eraFal03(t);
 
-	sunAnomMhb=fmod(1287104.79305+
-				 t*(129596581.0481+t*(-0.5532+t*(0.000136+t*(-0.00001149)))),
-			 K_ARCSEC_PER_TURN)*
-		K_ARCSEC_TO_RAD;
+	sunAnomMhb=fmod(1287104.79305+t*(129596581.0481+
+									 t*(-0.5532+t*(0.000136+t*(-0.00001149)))),
+					K_ARCSEC_PER_TURN)*
+			   K_ARCSEC_TO_RAD;
 
 	moonLatArgIers=eraFaf03(t);
 
-	moonElongIers=fmod(1072260.70369+
-			   t*(1602961601.2090+t*(-6.3706+t*(0.006593+t*(-0.00003169)))),
-		   K_ARCSEC_PER_TURN)*
-	  K_ARCSEC_TO_RAD;
+	moonElongIers=
+		fmod(1072260.70369+
+				 t*(1602961601.2090+t*(-6.3706+t*(0.006593+t*(-0.00003169)))),
+			 K_ARCSEC_PER_TURN)*
+		K_ARCSEC_TO_RAD;
 
 	nodeLonIers=eraFaom03(t);
 
@@ -1899,8 +1905,9 @@ void eraNut00a(double jdPartA,double jdPartB,double*dpsi,double*deps)
 
 	for(const auto*term=luniTerms+kLuniTermCount;term!=luniTerms;){
 		--term;
-		argRad=(double)term->mulL*moonAnomIers+(double)term->mulLp*sunAnomMhb+(double)term->mulF*moonLatArgIers+
-			  (double)term->mulD*moonElongIers+(double)term->mulOm*nodeLonIers;
+		argRad=(double)term->mulL*moonAnomIers+(double)term->mulLp*sunAnomMhb+
+			   (double)term->mulF*moonLatArgIers+
+			   (double)term->mulD*moonElongIers+(double)term->mulOm*nodeLonIers;
 		fastSinCos(argRad,argSin,argCos);
 		accLon+=(term->lonSin+term->lonSinT*t)*argSin+term->lonCos*argCos;
 		accObl+=(term->oblCos+term->oblCosT*t)*argCos+term->oblSin*argSin;
@@ -1934,12 +1941,13 @@ void eraNut00a(double jdPartA,double jdPartB,double*dpsi,double*deps)
 
 	for(const auto*term=planetTerms+kPlanetTermCount;term!=planetTerms;){
 		--term;
-		argRad=(double)term->mulL*moonAnomMhb+(double)term->mulF*moonLatArgMhb+(double)term->mulD*moonElongMhb+
-			  (double)term->mulOm*nodeLonMhb+(double)term->mulMe*mercuryLon+
-			  (double)term->mulVe*venusLon+(double)term->mulEa*earthLon+
-			  (double)term->mulMa*marsLon+(double)term->mulJu*jupiterLon+
-			  (double)term->mulSa*saturnLon+(double)term->mulUr*uranusLon+
-			  (double)term->mulNe*neptuneLon+(double)term->mulPa*precAccumLon;
+		argRad=(double)term->mulL*moonAnomMhb+(double)term->mulF*moonLatArgMhb+
+			   (double)term->mulD*moonElongMhb+(double)term->mulOm*nodeLonMhb+
+			   (double)term->mulMe*mercuryLon+(double)term->mulVe*venusLon+
+			   (double)term->mulEa*earthLon+(double)term->mulMa*marsLon+
+			   (double)term->mulJu*jupiterLon+(double)term->mulSa*saturnLon+
+			   (double)term->mulUr*uranusLon+(double)term->mulNe*neptuneLon+
+			   (double)term->mulPa*precAccumLon;
 		fastSinCos(argRad,argSin,argCos);
 		accLon+=(double)term->lonSin*argSin+(double)term->lonCos*argCos;
 		accObl+=(double)term->oblSin*argSin+(double)term->oblCos*argCos;
@@ -1950,7 +1958,6 @@ void eraNut00a(double jdPartA,double jdPartB,double*dpsi,double*deps)
 
 	*dpsi=luniLonRad+planetLonRad;
 	*deps=luniOblRad+planetOblRad;
-
 }
 
 void eraNut06a(double jdPartA,double jdPartB,double*dpsi,double*deps){
@@ -1965,7 +1972,8 @@ void eraNut06a(double jdPartA,double jdPartB,double*dpsi,double*deps){
 	*deps=deps_2000a+deps_2000a*fj2;
 }
 
-void eraNumat(double meanObliquity,double nutLon,double nutObl,double outMat[3][3]){
+void eraNumat(double meanObliquity,double nutLon,double nutObl,
+			  double outMat[3][3]){
 	eraIr(outMat);
 	eraRx(meanObliquity,outMat);
 	eraRz(-nutLon,outMat);
@@ -1981,9 +1989,217 @@ void eraNum06a(double jdPartA,double jdPartB,double rmatn[3][3]){
 	eraNumat(meanObliquity,nutLon,nutObl,rmatn);
 }
 
+double eraAnp(double angleRad){
+	double wrapped=fmod(angleRad,K_TWO_PI);
+	if(wrapped<0.0){
+		wrapped+=K_TWO_PI;
+	}
+	return wrapped;
 }
 
+double eraEra00(double jdPartA,double jdPartB){
+	double dayPartA=jdPartA;
+	double dayPartB=jdPartB;
+	if(dayPartA>dayPartB){
+		const double tmp=dayPartA;
+		dayPartA=dayPartB;
+		dayPartB=tmp;
+	}
 
+	const double daysSinceJ2000=dayPartA+(dayPartB-K_JD_J2000);
+	const double fractionalDay=fmod(dayPartA,1.0)+fmod(dayPartB,1.0);
+	const double turns=
+		fractionalDay+0.7790572732640+0.00273781191135448*daysSinceJ2000;
+	return eraAnp(K_TWO_PI*turns);
+}
 
+double eraFalp03(double t){
+	return fmod(1287104.793048+
+					t*(129596581.0481+t*(-0.5532+t*(0.000136+t*(-0.00001149)))),
+				K_ARCSEC_PER_TURN)*
+		   K_ARCSEC_TO_RAD;
+}
 
+double eraFad03(double t){
+	return fmod(1072260.703692+t*(1602961601.2090+
+								  t*(-6.3706+t*(0.006593+t*(-0.00003169)))),
+				K_ARCSEC_PER_TURN)*
+		   K_ARCSEC_TO_RAD;
+}
 
+void eraBpn2xy(double rbpn[3][3],double*x,double*y){
+	*x=rbpn[2][0];
+	*y=rbpn[2][1];
+}
+
+double eraS06(double jdPartA,double jdPartB,double x,double y){
+	struct S06Term{
+		int nfa[8];
+		double s;
+		double c;
+	};
+
+	static const double polyCoeff[]={
+		94.00e-6,3808.65e-6,-122.68e-6,-72574.11e-6,27.98e-6,15.62e-6,
+	};
+
+	static const S06Term terms0[]={
+		{{0,0,0,0,1,0,0,0},-2640.73e-6,0.39e-6},
+		{{0,0,0,0,2,0,0,0},-63.53e-6,0.02e-6},
+		{{0,0,2,-2,3,0,0,0},-11.75e-6,-0.01e-6},
+		{{0,0,2,-2,1,0,0,0},-11.21e-6,-0.01e-6},
+		{{0,0,2,-2,2,0,0,0},4.57e-6,0.00e-6},
+		{{0,0,2,0,3,0,0,0},-2.02e-6,0.00e-6},
+		{{0,0,2,0,1,0,0,0},-1.98e-6,0.00e-6},
+		{{0,0,0,0,3,0,0,0},1.72e-6,0.00e-6},
+		{{0,1,0,0,1,0,0,0},1.41e-6,0.01e-6},
+		{{0,1,0,0,-1,0,0,0},1.26e-6,0.01e-6},
+		{{1,0,0,0,-1,0,0,0},0.63e-6,0.00e-6},
+		{{1,0,0,0,1,0,0,0},0.63e-6,0.00e-6},
+		{{0,1,2,-2,3,0,0,0},-0.46e-6,0.00e-6},
+		{{0,1,2,-2,1,0,0,0},-0.45e-6,0.00e-6},
+		{{0,0,4,-4,4,0,0,0},-0.36e-6,0.00e-6},
+		{{0,0,1,-1,1,-8,12,0},0.24e-6,0.12e-6},
+		{{0,0,2,0,0,0,0,0},-0.32e-6,0.00e-6},
+		{{0,0,2,0,2,0,0,0},-0.28e-6,0.00e-6},
+		{{1,0,2,0,3,0,0,0},-0.27e-6,0.00e-6},
+		{{1,0,2,0,1,0,0,0},-0.26e-6,0.00e-6},
+		{{0,0,2,-2,0,0,0,0},0.21e-6,0.00e-6},
+		{{0,1,-2,2,-3,0,0,0},-0.19e-6,0.00e-6},
+		{{0,1,-2,2,-1,0,0,0},-0.18e-6,0.00e-6},
+		{{0,0,0,0,0,8,-13,-1},0.10e-6,-0.05e-6},
+		{{0,0,0,2,0,0,0,0},-0.15e-6,0.00e-6},
+		{{2,0,-2,0,-1,0,0,0},0.14e-6,0.00e-6},
+		{{0,1,2,-2,2,0,0,0},0.14e-6,0.00e-6},
+		{{1,0,0,-2,1,0,0,0},-0.14e-6,0.00e-6},
+		{{1,0,0,-2,-1,0,0,0},-0.14e-6,0.00e-6},
+		{{0,0,4,-2,4,0,0,0},-0.13e-6,0.00e-6},
+		{{0,0,2,-2,4,0,0,0},0.11e-6,0.00e-6},
+		{{1,0,-2,0,-3,0,0,0},-0.11e-6,0.00e-6},
+		{{1,0,-2,0,-1,0,0,0},-0.11e-6,0.00e-6},
+	};
+
+	static const S06Term terms1[]={
+		{{0,0,0,0,2,0,0,0},-0.07e-6,3.57e-6},
+		{{0,0,0,0,1,0,0,0},1.73e-6,-0.03e-6},
+		{{0,0,2,-2,3,0,0,0},0.00e-6,0.48e-6},
+	};
+
+	static const S06Term terms2[]={
+		{{0,0,0,0,1,0,0,0},743.52e-6,-0.17e-6},
+		{{0,0,2,-2,2,0,0,0},56.91e-6,0.06e-6},
+		{{0,0,2,0,2,0,0,0},9.84e-6,-0.01e-6},
+		{{0,0,0,0,2,0,0,0},-8.85e-6,0.01e-6},
+		{{0,1,0,0,0,0,0,0},-6.38e-6,-0.05e-6},
+		{{1,0,0,0,0,0,0,0},-3.07e-6,0.00e-6},
+		{{0,1,2,-2,2,0,0,0},2.23e-6,0.00e-6},
+		{{0,0,2,0,1,0,0,0},1.67e-6,0.00e-6},
+		{{1,0,2,0,2,0,0,0},1.30e-6,0.00e-6},
+		{{0,1,-2,2,-2,0,0,0},0.93e-6,0.00e-6},
+		{{1,0,0,-2,0,0,0,0},0.68e-6,0.00e-6},
+		{{0,0,2,-2,1,0,0,0},-0.55e-6,0.00e-6},
+		{{1,0,-2,0,-2,0,0,0},0.53e-6,0.00e-6},
+		{{0,0,0,2,0,0,0,0},-0.27e-6,0.00e-6},
+		{{1,0,0,0,1,0,0,0},-0.27e-6,0.00e-6},
+		{{1,0,-2,-2,-2,0,0,0},-0.26e-6,0.00e-6},
+		{{1,0,0,0,-1,0,0,0},-0.25e-6,0.00e-6},
+		{{1,0,2,0,1,0,0,0},0.22e-6,0.00e-6},
+		{{2,0,0,-2,0,0,0,0},-0.21e-6,0.00e-6},
+		{{2,0,-2,0,-1,0,0,0},0.20e-6,0.00e-6},
+		{{0,0,2,2,2,0,0,0},0.17e-6,0.00e-6},
+		{{2,0,2,0,2,0,0,0},0.13e-6,0.00e-6},
+		{{2,0,0,0,0,0,0,0},-0.13e-6,0.00e-6},
+		{{1,0,2,-2,2,0,0,0},-0.12e-6,0.00e-6},
+		{{0,0,2,0,0,0,0,0},-0.11e-6,0.00e-6},
+	};
+
+	static const S06Term terms3[]={
+		{{0,0,0,0,1,0,0,0},0.30e-6,-23.42e-6},
+		{{0,0,2,-2,2,0,0,0},-0.03e-6,-1.46e-6},
+		{{0,0,2,0,2,0,0,0},-0.01e-6,-0.25e-6},
+		{{0,0,0,0,2,0,0,0},0.00e-6,0.23e-6},
+	};
+
+	static const S06Term terms4[]={
+		{{0,0,0,0,1,0,0,0},-0.26e-6,-0.01e-6},
+	};
+
+	const double t=((jdPartA-K_JD_J2000)+jdPartB)/K_DAYS_PER_CENTURY;
+	const double fa[8]={
+		eraFal03(t), eraFalp03(t),eraFaf03(t),eraFad03(t),
+		eraFaom03(t),eraFave03(t),eraFae03(t),eraFapa03(t),
+	};
+
+	auto accumulateTerms=[&fa](const S06Term*terms,int count,double*sum){
+		for(int i=count-1;i>=0;--i){
+			double arg=0.0;
+			for(int j=0;j<8;++j){
+				arg+=(double)terms[i].nfa[j]*fa[j];
+			}
+			*sum+=terms[i].s*sin(arg)+terms[i].c*cos(arg);
+		}
+	};
+
+	double w0=polyCoeff[0];
+	double w1=polyCoeff[1];
+	double w2=polyCoeff[2];
+	double w3=polyCoeff[3];
+	double w4=polyCoeff[4];
+	const double w5=polyCoeff[5];
+
+	accumulateTerms(terms0,(int)(sizeof terms0/sizeof terms0[0]),&w0);
+	accumulateTerms(terms1,(int)(sizeof terms1/sizeof terms1[0]),&w1);
+	accumulateTerms(terms2,(int)(sizeof terms2/sizeof terms2[0]),&w2);
+	accumulateTerms(terms3,(int)(sizeof terms3/sizeof terms3[0]),&w3);
+	accumulateTerms(terms4,(int)(sizeof terms4/sizeof terms4[0]),&w4);
+
+	const double seriesArcsec=w0+(w1+(w2+(w3+(w4+w5*t)*t)*t)*t)*t;
+	return seriesArcsec*K_ARCSEC_TO_RAD-x*y*0.5;
+}
+
+double eraEors(double rnpb[3][3],double s){
+	const double x=rnpb[2][0];
+	const double xScale=x/(1.0+rnpb[2][2]);
+	const double xs=1.0-xScale*x;
+	const double ys=-xScale*rnpb[2][1];
+	const double zs=-x;
+
+	const double p=rnpb[0][0]*xs+rnpb[0][1]*ys+rnpb[0][2]*zs;
+	const double q=rnpb[1][0]*xs+rnpb[1][1]*ys+rnpb[1][2]*zs;
+
+	if((p!=0.0)||(q!=0.0)){
+		return s-atan2(q,p);
+	}
+	return s;
+}
+
+void eraPnm06a(double jdPartA,double jdPartB,double rbpn[3][3]){
+	double gamb;
+	double phib;
+	double psib;
+	double epsa;
+	double nutLon;
+	double nutObl;
+
+	eraPfw06(jdPartA,jdPartB,&gamb,&phib,&psib,&epsa);
+	eraNut06a(jdPartA,jdPartB,&nutLon,&nutObl);
+	eraFw2m(gamb,phib,psib+nutLon,epsa+nutObl,rbpn);
+}
+
+double eraGst06(double uta,double utb,double tta,double ttb,double rnpb[3][3]){
+	double x;
+	double y;
+	eraBpn2xy(rnpb,&x,&y);
+
+	const double s=eraS06(tta,ttb,x,y);
+	const double era=eraEra00(uta,utb);
+	const double eo=eraEors(rnpb,s);
+	return eraAnp(era-eo);
+}
+
+double eraGst06a(double uta,double utb,double tta,double ttb){
+	double rbpn[3][3];
+	eraPnm06a(tta,ttb,rbpn);
+	return eraGst06(uta,utb,tta,ttb,rbpn);
+}
+}
