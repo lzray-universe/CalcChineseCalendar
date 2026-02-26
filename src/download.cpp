@@ -7,27 +7,27 @@
 std::vector<BspOption> bsp_opts(){
 	return {
 		{"de440",
-		 "https://naif.jpl.nasa.gov/pub/naif/gen_kern/spk/planets/"
+		 "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/"
 		 "de440.bsp",
 		 "≈114MB","1550–2650年"},
 		{"de440s",
-		 "https://naif.jpl.nasa.gov/pub/naif/gen_kern/spk/planets/"
+		 "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/"
 		 "de440s.bsp",
 		 "≈31MB","1850–2150年"},
 		{"de441p1",
-		 "https://naif.jpl.nasa.gov/pub/naif/gen_kern/spk/planets/"
+		 "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/"
 		 "de441_part-1.bsp",
 		 "≈1.5GB","-13200–1969年"},
 		{"de441p2",
-		 "https://naif.jpl.nasa.gov/pub/naif/gen_kern/spk/planets/"
+		 "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/"
 		 "de441_part-2.bsp",
 		 "≈1.5GB","1969–17191年"},
 		{"de442",
-		 "https://naif.jpl.nasa.gov/pub/naif/gen_kern/spk/planets/"
+		 "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/"
 		 "de442.bsp",
 		 "≈114MB","1550–2650年"},
 		{"de442s",
-		 "https://naif.jpl.nasa.gov/pub/naif/gen_kern/spk/planets/"
+		 "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/"
 		 "de442s.bsp",
 		 "≈31MB","1850–2150年"},
 	};
