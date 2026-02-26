@@ -12,6 +12,8 @@ void eraNut00a(double date1,double date2,double*dpsi,double*deps);
 
 void eraNum06a(double date1,double date2,double rmatn[3][3]);
 
+double eraGst06a(double uta,double utb,double tta,double ttb);
+
 }
 
 namespace lunar::precnut{
@@ -34,6 +36,10 @@ void nut00a(double date1,double date2,double*dpsi,double*deps){
 
 void num06a(double date1,double date2,double rmatn[3][3]){
 	eraNum06a(date1,date2,rmatn);
+}
+
+double gst06a(double uta,double utb,double tta,double ttb){
+	return eraGst06a(uta,utb,tta,ttb);
 }
 
 }

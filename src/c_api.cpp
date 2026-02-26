@@ -5,6 +5,7 @@
 #include<string>
 #include<vector>
 
+#include "lunar/app_long.hpp"
 #include "lunar/calendar.hpp"
 #include "lunar/cli.hpp"
 #include "lunar/entry.hpp"
@@ -109,6 +110,28 @@ int LUNAR_CALL lunar_root_batch(const char*ephem,const char*input_path,
 				"ephem/input_path/out_path must not be null");
 		}
 		return run_rootw(ephem,input_path,out_path);
+	});
+}
+
+int LUNAR_CALL lunar_calc_eot(const char*ephem,double jd_utc,double lon_deg,
+							  lunar_eot_result*out){
+	return guard([&](){
+		if(ephem==nullptr||out==nullptr){
+			throw std::invalid_argument("ephem/out must not be null");
+		}
+		EphRead eph(ephem);
+		AppLon app(eph);
+		EoTData data=app.eot_calc(jd_utc,lon_deg);
+		out->jd_utc=data.jd_utc;
+		out->jd_tdb=data.jd_tdb;
+		out->lon_deg=data.lon_deg;
+		out->lon_rad=data.lon_rad;
+		out->apparent_solar_time_rad=data.apparent_solar_time_rad;
+		out->mean_solar_time_rad=data.mean_solar_time_rad;
+		out->eot_rad=data.eot_rad;
+		out->eot_minutes=data.eot_minutes;
+		out->eot_seconds=data.eot_seconds;
+		return 0;
 	});
 }
 

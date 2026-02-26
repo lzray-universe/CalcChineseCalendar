@@ -82,6 +82,8 @@ struct AtArgs{
 	bool pretty=true;
 	bool quiet=false;
 	bool events=true;
+	bool calc_eot=false;
+	double eot_lon_deg=0.0;
 	bool from_stdin=false;
 	std::string input_file;
 	int jobs=1;

@@ -12,4 +12,6 @@ void nut00a(double date1,double date2,double*dpsi,double*deps);
 
 void num06a(double date1,double date2,double rmatn[3][3]);
 
+double gst06a(double uta,double utb,double tta,double ttb);
+
 }

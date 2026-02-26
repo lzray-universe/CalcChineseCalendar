@@ -439,13 +439,14 @@ lunar download get <id> [--dir <path>]
   * 月相名（phase_name）
   * 该时刻对应的农历日期（按 UTC+8 判日）
   * 可选：最近的节气/相位事件（`--events 1`）
+  * 可选：指定经度的 EoT（真太阳时 - 平太阳时，`--eot-lon`）
 
 **单次用法**
 
 ```bash
 lunar at <bsp> <time>
   [--input-tz Z|+08:00|-05:00] [--tz Z|+08:00|-05:00]
-  [--events 0|1]
+  [--events 0|1] [--eot-lon <deg>]
   [--format json|txt|jsonl] [--out ...] [--pretty 0|1] [--quiet]
 ```
 
@@ -538,6 +539,7 @@ lunar at <bsp> <time>
 * `ill_*`：月面照明率（0–1 / 0–100）
 * `waxing`：是否在“盈”（照明率上升），用黄经变化率近似判断
 * `phase_name`：由角距判断的相位名称（如“朔”“望”“上弦”“下弦”“盈凸月”等）
+* `eot`：仅 `--eot-lon` 时出现，包含 `eot_minutes/eot_seconds`（真太阳时 - 平太阳时）
 * `near_ev`：最近节气/月相事件（仅 `--events 1` 时出现）
 
 #### 批处理模式（stdin / file）

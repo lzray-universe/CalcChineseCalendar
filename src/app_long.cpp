@@ -1,7 +1,34 @@
 #include "lunar/app_long.hpp"
+#include "lunar/precnut_core.hpp"
+#include "lunar/time_scale.hpp"
 
 #include<algorithm>
 #include<cmath>
+
+namespace{
+
+double norm2pi(double angle){
+	double v=std::fmod(angle,TWO_PI);
+	if(v<0.0){
+		v+=TWO_PI;
+	}
+	return v;
+}
+
+double norm_pm_pi(double angle){
+	double v=norm2pi(angle+PI);
+	return v-PI;
+}
+
+double day_frac_utc(double jd_utc){
+	double frac=std::fmod(jd_utc+0.5,1.0);
+	if(frac<0.0){
+		frac+=1.0;
+	}
+	return frac;
+}
+
+}
 
 double AberCorr::lightday(const Vec3&vec){
 	double r=vec.norm();
@@ -161,4 +188,37 @@ std::pair<double,double> AppLon::moon_calc(double jd_tdb){
 		lam_dot=(Xec.x*Xec_dot.y-Xec.y*Xec_dot.x)/denom;
 	}
 	return {lam,lam_dot};
+}
+
+EoTData AppLon::eot_calc(double jd_utc,double lon_deg){
+	EoTData out;
+	out.jd_utc=jd_utc;
+	out.jd_tdb=TimeScale::utc_to_tdb(jd_utc);
+	out.lon_deg=lon_deg;
+	out.lon_rad=norm_pm_pi(lon_deg*PI/180.0);
+
+	Vec3 sun_app=AberCorr::geo_app(eph,eph.SUN,out.jd_tdb,6);
+
+	Mat3 P=prec_mat(out.jd_tdb);
+	Mat3 N=PrecNut::nut_mat(out.jd_tdb);
+	Mat3 eq_true=N*P*frame_bias;
+	Vec3 sun_eq=eq_true*sun_app;
+	double ra_app=norm2pi(std::atan2(sun_eq.y,sun_eq.x));
+
+	double uta=std::floor(jd_utc);
+	double utb=jd_utc-uta;
+	double tta=std::floor(out.jd_tdb);
+	double ttb=out.jd_tdb-tta;
+	double gast=lunar::precnut::gst06a(uta,utb,tta,ttb);
+
+	double h_app=gast+out.lon_rad-ra_app;
+	out.apparent_solar_time_rad=norm2pi(h_app+PI);
+
+	double lmst=day_frac_utc(jd_utc)*TWO_PI+out.lon_rad;
+	out.mean_solar_time_rad=norm2pi(lmst);
+
+	out.eot_rad=norm_pm_pi(out.apparent_solar_time_rad-out.mean_solar_time_rad);
+	out.eot_seconds=out.eot_rad*SEC_DAY/TWO_PI;
+	out.eot_minutes=out.eot_seconds/60.0;
+	return out;
 }

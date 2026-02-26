@@ -471,6 +471,22 @@ std::string format_num(double v){
 	return oss.str();
 }
 
+double parse_double(const std::string&text,const std::string&name){
+	try{
+		std::size_t idx=0;
+		double v=std::stod(text,&idx);
+		if(idx!=text.size()){
+			throw std::invalid_argument("");
+		}
+		if(!std::isfinite(v)){
+			throw std::invalid_argument("");
+		}
+		return v;
+	}catch(const std::exception&){
+		throw std::invalid_argument("invalid "+name+": "+text);
+	}
+}
+
 struct AtData{
 	std::string time_raw;
 	std::string tz_in;
@@ -494,6 +510,8 @@ struct AtData{
 	LunDate lunar_date;
 	bool inc_ev=false;
 	NearEvents near_ev;
+	bool has_eot=false;
+	EoTData eot;
 };
 
 struct BatchLine{
@@ -622,7 +640,8 @@ std::vector<BatchLine> read_bat(bool from_stdin,const std::string&input_file){
 
 AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 				 const std::string&display_tz,const std::string&time_raw,
-				 const std::string&tz_in,bool inc_ev,QueryCache*cache=nullptr){
+				 const std::string&tz_in,bool inc_ev,bool calc_eot,
+				 double eot_lon_deg,QueryCache*cache=nullptr){
 	AtData out;
 	out.time_raw=time_raw;
 	out.tz_in=tz_in;
@@ -650,6 +669,10 @@ AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 	if(inc_ev){
 		out.near_ev=comp_near(eph,jd_utc,tz_disp,cache);
 	}
+	out.has_eot=calc_eot;
+	if(calc_eot){
+		out.eot=app.eot_calc(jd_utc,eot_lon_deg);
+	}
 
 	out.utc_iso=fmt_iso(jd_utc,0,true);
 	out.local_iso=fmt_iso(jd_utc,tz_disp,true);
@@ -658,13 +681,14 @@ AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 
 AtData at_ftxt(EphRead&eph,const std::string&time_raw,
 			   const std::string&input_tz,int tz_disp,
-			   const std::string&display_tz,bool inc_ev,
+			   const std::string&display_tz,bool inc_ev,bool calc_eot,
+			   double eot_lon_deg,
 			   QueryCache*cache=nullptr){
 	IsoTime parsed=parse_iso(time_raw,input_tz);
 	std::string tz_in=
 		parsed.has_tz?fmt_tz(parsed.tz_off):fmt_tz(parse_tz(input_tz));
 	return at_fromjd(eph,parsed.jd_utc,tz_disp,display_tz,time_raw,tz_in,
-					 inc_ev,cache);
+					 inc_ev,calc_eot,eot_lon_deg,cache);
 }
 
 void wr_ejson(JsonWriter&w,const EventRec&ev){
@@ -714,6 +738,27 @@ void wr_adjs(JsonWriter&w,const AtData&d){
 	w.value(d.phase_name);
 	w.key("lunar_date");
 	wr_ljson(w,d.lunar_date);
+	w.key("eot");
+	if(!d.has_eot){
+		w.null_val();
+	}else{
+		w.obj_begin();
+		w.key("longitude_deg");
+		w.value(d.eot.lon_deg);
+		w.key("longitude_rad");
+		w.value(d.eot.lon_rad);
+		w.key("apparent_solar_time_rad");
+		w.value(d.eot.apparent_solar_time_rad);
+		w.key("mean_solar_time_rad");
+		w.value(d.eot.mean_solar_time_rad);
+		w.key("eot_rad");
+		w.value(d.eot.eot_rad);
+		w.key("eot_minutes");
+		w.value(d.eot.eot_minutes);
+		w.key("eot_seconds");
+		w.value(d.eot.eot_seconds);
+		w.obj_end();
+	}
 	w.key("near_ev");
 	if(!d.inc_ev){
 		w.null_val();
@@ -748,6 +793,12 @@ void wr_aijs(JsonWriter&w,const AtData&d){
 	w.value(d.utc_iso);
 	w.key("loc_iso");
 	w.value(d.local_iso);
+	w.key("eot_lon_deg");
+	if(d.has_eot){
+		w.value(d.eot.lon_deg);
+	}else{
+		w.null_val();
+	}
 	w.obj_end();
 }
 
@@ -773,6 +824,9 @@ void wr_atxt(std::ostream&os,const AtData&d,bool hdr_on){
 	os<<"input.jd_tdb="<<format_num(d.jd_tdb)<<"\n";
 	os<<"input.utc_iso="<<d.utc_iso<<"\n";
 	os<<"input.loc_iso="<<d.local_iso<<"\n";
+	if(d.has_eot){
+		os<<"input.eot_lon_deg="<<format_num(d.eot.lon_deg)<<"\n";
+	}
 	os<<"data.sun_lam="<<format_num(d.lam_s)<<"\n";
 	os<<"data.moon_lam="<<format_num(d.lam_m)<<"\n";
 	os<<"data.elongation_rad="<<format_num(d.elong)<<"\n";
@@ -787,6 +841,17 @@ void wr_atxt(std::ostream&os,const AtData&d,bool hdr_on){
 	os<<"data.lun_mlab="<<d.lunar_date.lun_mlab<<"\n";
 	os<<"data.lunar_day="<<d.lunar_date.lunar_day<<"\n";
 	os<<"data.lun_label="<<d.lunar_date.lun_label<<"\n";
+	if(d.has_eot){
+		os<<"data.eot.longitude_deg="<<format_num(d.eot.lon_deg)<<"\n";
+		os<<"data.eot.longitude_rad="<<format_num(d.eot.lon_rad)<<"\n";
+		os<<"data.eot.apparent_solar_time_rad="
+		  <<format_num(d.eot.apparent_solar_time_rad)<<"\n";
+		os<<"data.eot.mean_solar_time_rad="
+		  <<format_num(d.eot.mean_solar_time_rad)<<"\n";
+		os<<"data.eot.eot_rad="<<format_num(d.eot.eot_rad)<<"\n";
+		os<<"data.eot.eot_minutes="<<format_num(d.eot.eot_minutes)<<"\n";
+		os<<"data.eot.eot_seconds="<<format_num(d.eot.eot_seconds)<<"\n";
+	}
 	if(d.inc_ev){
 		os<<"[near_ev]\n";
 		os<<"slot\tkind\tcode\tname\tjd_utc\ttm_uiso\ttm_liso\n";
@@ -1046,7 +1111,7 @@ int cmd_test(const std::vector<std::string>&args){
 		c1.id="at_illum";
 		try{
 			AtData atd=at_ftxt(eph,"2025-06-01T00:00:00+08:00","+08:00",480,
-							   "+08:00",true,&cache);
+							   "+08:00",true,false,0.0,&cache);
 			c1.pass=(atd.ill_pct>=0.0&&atd.ill_pct<=100.0);
 			c1.message=c1.pass?"ok":"illumination out of [0,100]";
 		}catch(const std::exception&ex){
@@ -1276,7 +1341,7 @@ int cmd_comp(const std::vector<std::string>&args){
 				 <<"  fi\n"
 				 <<"  local opts=\"--help --format --out --tz --pretty --quiet "
 				   "--stdin --file --jobs --meta-once --from --to --count "
-				   "--kinds\"\n"
+				   "--kinds --eot-lon\"\n"
 				 <<"  COMPREPLY=( $(compgen -W \"${opts}\" -- \"${cur}\") )\n"
 				 <<"}\n"
 				 <<"complete -F _lunar_complete lunar\n";
@@ -1443,7 +1508,7 @@ void cli_at(const AtArgs&args){
 	QueryCache cache(eph);
 	AtData result=
 		at_ftxt(eph,args.time_raw,args.input_tz,tz_disp,args.tz,args.events,
-				&cache);
+				args.calc_eot,args.eot_lon_deg,&cache);
 
 	OutTgt out=open_out(args.out);
 	const FmtMap fmt_handlers={
@@ -1667,7 +1732,7 @@ int run_abcli(const AtArgs&args){
 		try{
 			row.data=
 				at_ftxt(eph,line.raw,args.input_tz,tz_disp,args.tz,args.events,
-						&cache);
+						args.calc_eot,args.eot_lon_deg,&cache);
 			row.ok=true;
 		}catch(const std::exception&ex){
 			row.ok=false;
@@ -1750,16 +1815,27 @@ int run_abcli(const AtArgs&args){
 			 std::ostream&os=*out.stream;
 			 os<<"tool=lunar format=txt type=at-batch tz_display="<<args.tz
 			   <<"\n";
-			 os<<"line_no\tstatus\traw\till_pct\tphase_name\tlunar_"
-				 "date\tmessage\n";
+			 os<<"line_no\tstatus\traw\till_pct\tphase_name\tlunar_date";
+			 if(args.calc_eot){
+				 os<<"\teot_minutes";
+			 }
+			 os<<"\tmessage\n";
 			 for(const auto&row : rows){
 				 os<<row.line_no<<"\t";
 				 if(row.ok){
 					 os<<"ok\t"<<row.raw<<"\t"<<format_num(row.data.ill_pct)
 					   <<"\t"<<row.data.phase_name<<"\t"
-					   <<row.data.lunar_date.lun_label<<"\t\n";
+					   <<row.data.lunar_date.lun_label;
+					 if(args.calc_eot){
+						 os<<"\t"<<format_num(row.data.eot.eot_minutes);
+					 }
+					 os<<"\t\n";
 				 }else{
-					 os<<"error\t"<<row.raw<<"\t\t\t\t"<<row.error<<"\n";
+					 os<<"error\t"<<row.raw<<"\t\t\t";
+					 if(args.calc_eot){
+						 os<<"\t";
+					 }
+					 os<<"\t"<<row.error<<"\n";
 				 }
 			 }
 		 }},
@@ -2058,6 +2134,11 @@ int cmd_at(const std::vector<std::string>&args){
 						const std::string&opt){
 			 a.events=parse_bool01(req_val(src,idx,opt),"--events");
 		 }},
+		{"--eot-lon",[&](const std::vector<std::string>&src,std::size_t&idx,
+						 const std::string&opt){
+			 a.eot_lon_deg=parse_double(req_val(src,idx,opt),"--eot-lon");
+			 a.calc_eot=true;
+		 }},
 	};
 
 	for(;i<args.size();++i){
@@ -2230,7 +2311,7 @@ void use_at(){
 		<<"  lunar at <bsp> --file <path>\n"
 		<<"    [--input-tz Z|+08:00|-05:00] [--tz Z|+08:00|-05:00]\n"
 		<<"    [--format json|txt|jsonl] [--out <path>] [--pretty 0|1] "
-		  "[--quiet] [--events 0|1]\n"
+		  "[--quiet] [--events 0|1] [--eot-lon <deg>]\n"
 		<<"    [--jobs N] [--meta-once 0|1]\n"
 		<<"Time formats:\n"
 		<<"  YYYY-MM-DD\n"
@@ -2241,11 +2322,15 @@ void use_at(){
 		<<"  lunar at D:\\de442.bsp 2025-06-01T00:00:00+08:00 --format json\n"
 		<<"  lunar at D:\\de442.bsp --time 2025-06-01T00:00 --input-tz +08:00 "
 		  "--tz Z\n"
+		<<"  lunar at D:\\de442.bsp 2025-06-01T00:00:00+08:00 --eot-lon "
+		  "116.391\n"
 		<<"  lunar at D:\\de442.bsp --file times.txt --format jsonl "
 		  "--meta-once 1\n"
 		<<"Notes:\n"
 		<<"  --input-tz only parses input without timezone suffix; --tz only "
-		  "affects display.\n";
+		  "affects display.\n"
+		<<"  --eot-lon uses east-positive degrees; output is apparent - mean "
+		  "solar time.\n";
 }
 
 void use_conv(){
@@ -2504,7 +2589,7 @@ int cmd_day(const std::vector<std::string>&args){
 	QueryCache cache(eph);
 	AtData atd=
 		at_fromjd(eph,smp_jdutc,tz_off,tz,date_text+"T"+at_time,"+08:00",false,
-				  &cache);
+				  false,0.0,&cache);
 
 	std::vector<EventRec> day_events;
 	if(inc_ev){
@@ -2677,7 +2762,7 @@ int cmd_mview(const std::vector<std::string>&args){
 	for(int d=1;d<=n_days;++d){
 		double smp_jdutc=greg2jd(year,month,d,12,0,0.0)-UTC8DAY;
 		AtData atd=at_fromjd(eph,smp_jdutc,tz_off,tz,ymd_str(year,month,d),
-							 "+08:00",false,&cache);
+							 "+08:00",false,false,0.0,&cache);
 		std::string summary;
 		auto it=day2ev.find(d);
 		if(it!=day2ev.end()){
@@ -3150,7 +3235,7 @@ int cmd_alm(const std::vector<std::string>&args){
 	QueryCache cache(eph);
 	AtData atd=
 		at_fromjd(eph,smp_jdutc,tz_off,tz,date_text+"T12:00:00","+08:00",false,
-				  &cache);
+				  false,0.0,&cache);
 	std::set<int> years={y-1,y,y+1};
 	std::vector<EventRec> all_events=
 		col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr);

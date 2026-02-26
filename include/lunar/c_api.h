@@ -27,6 +27,21 @@ LUNAR_API int LUNAR_CALL lunar_root_batch(const char*ephem,
 										  const char*input_path,
 										  const char*out_path);
 
+typedef struct lunar_eot_result{
+	double jd_utc;
+	double jd_tdb;
+	double lon_deg;
+	double lon_rad;
+	double apparent_solar_time_rad;
+	double mean_solar_time_rad;
+	double eot_rad;
+	double eot_minutes;
+	double eot_seconds;
+} lunar_eot_result;
+
+LUNAR_API int LUNAR_CALL lunar_calc_eot(const char*ephem,double jd_utc,
+										double lon_deg,lunar_eot_result*out);
+
 LUNAR_API int LUNAR_CALL lunar_cmd_month(int argc,const char*const*argv);
 LUNAR_API int LUNAR_CALL lunar_cmd_cal(int argc,const char*const*argv);
 LUNAR_API int LUNAR_CALL lunar_cmd_year(int argc,const char*const*argv);

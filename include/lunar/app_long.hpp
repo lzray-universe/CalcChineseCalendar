@@ -11,6 +11,18 @@ struct RetProp{
 	double tr;
 };
 
+struct EoTData{
+	double jd_utc=0.0;
+	double jd_tdb=0.0;
+	double lon_deg=0.0;
+	double lon_rad=0.0;
+	double apparent_solar_time_rad=0.0;
+	double mean_solar_time_rad=0.0;
+	double eot_rad=0.0;
+	double eot_minutes=0.0;
+	double eot_seconds=0.0;
+};
+
 struct AberCorr{
 	static double lightday(const Vec3&vec);
 
@@ -52,4 +64,6 @@ struct AppLon{
 	std::pair<double,double> sun_calc(double jd_tdb);
 
 	std::pair<double,double> moon_calc(double jd_tdb);
+
+	EoTData eot_calc(double jd_utc,double lon_deg);
 };
