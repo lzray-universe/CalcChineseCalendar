@@ -109,12 +109,14 @@ struct LunCal6{
 	EphRead&eph;
 	SolLunCal engine;
 	std::map<std::pair<std::string,int>,LocalDT> st_cache;
+	std::map<int,std::vector<LunarMonth>> month_cache;
 
 	std::vector<std::string> Z_CODES;
 
 	explicit LunCal6(EphRead&reader);
 
 	LocalDT get_st(const std::string&code,int year);
+	const std::vector<LunarMonth>&get_months(int year);
 
 	static double to_utcjd(const LocalDT&t);
 

@@ -579,6 +579,15 @@ LocalDT LunCal6::get_st(const std::string&code,int year){
 	return t;
 }
 
+const std::vector<LunarMonth>&LunCal6::get_months(int year){
+	auto it=month_cache.find(year);
+	if(it!=month_cache.end()){
+		return it->second;
+	}
+	auto inserted=month_cache.emplace(year,comp_sym(*this,year));
+	return inserted.first->second;
+}
+
 double LunCal6::to_utcjd(const LocalDT&t){ return SolLunCal::loc2utc(t); }
 
 LocalDT LunCal6::to_local(double jd){ return SolLunCal::utc2loc(jd); }
@@ -779,12 +788,12 @@ std::vector<LunarMonth> comp_sym(LunCal6&calc,int year){
 }
 
 std::vector<LunarMonth> enum_lyr(LunCal6&calc,int year){
-	return comp_sym(calc,year);
+	return calc.get_months(year);
 }
 
 std::vector<LunarMonth> enum_gyr(LunCal6&calc,int year){
-	std::vector<LunarMonth> mon_span=comp_sym(calc,year);
-	std::vector<LunarMonth> next=comp_sym(calc,year+1);
+	std::vector<LunarMonth> mon_span=calc.get_months(year);
+	const auto&next=calc.get_months(year+1);
 	mon_span.insert(mon_span.end(),next.begin(),next.end());
 
 	std::map<double,LunarMonth> unique;

@@ -67,6 +67,21 @@ struct NearEvents{
 	NearEvt phase_next;
 };
 
+struct YearEventsCache{
+	std::vector<EventRec> solar;
+	std::vector<EventRec> phase;
+};
+
+struct QueryCache{
+	LunCal6 calc;
+	SolLunCal solver;
+	AppLon app;
+	std::map<std::pair<int,int>,YearEventsCache> year_events;
+
+	explicit QueryCache(EphRead&eph)
+		: calc(eph),solver(eph),app(eph){}
+};
+
 using cli_util::OutTgt;
 using cli_util::bld_lpev;
 using cli_util::bld_stev;
@@ -182,23 +197,48 @@ std::pair<NearEvt,NearEvt> find_pnev(const std::vector<EventRec>&events,
 	return {prev,next};
 }
 
-NearEvents comp_near(EphRead&eph,double jd_utc,int tz_off){
+const YearEventsCache&load_year_events(QueryCache&cache,int year,int tz_off){
+	auto key=std::make_pair(year,tz_off);
+	auto it=cache.year_events.find(key);
+	if(it!=cache.year_events.end()){
+		return it->second;
+	}
+	YearResult yr=cache.solver.compute_year(year,nullptr);
+	YearEventsCache rec;
+	rec.solar=bld_stev(yr,tz_off);
+	rec.phase=bld_lpev(yr,tz_off);
+	auto inserted=cache.year_events.emplace(key,std::move(rec));
+	return inserted.first->second;
+}
+
+NearEvents comp_near(EphRead&eph,double jd_utc,int tz_off,
+					 QueryCache*cache=nullptr){
 	int cst_year=0;
 	int cst_month=0;
 	int cst_day=0;
 	utc2cst(jd_utc,cst_year,cst_month,cst_day);
 
 	std::set<int> years={cst_year-1,cst_year,cst_year+1};
-	SolLunCal solver(eph);
 
 	std::vector<EventRec> sol_evts;
 	std::vector<EventRec> ph_evts;
-	for(int y : years){
-		YearResult yr=solver.compute_year(y,nullptr);
-		std::vector<EventRec> se=bld_stev(yr,tz_off);
-		std::vector<EventRec> pe=bld_lpev(yr,tz_off);
-		sol_evts.insert(sol_evts.end(),se.begin(),se.end());
-		ph_evts.insert(ph_evts.end(),pe.begin(),pe.end());
+	if(cache){
+		for(int y : years){
+			const auto&cached=load_year_events(*cache,y,tz_off);
+			sol_evts.insert(sol_evts.end(),cached.solar.begin(),
+							cached.solar.end());
+			ph_evts.insert(ph_evts.end(),cached.phase.begin(),
+						   cached.phase.end());
+		}
+	}else{
+		SolLunCal solver(eph);
+		for(int y : years){
+			YearResult yr=solver.compute_year(y,nullptr);
+			std::vector<EventRec> se=bld_stev(yr,tz_off);
+			std::vector<EventRec> pe=bld_lpev(yr,tz_off);
+			sol_evts.insert(sol_evts.end(),se.begin(),se.end());
+			ph_evts.insert(ph_evts.end(),pe.begin(),pe.end());
+		}
 	}
 
 	std::sort(
@@ -214,21 +254,22 @@ NearEvents comp_near(EphRead&eph,double jd_utc,int tz_off){
 	return out;
 }
 
-LunDate res_lun(EphRead&eph,double jd_utc){
+LunDate res_lun(EphRead&eph,double jd_utc,QueryCache*cache=nullptr){
 	int cst_year=0;
 	int cst_month=0;
 	int cst_day=0;
 	utc2cst(jd_utc,cst_year,cst_month,cst_day);
 	double qry_dutc=cst_midjd(cst_year,cst_month,cst_day);
 
-	LunCal6 calc(eph);
+	LunCal6 local_calc(eph);
+	LunCal6&calc=cache?cache->calc:local_calc;
 
 	bool found=false;
 	LunarMonth selected;
 	double sel_sday=0.0;
 	double sel_eday=0.0;
 	for(int y : {cst_year,cst_year-1,cst_year+1}){
-		std::vector<LunarMonth> months=comp_sym(calc,y);
+		const auto&months=calc.get_months(y);
 		for(const auto&m : months){
 			double start_day=
 				cst_midjd(m.start_dt.year,m.start_dt.month,m.start_dt.day);
@@ -249,7 +290,7 @@ LunDate res_lun(EphRead&eph,double jd_utc){
 		throw std::runtime_error("failed to map civil day to lunar month");
 	}
 
-	std::vector<LunarMonth> mths_year=comp_sym(calc,cst_year);
+	const auto&mths_year=calc.get_months(cst_year);
 	double cny_sday=std::numeric_limits<double>::quiet_NaN();
 	for(const auto&m : mths_year){
 		if(m.month_no==1&&!m.is_leap){
@@ -288,10 +329,12 @@ LunDate res_lun(EphRead&eph,double jd_utc){
 	return info;
 }
 
-GregDate res_greg(EphRead&eph,int lunar_year,int month_no,int day,bool leap){
-	LunCal6 calc(eph);
+GregDate res_greg(EphRead&eph,int lunar_year,int month_no,int day,bool leap,
+				  QueryCache*cache=nullptr){
+	LunCal6 local_calc(eph);
+	LunCal6&calc=cache?cache->calc:local_calc;
 	auto find_cny=[&](int greg_year) -> double{
-		std::vector<LunarMonth> months=comp_sym(calc,greg_year);
+		const auto&months=calc.get_months(greg_year);
 		for(const auto&m : months){
 			if(m.month_no==1&&!m.is_leap){
 				return cst_midjd(m.start_dt.year,m.start_dt.month,
@@ -304,24 +347,29 @@ GregDate res_greg(EphRead&eph,int lunar_year,int month_no,int day,bool leap){
 	double cny_this=find_cny(lunar_year);
 	double cny_next=find_cny(lunar_year+1);
 
-	std::vector<LunarMonth> candidates=comp_sym(calc,lunar_year);
-	std::vector<LunarMonth> next=comp_sym(calc,lunar_year+1);
-	candidates.insert(candidates.end(),next.begin(),next.end());
+	const auto&months_this=calc.get_months(lunar_year);
+	const auto&months_next=calc.get_months(lunar_year+1);
 
 	bool found=false;
 	double start_day=0.0;
 	double end_day=0.0;
-	for(const auto&m : candidates){
-		double s=cst_midjd(m.start_dt.year,m.start_dt.month,m.start_dt.day);
-		if(s<cny_this||s>=cny_next){
-			continue;
+	auto find_month=[&](const std::vector<LunarMonth>&months){
+		for(const auto&m : months){
+			double s=cst_midjd(m.start_dt.year,m.start_dt.month,m.start_dt.day);
+			if(s<cny_this||s>=cny_next){
+				continue;
+			}
+			if(m.month_no==month_no&&m.is_leap==leap){
+				start_day=s;
+				end_day=cst_midjd(m.end_dt.year,m.end_dt.month,m.end_dt.day);
+				found=true;
+				return;
+			}
 		}
-		if(m.month_no==month_no&&m.is_leap==leap){
-			start_day=s;
-			end_day=cst_midjd(m.end_dt.year,m.end_dt.month,m.end_dt.day);
-			found=true;
-			break;
-		}
+	};
+	find_month(months_this);
+	if(!found){
+		find_month(months_next);
 	}
 	if(!found){
 		throw std::invalid_argument(
@@ -574,7 +622,7 @@ std::vector<BatchLine> read_bat(bool from_stdin,const std::string&input_file){
 
 AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 				 const std::string&display_tz,const std::string&time_raw,
-				 const std::string&tz_in,bool inc_ev){
+				 const std::string&tz_in,bool inc_ev,QueryCache*cache=nullptr){
 	AtData out;
 	out.time_raw=time_raw;
 	out.tz_in=tz_in;
@@ -582,7 +630,8 @@ AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 	out.jd_utc=jd_utc;
 	out.jd_tdb=TimeScale::utc_to_tdb(jd_utc);
 
-	AppLon app(eph);
+	AppLon local_app(eph);
+	AppLon&app=cache?cache->app:local_app;
 	auto sun=app.sun_calc(out.jd_tdb);
 	auto moon=app.moon_calc(out.jd_tdb);
 	out.lam_s=sun.first;
@@ -596,10 +645,10 @@ AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 	out.ill_pct=out.ill_frac*100.0;
 	out.waxing=(out.lam_m_dot-out.lam_s_dot)>0.0;
 	out.phase_name=phase_elo(out.elong);
-	out.lunar_date=res_lun(eph,jd_utc);
+	out.lunar_date=res_lun(eph,jd_utc,cache);
 	out.inc_ev=inc_ev;
 	if(inc_ev){
-		out.near_ev=comp_near(eph,jd_utc,tz_disp);
+		out.near_ev=comp_near(eph,jd_utc,tz_disp,cache);
 	}
 
 	out.utc_iso=fmt_iso(jd_utc,0,true);
@@ -609,12 +658,13 @@ AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 
 AtData at_ftxt(EphRead&eph,const std::string&time_raw,
 			   const std::string&input_tz,int tz_disp,
-			   const std::string&display_tz,bool inc_ev){
+			   const std::string&display_tz,bool inc_ev,
+			   QueryCache*cache=nullptr){
 	IsoTime parsed=parse_iso(time_raw,input_tz);
 	std::string tz_in=
 		parsed.has_tz?fmt_tz(parsed.tz_off):fmt_tz(parse_tz(input_tz));
 	return at_fromjd(eph,parsed.jd_utc,tz_disp,display_tz,time_raw,tz_in,
-					 inc_ev);
+					 inc_ev,cache);
 }
 
 void wr_ejson(JsonWriter&w,const EventRec&ev){
@@ -990,12 +1040,13 @@ int cmd_test(const std::vector<std::string>&args){
 	bool all_pass=true;
 	try{
 		EphRead eph(ephem);
+		QueryCache cache(eph);
 
 		Case c1;
 		c1.id="at_illum";
 		try{
 			AtData atd=at_ftxt(eph,"2025-06-01T00:00:00+08:00","+08:00",480,
-							   "+08:00",true);
+							   "+08:00",true,&cache);
 			c1.pass=(atd.ill_pct>=0.0&&atd.ill_pct<=100.0);
 			c1.message=c1.pass?"ok":"illumination out of [0,100]";
 		}catch(const std::exception&ex){
@@ -1009,9 +1060,9 @@ int cmd_test(const std::vector<std::string>&args){
 		c2.id="conv_rt";
 		try{
 			IsoTime p=parse_iso("2026-02-18","+08:00");
-			LunDate ld=res_lun(eph,p.jd_utc);
-			GregDate g=
-				res_greg(eph,ld.lunar_year,ld.lun_mno,ld.lunar_day,ld.is_leap);
+			LunDate ld=res_lun(eph,p.jd_utc,&cache);
+			GregDate g=res_greg(eph,ld.lunar_year,ld.lun_mno,ld.lunar_day,
+								ld.is_leap,&cache);
 			int gy=0,gm=0,gd=0;
 			std::tie(gy,gm,gd)=parse_ymd("2026-02-18");
 			int ry=0,rm=0,rd=0;
@@ -1389,8 +1440,10 @@ void cli_at(const AtArgs&args){
 
 	int tz_disp=parse_tz(args.tz);
 	EphRead eph(args.ephem);
+	QueryCache cache(eph);
 	AtData result=
-		at_ftxt(eph,args.time_raw,args.input_tz,tz_disp,args.tz,args.events);
+		at_ftxt(eph,args.time_raw,args.input_tz,tz_disp,args.tz,args.events,
+				&cache);
 
 	OutTgt out=open_out(args.out);
 	const FmtMap fmt_handlers={
@@ -1420,6 +1473,7 @@ void cli_conv(const ConvArgs&args){
 	int tz_disp=parse_tz(args.tz);
 
 	EphRead eph(args.ephem);
+	QueryCache cache(eph);
 
 	bool forward=!args.from_lunar;
 	std::string note=
@@ -1431,7 +1485,7 @@ void cli_conv(const ConvArgs&args){
 		std::string tz_in=
 			parsed.has_tz?fmt_tz(parsed.tz_off):fmt_tz(parse_tz(args.input_tz));
 
-		LunDate lunar_date=res_lun(eph,parsed.jd_utc);
+		LunDate lunar_date=res_lun(eph,parsed.jd_utc,&cache);
 		std::string utc_iso=fmt_iso(parsed.jd_utc,0,true);
 		std::string local_iso=fmt_iso(parsed.jd_utc,tz_disp,true);
 
@@ -1506,9 +1560,9 @@ void cli_conv(const ConvArgs&args){
 		};
 		run_fmt(fmt_handlers,format,"convert");
 	}else{
-		GregDate g=
-			res_greg(eph,args.lunar_year,args.lun_mno,args.lunar_day,args.leap);
-		LunDate l_check=res_lun(eph,g.cstday_jd);
+		GregDate g=res_greg(eph,args.lunar_year,args.lun_mno,args.lunar_day,
+							args.leap,&cache);
+		LunDate l_check=res_lun(eph,g.cstday_jd,&cache);
 
 		const FmtMap fmt_handlers={
 			{"json",[&](){
@@ -1594,6 +1648,7 @@ int run_abcli(const AtArgs&args){
 
 	const int tz_disp=parse_tz(args.tz);
 	EphRead eph(args.ephem);
+	QueryCache cache(eph);
 
 	struct Row{
 		int line_no=0;
@@ -1611,7 +1666,8 @@ int run_abcli(const AtArgs&args){
 		row.raw=line.raw;
 		try{
 			row.data=
-				at_ftxt(eph,line.raw,args.input_tz,tz_disp,args.tz,args.events);
+				at_ftxt(eph,line.raw,args.input_tz,tz_disp,args.tz,args.events,
+						&cache);
 			row.ok=true;
 		}catch(const std::exception&ex){
 			row.ok=false;
@@ -1729,8 +1785,8 @@ int run_cbcli(const ConvArgs&args){
 				   "seq_run for det_mode behavior.\n";
 	}
 
-	const int tz_disp=parse_tz(args.tz);
 	EphRead eph(args.ephem);
+	QueryCache cache(eph);
 
 	struct Row{
 		int line_no=0;
@@ -1781,7 +1837,7 @@ int run_cbcli(const ConvArgs&args){
 				row.jd_utc=parsed.jd_utc;
 				row.tz_in=parsed.has_tz?fmt_tz(parsed.tz_off)
 									   :fmt_tz(parse_tz(args.input_tz));
-				row.lunar_date=res_lun(eph,parsed.jd_utc);
+				row.lunar_date=res_lun(eph,parsed.jd_utc,&cache);
 				row.greg_date.year=row.lunar_date.cst_year;
 				row.greg_date.month=row.lunar_date.cst_month;
 				row.greg_date.day=row.lunar_date.cst_day;
@@ -1793,10 +1849,10 @@ int run_cbcli(const ConvArgs&args){
 				bool leap=false;
 				parse_lun(line.raw,y,m,d,leap);
 				row.direction="lun2greg";
-				row.greg_date=res_greg(eph,y,m,d,leap);
+				row.greg_date=res_greg(eph,y,m,d,leap,&cache);
 				row.jd_utc=row.greg_date.cstday_jd;
 				row.tz_in=args.tz;
-				row.lunar_date=res_lun(eph,row.greg_date.cstday_jd);
+				row.lunar_date=res_lun(eph,row.greg_date.cstday_jd,&cache);
 			}
 			row.ok=true;
 		}catch(const std::exception&ex){
@@ -2330,7 +2386,8 @@ std::vector<EventRec> load_evs(EphRead&eph,double jd_from,double jd_to,
 	return filt_evs(events,filter,jd_from,jd_to,true,gt_from);
 }
 
-std::vector<EventRec> bld_fest(EphRead&eph,int lunar_year,int tz_off){
+std::vector<EventRec> bld_fest(EphRead&eph,int lunar_year,int tz_off,
+							   QueryCache*cache=nullptr){
 	struct FDef{
 		const char*name;
 		int m;
@@ -2349,7 +2406,7 @@ std::vector<EventRec> bld_fest(EphRead&eph,int lunar_year,int tz_off){
 	std::vector<EventRec> out;
 	out.reserve(defs.size()+1);
 	for(const auto&def : defs){
-		GregDate g=res_greg(eph,lunar_year,def.m,def.d,false);
+		GregDate g=res_greg(eph,lunar_year,def.m,def.d,false,cache);
 		EventRec ev;
 		ev.kind="festival";
 		ev.code=std::to_string(def.m)+"-"+std::to_string(def.d);
@@ -2361,7 +2418,7 @@ std::vector<EventRec> bld_fest(EphRead&eph,int lunar_year,int tz_off){
 		out.push_back(std::move(ev));
 	}
 
-	GregDate cny_next=res_greg(eph,lunar_year+1,1,1,false);
+	GregDate cny_next=res_greg(eph,lunar_year+1,1,1,false,cache);
 	EventRec eve;
 	eve.kind="festival";
 	eve.code="12-last";
@@ -2444,8 +2501,10 @@ int cmd_day(const std::vector<std::string>&args){
 	double day_eutc=day_sutc+1.0;
 
 	EphRead eph(ephem);
+	QueryCache cache(eph);
 	AtData atd=
-		at_fromjd(eph,smp_jdutc,tz_off,tz,date_text+"T"+at_time,"+08:00",false);
+		at_fromjd(eph,smp_jdutc,tz_off,tz,date_text+"T"+at_time,"+08:00",false,
+				  &cache);
 
 	std::vector<EventRec> day_events;
 	if(inc_ev){
@@ -2591,6 +2650,7 @@ int cmd_mview(const std::vector<std::string>&args){
 	int tz_off=parse_tz(tz);
 	int n_days=days_gm(year,month);
 	EphRead eph(ephem);
+	QueryCache cache(eph);
 
 	std::set<int> years={year-1,year,year+1};
 	std::vector<EventRec> events=
@@ -2617,7 +2677,7 @@ int cmd_mview(const std::vector<std::string>&args){
 	for(int d=1;d<=n_days;++d){
 		double smp_jdutc=greg2jd(year,month,d,12,0,0.0)-UTC8DAY;
 		AtData atd=at_fromjd(eph,smp_jdutc,tz_off,tz,ymd_str(year,month,d),
-							 "+08:00",false);
+							 "+08:00",false,&cache);
 		std::string summary;
 		auto it=day2ev.find(d);
 		if(it!=day2ev.end()){
@@ -3021,7 +3081,8 @@ int cmd_fest(const std::vector<std::string>&args){
 
 	int tz_off=parse_tz(tz);
 	EphRead eph(ephem);
-	std::vector<EventRec> festivals=bld_fest(eph,year,tz_off);
+	QueryCache cache(eph);
+	std::vector<EventRec> festivals=bld_fest(eph,year,tz_off,&cache);
 
 	OutTgt out=open_out(out_path);
 	const FmtMap fmt_handlers={
@@ -3086,8 +3147,10 @@ int cmd_alm(const std::vector<std::string>&args){
 	double day_eutc=day_sutc+1.0;
 
 	EphRead eph(ephem);
+	QueryCache cache(eph);
 	AtData atd=
-		at_fromjd(eph,smp_jdutc,tz_off,tz,date_text+"T12:00:00","+08:00",false);
+		at_fromjd(eph,smp_jdutc,tz_off,tz,date_text+"T12:00:00","+08:00",false,
+				  &cache);
 	std::set<int> years={y-1,y,y+1};
 	std::vector<EventRec> all_events=
 		col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr);
@@ -3098,7 +3161,7 @@ int cmd_alm(const std::vector<std::string>&args){
 		}
 	}
 	std::vector<EventRec> festivals=
-		bld_fest(eph,atd.lunar_date.lunar_year,tz_off);
+		bld_fest(eph,atd.lunar_date.lunar_year,tz_off,&cache);
 	std::vector<EventRec> day_fest;
 	for(const auto&ev : festivals){
 		if(ev.jd_utc>=day_sutc&&ev.jd_utc<day_eutc){
