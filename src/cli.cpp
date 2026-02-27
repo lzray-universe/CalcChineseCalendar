@@ -128,7 +128,17 @@ void write_meta(JsonWriter&w,const std::string&ephem,
 	w.obj_end();
 }
 
-void wr_ejson(JsonWriter&w,const EventRec&ev){
+bool is_full_moon_ev(const EventRec&ev){
+	return ev.kind=="lunar_phase"&&ev.code=="full_moon";
+}
+
+double full_moon_dist_km(EphRead&eph,double jd_utc){
+	double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
+	Vec3 r=eph.get_pos(eph.MOON,eph.EARTH,jd_tdb);
+	return r.norm()*AU_KM;
+}
+
+void wr_ejson(JsonWriter&w,const EventRec&ev,EphRead&eph){
 	w.obj_begin();
 	w.key("kind");
 	w.value(ev.kind);
@@ -150,6 +160,10 @@ void wr_ejson(JsonWriter&w,const EventRec&ev){
 	w.value(ev.utc_iso);
 	w.key("loc_iso");
 	w.value(ev.loc_iso);
+	if(is_full_moon_ev(ev)){
+		w.key("moon_dist_km");
+		w.value(full_moon_dist_km(eph,ev.jd_utc));
+	}
 	w.obj_end();
 }
 
@@ -176,7 +190,7 @@ void wr_mj(JsonWriter&w,const MonthRec&m){
 	w.obj_end();
 }
 
-void wr_cyjs(JsonWriter&w,const CalYrData&item,bool inc_mode){
+void wr_cyjs(JsonWriter&w,const CalYrData&item,bool inc_mode,EphRead&eph){
 	w.obj_begin();
 	w.key("year");
 	w.value(item.year);
@@ -187,13 +201,13 @@ void wr_cyjs(JsonWriter&w,const CalYrData&item,bool inc_mode){
 	w.key("sol_terms");
 	w.arr_begin();
 	for(const auto&ev : item.sol_terms){
-		wr_ejson(w,ev);
+		wr_ejson(w,ev,eph);
 	}
 	w.arr_end();
 	w.key("lun_phase");
 	w.arr_begin();
 	for(const auto&ev : item.lun_phase){
-		wr_ejson(w,ev);
+		wr_ejson(w,ev,eph);
 	}
 	w.arr_end();
 	if(item.inc_month){
@@ -234,17 +248,18 @@ void wr_mjs(std::ostream&os,const std::vector<MonYrData>&data,
 }
 
 void wr_caljs(std::ostream&os,const std::vector<CalYrData>&years,
-			  const std::string&ephem,const std::string&tz_display,bool pretty){
+			  const std::string&ephem,const std::string&tz_display,bool pretty,
+			  EphRead&eph){
 	JsonWriter w(os,pretty);
 	w.obj_begin();
 	write_meta(w,ephem,tz_display);
 	w.key("data");
 	if(years.size()==1){
-		wr_cyjs(w,years.front(),false);
+		wr_cyjs(w,years.front(),false,eph);
 	}else{
 		w.arr_begin();
 		for(const auto&item : years){
-			wr_cyjs(w,item,false);
+			wr_cyjs(w,item,false,eph);
 		}
 		w.arr_end();
 	}
@@ -253,23 +268,23 @@ void wr_caljs(std::ostream&os,const std::vector<CalYrData>&years,
 }
 
 void wr_yjs(std::ostream&os,const CalYrData&year_data,const std::string&ephem,
-			const std::string&tz_display,bool pretty){
+			const std::string&tz_display,bool pretty,EphRead&eph){
 	JsonWriter w(os,pretty);
 	w.obj_begin();
 	write_meta(w,ephem,tz_display);
 	w.key("data");
-	wr_cyjs(w,year_data,true);
+	wr_cyjs(w,year_data,true,eph);
 	w.obj_end();
 	os<<"\n";
 }
 
 void wr_ejdoc(std::ostream&os,const EventRec&event,const std::string&ephem,
-			  const std::string&tz_display,bool pretty){
+			  const std::string&tz_display,bool pretty,EphRead&eph){
 	JsonWriter w(os,pretty);
 	w.obj_begin();
 	write_meta(w,ephem,tz_display);
 	w.key("data");
-	wr_ejson(w,event);
+	wr_ejson(w,event,eph);
 	w.obj_end();
 	os<<"\n";
 }
@@ -598,7 +613,7 @@ void cli_cal(const CalArgs&args){
 	OutTgt out=open_out(args.out);
 	const FmtMap handlers={
 		{"json",[&](){
-			 wr_caljs(*out.stream,out_data,args.ephem,args.tz,args.pretty);
+			 wr_caljs(*out.stream,out_data,args.ephem,args.tz,args.pretty,eph);
 		 }},
 		{"ics",[&](){
 			 std::vector<EventRec> merged;
@@ -652,7 +667,9 @@ void cli_year(const YearArgs&args){
 
 	OutTgt out=open_out(args.out);
 	const FmtMap handlers={
-		{"json",[&](){ wr_yjs(*out.stream,data,args.ephem,args.tz,args.pretty); }},
+		{"json",[&](){
+			 wr_yjs(*out.stream,data,args.ephem,args.tz,args.pretty,eph);
+		 }},
 		{"ics",[&](){
 			 std::vector<EventRec> merged=data.sol_terms;
 			 merged.insert(merged.end(),data.lun_phase.begin(),
@@ -721,7 +738,9 @@ void cli_event(const EventArgs&args){
 
 	OutTgt out=open_out(args.out);
 	const FmtMap handlers={
-		{"json",[&](){ wr_ejdoc(*out.stream,ev,args.ephem,args.tz,args.pretty); }},
+		{"json",[&](){
+			 wr_ejdoc(*out.stream,ev,args.ephem,args.tz,args.pretty,eph);
+		 }},
 		{"ics",[&](){
 			 std::vector<EventRec> one{ev};
 			 wr_eics(*out.stream,args.ephem,"lunar-event",one);

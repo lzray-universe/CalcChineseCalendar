@@ -691,7 +691,17 @@ AtData at_ftxt(EphRead&eph,const std::string&time_raw,
 					 inc_ev,calc_eot,eot_lon_deg,cache);
 }
 
-void wr_ejson(JsonWriter&w,const EventRec&ev){
+bool is_full_moon_ev(const EventRec&ev){
+	return ev.kind=="lunar_phase"&&ev.code=="full_moon";
+}
+
+double full_moon_dist_km(EphRead&eph,double jd_utc){
+	double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
+	Vec3 r=eph.get_pos(eph.MOON,eph.EARTH,jd_tdb);
+	return r.norm()*AU_KM;
+}
+
+void wr_ejson(JsonWriter&w,const EventRec&ev,EphRead&eph){
 	w.obj_begin();
 	w.key("kind");
 	w.value(ev.kind);
@@ -707,18 +717,22 @@ void wr_ejson(JsonWriter&w,const EventRec&ev){
 	w.value(ev.utc_iso);
 	w.key("loc_iso");
 	w.value(ev.loc_iso);
+	if(is_full_moon_ev(ev)){
+		w.key("moon_dist_km");
+		w.value(full_moon_dist_km(eph,ev.jd_utc));
+	}
 	w.obj_end();
 }
 
-void wr_nslot(JsonWriter&w,const NearEvt&ev){
+void wr_nslot(JsonWriter&w,const NearEvt&ev,EphRead&eph){
 	if(!ev.has){
 		w.null_val();
 		return;
 	}
-	wr_ejson(w,ev.event);
+	wr_ejson(w,ev.event,eph);
 }
 
-void wr_adjs(JsonWriter&w,const AtData&d){
+void wr_adjs(JsonWriter&w,const AtData&d,EphRead&eph){
 	w.obj_begin();
 	w.key("sun_lam");
 	w.value(d.lam_s);
@@ -765,13 +779,13 @@ void wr_adjs(JsonWriter&w,const AtData&d){
 	}else{
 		w.obj_begin();
 		w.key("st_prev");
-		wr_nslot(w,d.near_ev.solar_prev);
+		wr_nslot(w,d.near_ev.solar_prev,eph);
 		w.key("st_next");
-		wr_nslot(w,d.near_ev.solar_next);
+		wr_nslot(w,d.near_ev.solar_next,eph);
 		w.key("lp_prev");
-		wr_nslot(w,d.near_ev.phase_prev);
+		wr_nslot(w,d.near_ev.phase_prev,eph);
 		w.key("lp_next");
-		wr_nslot(w,d.near_ev.phase_next);
+		wr_nslot(w,d.near_ev.phase_next,eph);
 		w.obj_end();
 	}
 	w.obj_end();
@@ -1521,7 +1535,7 @@ void cli_at(const AtArgs&args){
 			 w.key("input");
 			 wr_aijs(w,result);
 			 w.key("data");
-			 wr_adjs(w,result);
+			 wr_adjs(w,result,eph);
 			 w.obj_end();
 			 *out.stream<<"\n";
 		 }},
@@ -1769,7 +1783,7 @@ int run_abcli(const AtArgs&args){
 					 w.key("input");
 					 wr_aijs(w,row.data);
 					 w.key("data");
-					 wr_adjs(w,row.data);
+					 wr_adjs(w,row.data,eph);
 				 }else{
 					 w.key("error");
 					 w.obj_begin();
@@ -1797,7 +1811,7 @@ int run_abcli(const AtArgs&args){
 					 w.key("input");
 					 wr_aijs(w,row.data);
 					 w.key("data");
-					 wr_adjs(w,row.data);
+					 wr_adjs(w,row.data,eph);
 				 }else{
 					 w.key("error");
 					 w.obj_begin();
@@ -2381,14 +2395,14 @@ std::string csv_quote(const std::string&s){
 
 void wr_eljs(std::ostream&os,const std::string&ephem,const std::string&tz,
 			 bool pretty,const std::vector<EventRec>&events,
-			 const std::string&type){
+			 const std::string&type,EphRead&eph){
 	JsonWriter w(os,pretty);
 	w.obj_begin();
 	write_meta(w,ephem,tz,{"type="+type});
 	w.key("data");
 	w.arr_begin();
 	for(const auto&ev : events){
-		wr_ejson(w,ev);
+		wr_ejson(w,ev,eph);
 	}
 	w.arr_end();
 	w.obj_end();
@@ -2415,13 +2429,14 @@ void wr_elcsv(std::ostream&os,const std::vector<EventRec>&events){
 }
 
 void wr_eljsl(std::ostream&os,const std::string&ephem,const std::string&tz,
-			  const std::vector<EventRec>&events,const std::string&type){
+			  const std::vector<EventRec>&events,const std::string&type,
+			  EphRead&eph){
 	for(const auto&ev : events){
 		JsonWriter w(os,false);
 		w.obj_begin();
 		write_meta(w,ephem,tz,{"type="+type});
 		w.key("data");
-		wr_ejson(w,ev);
+		wr_ejson(w,ev,eph);
 		w.obj_end();
 		os<<"\n";
 	}
@@ -2635,7 +2650,7 @@ int cmd_day(const std::vector<std::string>&args){
 		w.key("events");
 		w.arr_begin();
 		for(const auto&ev : day_events){
-			wr_ejson(w,ev);
+			wr_ejson(w,ev,eph);
 		}
 		w.arr_end();
 		w.obj_end();
@@ -2937,10 +2952,12 @@ int cmd_next(const std::vector<std::string>&args){
 
 	OutTgt out=open_out(out_path);
 	const FmtMap fmt_handlers={
-		{"json",[&](){ wr_eljs(*out.stream,ephem,tz,pretty,picked,"next"); }},
+		{"json",[&](){
+			 wr_eljs(*out.stream,ephem,tz,pretty,picked,"next",eph);
+		 }},
 		{"txt",[&](){ wr_eltxt(*out.stream,tz,picked,"next"); }},
 		{"csv",[&](){ wr_elcsv(*out.stream,picked); }},
-		{"jsonl",[&](){ wr_eljsl(*out.stream,ephem,tz,picked,"next"); }},
+		{"jsonl",[&](){ wr_eljsl(*out.stream,ephem,tz,picked,"next",eph); }},
 		{"ics",[&](){ wr_elics(*out.stream,ephem,"lunar-next",picked); }},
 	};
 	run_fmt(fmt_handlers,format,"next");
@@ -3019,10 +3036,12 @@ int cmd_range(const std::vector<std::string>&args){
 
 	OutTgt out=open_out(out_path);
 	const FmtMap fmt_handlers={
-		{"json",[&](){ wr_eljs(*out.stream,ephem,tz,pretty,picked,"range"); }},
+		{"json",[&](){
+			 wr_eljs(*out.stream,ephem,tz,pretty,picked,"range",eph);
+		 }},
 		{"txt",[&](){ wr_eltxt(*out.stream,tz,picked,"range"); }},
 		{"csv",[&](){ wr_elcsv(*out.stream,picked); }},
-		{"jsonl",[&](){ wr_eljsl(*out.stream,ephem,tz,picked,"range"); }},
+		{"jsonl",[&](){ wr_eljsl(*out.stream,ephem,tz,picked,"range",eph); }},
 		{"ics",[&](){ wr_elics(*out.stream,ephem,"lunar-range",picked); }},
 	};
 	run_fmt(fmt_handlers,format,"range");
@@ -3172,7 +3191,7 @@ int cmd_fest(const std::vector<std::string>&args){
 	OutTgt out=open_out(out_path);
 	const FmtMap fmt_handlers={
 		{"json",[&](){
-			 wr_eljs(*out.stream,ephem,tz,pretty,festivals,"festival");
+			 wr_eljs(*out.stream,ephem,tz,pretty,festivals,"festival",eph);
 		 }},
 		{"csv",[&](){ wr_elcsv(*out.stream,festivals); }},
 		{"txt",[&](){ wr_eltxt(*out.stream,tz,festivals,"festival"); }},
@@ -3276,13 +3295,13 @@ int cmd_alm(const std::vector<std::string>&args){
 			 w.key("events");
 			 w.arr_begin();
 			 for(const auto&ev : day_events){
-				 wr_ejson(w,ev);
+				 wr_ejson(w,ev,eph);
 			 }
 			 w.arr_end();
 			 w.key("festivals");
 			 w.arr_begin();
 			 for(const auto&ev : day_fest){
-				 wr_ejson(w,ev);
+				 wr_ejson(w,ev,eph);
 			 }
 			 w.arr_end();
 			 w.obj_end();
