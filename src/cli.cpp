@@ -25,6 +25,7 @@
 #include "lunar/format.hpp"
 #include "lunar/ics.hpp"
 #include "lunar/js_writer.hpp"
+#include "lunar/lunar_eclipse.hpp"
 #include "lunar/time_scale.hpp"
 
 namespace{
@@ -33,6 +34,8 @@ struct MonYrData{
 	int year=0;
 	std::string mode;
 	std::vector<MonthRec> months;
+	std::vector<LunarEclipse> eclipses;
+	bool inc_eclipse=false;
 };
 
 struct CalYrData{
@@ -42,6 +45,8 @@ struct CalYrData{
 	std::vector<EventRec> lun_phase;
 	std::vector<MonthRec> months;
 	bool inc_month=false;
+	std::vector<LunarEclipse> eclipses;
+	bool inc_eclipse=false;
 };
 
 using cli_util::OutTgt;
@@ -138,6 +143,112 @@ double full_moon_dist_km(EphRead&eph,double jd_utc){
 	return r.norm()*AU_KM;
 }
 
+std::vector<LunarEclipse> bld_eclipses(EphRead&eph,const YearResult&yr){
+	std::vector<LunarEclipse> out;
+	out.reserve(yr.lun_phase.size());
+	for(const auto&item : yr.lun_phase){
+		double jd_utc=item.full_moon.toUtcJD();
+		double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
+		LunarEclipse ecl;
+		if(calc_lunar_eclipse(eph,jd_tdb,&ecl)&&ecl.has){
+			out.push_back(ecl);
+		}
+	}
+	std::sort(out.begin(),out.end(),[](const LunarEclipse&a,const LunarEclipse&b){
+		return a.jd_tdb_max<b.jd_tdb_max;
+	});
+	return out;
+}
+
+void wr_enode(JsonWriter&w,double jd_tdb,int tz_off){
+	if(!std::isfinite(jd_tdb)){
+		w.null_val();
+		return;
+	}
+	double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
+	w.obj_begin();
+	w.key("jd_tdb");
+	w.value(jd_tdb);
+	w.key("jd_utc");
+	w.value(jd_utc);
+	w.key("utc_iso");
+	w.value(fmt_iso(jd_utc,0,true));
+	w.key("loc_iso");
+	w.value(fmt_iso(jd_utc,tz_off,true));
+	w.obj_end();
+}
+
+std::string node_liso(double jd_tdb,int tz_off){
+	if(!std::isfinite(jd_tdb)){
+		return "null";
+	}
+	double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
+	return fmt_iso(jd_utc,tz_off,true);
+}
+
+void wr_ecljson(JsonWriter&w,const LunarEclipse&ecl,int year,int tz_off){
+	w.obj_begin();
+	w.key("kind");
+	w.value("lunar_eclipse");
+	w.key("year");
+	w.value(year);
+	w.key("has");
+	w.value(ecl.has);
+	w.key("type");
+	w.value(ecl.type);
+	w.key("pen_mag");
+	if(std::isfinite(ecl.pen_mag)){
+		w.value(ecl.pen_mag);
+	}else{
+		w.null_val();
+	}
+	w.key("umb_mag");
+	if(std::isfinite(ecl.umb_mag)){
+		w.value(ecl.umb_mag);
+	}else{
+		w.null_val();
+	}
+	w.key("p1");
+	wr_enode(w,ecl.jd_tdb_p1,tz_off);
+	w.key("u1");
+	wr_enode(w,ecl.jd_tdb_u1,tz_off);
+	w.key("max");
+	wr_enode(w,ecl.jd_tdb_max,tz_off);
+	w.key("u4");
+	wr_enode(w,ecl.jd_tdb_u4,tz_off);
+	w.key("p4");
+	wr_enode(w,ecl.jd_tdb_p4,tz_off);
+	w.key("u2");
+	wr_enode(w,ecl.jd_tdb_u2,tz_off);
+	w.key("u3");
+	wr_enode(w,ecl.jd_tdb_u3,tz_off);
+	w.obj_end();
+}
+
+void wr_ecltxt(std::ostream&os,const std::vector<LunarEclipse>&items,int tz_off){
+	os<<"type\tpen_mag\tumb_mag\tmax_liso\tp1_liso\tu1_liso\tu4_liso\tp4_liso\n";
+	os<<std::setprecision(17);
+	for(const auto&ecl : items){
+		os<<ecl.type<<"\t";
+		if(std::isfinite(ecl.pen_mag)){
+			os<<ecl.pen_mag;
+		}else{
+			os<<"null";
+		}
+		os<<"\t";
+		if(std::isfinite(ecl.umb_mag)){
+			os<<ecl.umb_mag;
+		}else{
+			os<<"null";
+		}
+		os<<"\t"<<node_liso(ecl.jd_tdb_max,tz_off)
+		  <<"\t"<<node_liso(ecl.jd_tdb_p1,tz_off)
+		  <<"\t"<<node_liso(ecl.jd_tdb_u1,tz_off)
+		  <<"\t"<<node_liso(ecl.jd_tdb_u4,tz_off)
+		  <<"\t"<<node_liso(ecl.jd_tdb_p4,tz_off)<<"\n";
+	}
+}
+
 void wr_ejson(JsonWriter&w,const EventRec&ev,EphRead&eph){
 	w.obj_begin();
 	w.key("kind");
@@ -190,7 +301,8 @@ void wr_mj(JsonWriter&w,const MonthRec&m){
 	w.obj_end();
 }
 
-void wr_cyjs(JsonWriter&w,const CalYrData&item,bool inc_mode,EphRead&eph){
+void wr_cyjs(JsonWriter&w,const CalYrData&item,bool inc_mode,EphRead&eph,
+			 int tz_off){
 	w.obj_begin();
 	w.key("year");
 	w.value(item.year);
@@ -210,6 +322,14 @@ void wr_cyjs(JsonWriter&w,const CalYrData&item,bool inc_mode,EphRead&eph){
 		wr_ejson(w,ev,eph);
 	}
 	w.arr_end();
+	if(item.inc_eclipse){
+		w.key("lunar_eclipses");
+		w.arr_begin();
+		for(const auto&ecl : item.eclipses){
+			wr_ecljson(w,ecl,item.year,tz_off);
+		}
+		w.arr_end();
+	}
 	if(item.inc_month){
 		w.key("months");
 		w.arr_begin();
@@ -223,6 +343,7 @@ void wr_cyjs(JsonWriter&w,const CalYrData&item,bool inc_mode,EphRead&eph){
 
 void wr_mjs(std::ostream&os,const std::vector<MonYrData>&data,
 			const std::string&ephem,const std::string&tz_display,bool pretty){
+	int tz_off=parse_tz(tz_display);
 	JsonWriter w(os,pretty);
 	w.obj_begin();
 	write_meta(w,ephem,tz_display);
@@ -240,6 +361,14 @@ void wr_mjs(std::ostream&os,const std::vector<MonYrData>&data,
 			wr_mj(w,m);
 		}
 		w.arr_end();
+		if(bundle.inc_eclipse){
+			w.key("lunar_eclipses");
+			w.arr_begin();
+			for(const auto&ecl : bundle.eclipses){
+				wr_ecljson(w,ecl,bundle.year,tz_off);
+			}
+			w.arr_end();
+		}
 		w.obj_end();
 	}
 	w.arr_end();
@@ -250,16 +379,17 @@ void wr_mjs(std::ostream&os,const std::vector<MonYrData>&data,
 void wr_caljs(std::ostream&os,const std::vector<CalYrData>&years,
 			  const std::string&ephem,const std::string&tz_display,bool pretty,
 			  EphRead&eph){
+	int tz_off=parse_tz(tz_display);
 	JsonWriter w(os,pretty);
 	w.obj_begin();
 	write_meta(w,ephem,tz_display);
 	w.key("data");
 	if(years.size()==1){
-		wr_cyjs(w,years.front(),false,eph);
+		wr_cyjs(w,years.front(),false,eph,tz_off);
 	}else{
 		w.arr_begin();
 		for(const auto&item : years){
-			wr_cyjs(w,item,false,eph);
+			wr_cyjs(w,item,false,eph,tz_off);
 		}
 		w.arr_end();
 	}
@@ -269,22 +399,33 @@ void wr_caljs(std::ostream&os,const std::vector<CalYrData>&years,
 
 void wr_yjs(std::ostream&os,const CalYrData&year_data,const std::string&ephem,
 			const std::string&tz_display,bool pretty,EphRead&eph){
+	int tz_off=parse_tz(tz_display);
 	JsonWriter w(os,pretty);
 	w.obj_begin();
 	write_meta(w,ephem,tz_display);
 	w.key("data");
-	wr_cyjs(w,year_data,true,eph);
+	wr_cyjs(w,year_data,true,eph,tz_off);
 	w.obj_end();
 	os<<"\n";
 }
 
 void wr_ejdoc(std::ostream&os,const EventRec&event,const std::string&ephem,
-			  const std::string&tz_display,bool pretty,EphRead&eph){
+			  const std::string&tz_display,bool pretty,EphRead&eph,
+			  const LunarEclipse*ecl,bool inc_ecl){
+	int tz_off=parse_tz(tz_display);
 	JsonWriter w(os,pretty);
 	w.obj_begin();
 	write_meta(w,ephem,tz_display);
 	w.key("data");
 	wr_ejson(w,event,eph);
+	if(inc_ecl){
+		w.key("lunar_eclipse");
+		if(ecl){
+			wr_ecljson(w,*ecl,event.year,tz_off);
+		}else{
+			w.null_val();
+		}
+	}
 	w.obj_end();
 	os<<"\n";
 }
@@ -342,6 +483,7 @@ void wr_eics(std::ostream&os,const std::string&ephem,const std::string&cal_name,
 
 void wr_mtxt(std::ostream&os,const std::vector<MonYrData>&data,
 			 const std::string&tz_display){
+	int tz_off=parse_tz(tz_display);
 	os<<"tool=lunar format=txt type=months tz_display="<<tz_display<<"\n";
 	os<<"note=--tz仅影响显示，不改变计算\n";
 	for(const auto&bundle : data){
@@ -353,6 +495,10 @@ void wr_mtxt(std::ostream&os,const std::vector<MonYrData>&data,
 			os<<m.label<<"\t"<<m.month_no<<"\t"<<(m.is_leap?1:0)<<"\t"
 			  <<m.st_jdutc<<"\t"<<m.ed_jdutc<<"\t"<<m.st_utc<<"\t"<<m.st_loc
 			  <<"\t"<<m.ed_utc<<"\t"<<m.ed_loc<<"\n";
+		}
+		if(bundle.inc_eclipse){
+			os<<"## lunar_eclipses\n";
+			wr_ecltxt(os,bundle.eclipses,tz_off);
 		}
 	}
 }
@@ -389,6 +535,7 @@ void wr_etxt(std::ostream&os,const std::vector<EventRec>&events){
 
 void wr_caltx(std::ostream&os,const std::vector<CalYrData>&years,
 			  const std::string&tz_display){
+	int tz_off=parse_tz(tz_display);
 	os<<"tool=lunar format=txt type=calendar tz_display="<<tz_display<<"\n";
 	os<<"note=--tz仅影响显示，不改变计算\n";
 	for(const auto&item : years){
@@ -408,10 +555,15 @@ void wr_caltx(std::ostream&os,const std::vector<CalYrData>&years,
 				  <<"\t"<<m.ed_utc<<"\t"<<m.ed_loc<<"\n";
 			}
 		}
+		if(item.inc_eclipse){
+			os<<"## lunar_eclipses\n";
+			wr_ecltxt(os,item.eclipses,tz_off);
+		}
 	}
 }
 
 void wr_ytxt(std::ostream&os,const CalYrData&item,const std::string&tz_display){
+	int tz_off=parse_tz(tz_display);
 	os<<"tool=lunar format=txt type=year mode="<<item.mode
 	  <<" tz_display="<<tz_display<<"\n";
 	os<<"note=--tz仅影响显示，不改变计算\n";
@@ -429,9 +581,15 @@ void wr_ytxt(std::ostream&os,const CalYrData&item,const std::string&tz_display){
 		  <<"\t"<<m.ed_jdutc<<"\t"<<m.st_utc<<"\t"<<m.st_loc<<"\t"<<m.ed_utc
 		  <<"\t"<<m.ed_loc<<"\n";
 	}
+	if(item.inc_eclipse){
+		os<<"## lunar_eclipses\n";
+		wr_ecltxt(os,item.eclipses,tz_off);
+	}
 }
 
-void wr_setxt(std::ostream&os,const EventRec&ev,const std::string&tz_display){
+void wr_setxt(std::ostream&os,const EventRec&ev,const std::string&tz_display,
+			  const LunarEclipse*ecl,bool inc_ecl){
+	int tz_off=parse_tz(tz_display);
 	os<<"tool=lunar format=txt type=event tz_display="<<tz_display<<"\n";
 	os<<"kind\tcode\tname\tyear\tjd_tdb\tjd_utc\ttm_uiso\ttm_loc"
 		"iso\n";
@@ -443,6 +601,36 @@ void wr_setxt(std::ostream&os,const EventRec&ev,const std::string&tz_display){
 		os<<"null";
 	}
 	os<<"\t"<<ev.jd_utc<<"\t"<<ev.utc_iso<<"\t"<<ev.loc_iso<<"\n";
+	if(inc_ecl){
+		os<<"[lunar_eclipse]\n";
+		if(ecl==nullptr){
+			os<<"null\n";
+			return;
+		}
+		os<<"has="<<(ecl->has?1:0)<<"\n";
+		os<<"type="<<ecl->type<<"\n";
+		os<<"pen_mag=";
+		if(std::isfinite(ecl->pen_mag)){
+			os<<ecl->pen_mag;
+		}else{
+			os<<"null";
+		}
+		os<<"\n";
+		os<<"umb_mag=";
+		if(std::isfinite(ecl->umb_mag)){
+			os<<ecl->umb_mag;
+		}else{
+			os<<"null";
+		}
+		os<<"\n";
+		os<<"p1_loc="<<node_liso(ecl->jd_tdb_p1,tz_off)<<"\n";
+		os<<"u1_loc="<<node_liso(ecl->jd_tdb_u1,tz_off)<<"\n";
+		os<<"max_loc="<<node_liso(ecl->jd_tdb_max,tz_off)<<"\n";
+		os<<"u4_loc="<<node_liso(ecl->jd_tdb_u4,tz_off)<<"\n";
+		os<<"p4_loc="<<node_liso(ecl->jd_tdb_p4,tz_off)<<"\n";
+		os<<"u2_loc="<<node_liso(ecl->jd_tdb_u2,tz_off)<<"\n";
+		os<<"u3_loc="<<node_liso(ecl->jd_tdb_u3,tz_off)<<"\n";
+	}
 }
 
 void chk_mode(const std::string&mode){
@@ -533,7 +721,7 @@ std::vector<int> parse_year(const std::string&arg){
 	return ordered;
 }
 
-void cli_month(const MonthsArgs&args){
+void cli_month_impl(const MonthsArgs&args,bool inc_eclipse){
 	std::vector<int> years=parse_year(args.years);
 	const std::string mode=to_low(args.mode);
 	chk_mode(mode);
@@ -542,6 +730,7 @@ void cli_month(const MonthsArgs&args){
 
 	EphRead eph(args.ephem);
 	LunCal6 calc(eph);
+	SolLunCal solver(eph);
 
 	std::vector<MonYrData> data;
 	data.reserve(years.size());
@@ -555,6 +744,11 @@ void cli_month(const MonthsArgs&args){
 		row.year=y;
 		row.mode=mode;
 		row.months=bld_mrec(months,tz_off);
+		row.inc_eclipse=inc_eclipse;
+		if(inc_eclipse){
+			YearResult yr=solver.compute_year(y,args.quiet?nullptr:&std::cerr);
+			row.eclipses=bld_eclipses(eph,yr);
+		}
 		data.push_back(std::move(row));
 	}
 
@@ -577,7 +771,9 @@ void cli_month(const MonthsArgs&args){
 	run_mout(args,data,format,args.out);
 }
 
-void cli_cal(const CalArgs&args){
+void cli_month(const MonthsArgs&args){ cli_month_impl(args,false); }
+
+void cli_cal_impl(const CalArgs&args,bool inc_eclipse){
 	int tz_off=parse_tz(args.tz);
 	const std::string format=to_low(args.format);
 	chk_fmt(format,{"json","txt","ics"},"calendar");
@@ -603,9 +799,13 @@ void cli_cal(const CalArgs&args){
 		item.sol_terms=bld_stev(yr,tz_off);
 		item.lun_phase=bld_lpev(yr,tz_off);
 		item.inc_month=args.inc_month;
+		item.inc_eclipse=inc_eclipse;
 		if(args.inc_month){
 			std::vector<LunarMonth> months=enum_lyr(calc,y);
 			item.months=bld_mrec(months,tz_off);
+		}
+		if(inc_eclipse){
+			item.eclipses=bld_eclipses(eph,yr);
 		}
 		out_data.push_back(std::move(item));
 	}
@@ -642,6 +842,8 @@ void cli_cal(const CalArgs&args){
 	run_fmt(handlers,format,"calendar");
 	note_out(args.out,args.quiet);
 }
+
+void cli_cal(const CalArgs&args){ cli_cal_impl(args,false); }
 
 void cli_year(const YearArgs&args){
 	int tz_off=parse_tz(args.tz);
@@ -687,7 +889,7 @@ void cli_year(const YearArgs&args){
 	note_out(args.out,args.quiet);
 }
 
-void cli_event(const EventArgs&args){
+void cli_event_impl(const EventArgs&args,bool calc_eclipse){
 	int tz_off=parse_tz(args.tz);
 	const std::string format=to_low(args.format);
 	chk_fmt(format,{"json","txt","ics"},"event");
@@ -735,21 +937,31 @@ void cli_event(const EventArgs&args){
 		throw std::invalid_argument(
 			"event category must be solar-term or lunar-phase");
 	}
+	LunarEclipse eclipse_data;
+	const LunarEclipse*ecl_ptr=nullptr;
+	if(calc_eclipse&&is_full_moon_ev(ev)){
+		double jd_tdb=TimeScale::utc_to_tdb(ev.jd_utc);
+		calc_lunar_eclipse(eph,jd_tdb,&eclipse_data);
+		ecl_ptr=&eclipse_data;
+	}
 
 	OutTgt out=open_out(args.out);
 	const FmtMap handlers={
 		{"json",[&](){
-			 wr_ejdoc(*out.stream,ev,args.ephem,args.tz,args.pretty,eph);
+			 wr_ejdoc(*out.stream,ev,args.ephem,args.tz,args.pretty,eph,ecl_ptr,
+					  calc_eclipse);
 		 }},
 		{"ics",[&](){
 			 std::vector<EventRec> one{ev};
 			 wr_eics(*out.stream,args.ephem,"lunar-event",one);
 		 }},
-		{"txt",[&](){ wr_setxt(*out.stream,ev,args.tz); }},
+		{"txt",[&](){ wr_setxt(*out.stream,ev,args.tz,ecl_ptr,calc_eclipse); }},
 	};
 	run_fmt(handlers,format,"event");
 	note_out(args.out,args.quiet);
 }
+
+void cli_event(const EventArgs&args){ cli_event_impl(args,false); }
 
 void cli_dl(const DlArgs&args){
 	const std::string action=to_low(args.action);
@@ -808,6 +1020,7 @@ int cmd_month(const std::vector<std::string>&args){
 	MonthsArgs margs;
 	margs.ephem=args[0];
 	margs.years=args[1];
+	bool inc_eclipse=false;
 	const OptMap handlers={
 		{"--mode",[&](const std::vector<std::string>&src,std::size_t&idx,
 					  const std::string&opt){
@@ -827,6 +1040,10 @@ int cmd_month(const std::vector<std::string>&args){
 		 }},
 		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
 					   const std::string&){ margs.quiet=true; }},
+		{"--include-eclipses",[&](const std::vector<std::string>&src,
+								  std::size_t&idx,const std::string&opt){
+			 inc_eclipse=parse_bool01(req_val(src,idx,opt),opt);
+		 }},
 		{"--output",[&](const std::vector<std::string>&src,std::size_t&idx,
 						const std::string&opt){
 			 margs.out_json=req_val(src,idx,opt);
@@ -850,8 +1067,13 @@ int cmd_month(const std::vector<std::string>&args){
 		throw std::invalid_argument(
 			"--out cannot be combined with deprecated --output/--output-txt");
 	}
+	if(inc_eclipse&&margs.out_json.empty()&&margs.out_txt.empty()&&
+	   to_low(margs.format)=="csv"){
+		throw std::invalid_argument(
+			"--include-eclipses requires json or txt format for months");
+	}
 
-	cli_month(margs);
+	cli_month_impl(margs,inc_eclipse);
 	return 0;
 }
 
@@ -866,6 +1088,7 @@ int cmd_cal(const std::vector<std::string>&args){
 
 	CalArgs cargs;
 	cargs.ephem=args[0];
+	bool inc_eclipse=false;
 	std::size_t i=1;
 	if(i<args.size()&&!is_opt(args[i])){
 		cargs.years_arg=args[i];
@@ -885,6 +1108,10 @@ int cmd_cal(const std::vector<std::string>&args){
 								std::size_t&idx,const std::string&opt){
 			 cargs.inc_month=parse_bool01(req_val(src,idx,opt),"--include-months");
 		 }},
+		{"--include-eclipses",[&](const std::vector<std::string>&src,
+								   std::size_t&idx,const std::string&opt){
+			 inc_eclipse=parse_bool01(req_val(src,idx,opt),opt);
+		 }},
 		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
 						const std::string&opt){
 			 cargs.pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
@@ -901,7 +1128,7 @@ int cmd_cal(const std::vector<std::string>&args){
 		apply_opt(handlers,args,i,a,"calendar");
 	}
 
-	cli_cal(cargs);
+	cli_cal_impl(cargs,inc_eclipse);
 	return 0;
 }
 
@@ -965,6 +1192,7 @@ int cmd_event(const std::vector<std::string>&args){
 	eargs.ephem=args[0];
 	eargs.category=to_low(args[1]);
 	eargs.code=args[2];
+	bool calc_eclipse=false;
 
 	std::size_t i=3;
 	if(eargs.category=="solar-term"){
@@ -997,6 +1225,10 @@ int cmd_event(const std::vector<std::string>&args){
 		 }},
 		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
 					   const std::string&){ eargs.quiet=true; }},
+		{"--eclipse",[&](const std::vector<std::string>&src,std::size_t&idx,
+						 const std::string&opt){
+			 calc_eclipse=parse_bool01(req_val(src,idx,opt),opt);
+		 }},
 	};
 
 	for(;i<args.size();++i){
@@ -1012,7 +1244,7 @@ int cmd_event(const std::vector<std::string>&args){
 		throw std::invalid_argument("lunar-phase requires --near YYYY-MM-DD");
 	}
 
-	cli_event(eargs);
+	cli_event_impl(eargs,calc_eclipse);
 	return 0;
 }
 
@@ -1063,7 +1295,7 @@ void use_month(){
 		<<"  lunar months <bsp> <years>\n"
 		<<"    [--mode lunar|gregorian]\n"
 		<<"    [--format json|txt|csv] [--out <path>] [--tz +08:00|Z|-05:00]\n"
-		<<"    [--pretty 0|1] [--quiet]\n"
+		<<"    [--pretty 0|1] [--quiet] [--include-eclipses 0|1]\n"
 		<<"    [--output <json>] [--output-txt <txt>]   # deprecated\n"
 		<<"Examples:\n"
 		<<"  lunar months D:\\de442.bsp 2025\n"
@@ -1080,7 +1312,8 @@ void use_cal(){
 		<<"Usage:\n"
 		<<"  lunar calendar <bsp> [<years>]\n"
 		<<"    [--format json|txt|ics] [--out <path>] [--tz +08:00|Z|-05:00]\n"
-		<<"    [--include-months 0|1] [--pretty 0|1] [--quiet]\n"
+		<<"    [--include-months 0|1] [--include-eclipses 0|1] [--pretty 0|1] "
+		  "[--quiet]\n"
 		<<"Examples:\n"
 		<<"  lunar calendar D:\\de442.bsp 2025\n"
 		<<"  lunar calendar D:\\de442.bsp 2024-2026 --format json --out "
@@ -1109,11 +1342,11 @@ void use_event(){
 	std::cout<<"Usage:\n"
 			 <<"  lunar event <bsp> solar-term <code> <year>\n"
 			 <<"    [--format json|txt|ics] [--out <path>] [--tz "
-			   "+08:00|Z|-05:00] [--pretty 0|1] [--quiet]\n"
+			   "+08:00|Z|-05:00] [--pretty 0|1] [--quiet] [--eclipse 0|1]\n"
 			 <<"  lunar event <bsp> lunar-phase "
 			   "<new_moon|fst_qtr|full_moon|lst_qtr>\n"
 			 <<"    --near <YYYY-MM-DD> [--format json|txt|ics] [--out <path>] "
-			   "[--tz ...] [--pretty 0|1] [--quiet]\n"
+			   "[--tz ...] [--pretty 0|1] [--quiet] [--eclipse 0|1]\n"
 			 <<"Examples:\n"
 			 <<"  lunar event D:\\de442.bsp solar-term Z2 2025\n"
 			 <<"  lunar event D:\\de442.bsp lunar-phase full_moon --near "

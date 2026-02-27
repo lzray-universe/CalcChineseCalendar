@@ -29,6 +29,7 @@
 #include "lunar/ics.hpp"
 #include "lunar/interact.hpp"
 #include "lunar/js_writer.hpp"
+#include "lunar/lunar_eclipse.hpp"
 #include "lunar/math.hpp"
 #include "lunar/time_scale.hpp"
 
@@ -701,7 +702,82 @@ double full_moon_dist_km(EphRead&eph,double jd_utc){
 	return r.norm()*AU_KM;
 }
 
-void wr_ejson(JsonWriter&w,const EventRec&ev,EphRead&eph){
+void wr_enode(JsonWriter&w,double jd_tdb,int tz_off){
+	if(!std::isfinite(jd_tdb)){
+		w.null_val();
+		return;
+	}
+	double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
+	w.obj_begin();
+	w.key("jd_tdb");
+	w.value(jd_tdb);
+	w.key("jd_utc");
+	w.value(jd_utc);
+	w.key("utc_iso");
+	w.value(fmt_iso(jd_utc,0,true));
+	w.key("loc_iso");
+	w.value(fmt_iso(jd_utc,tz_off,true));
+	w.obj_end();
+}
+
+std::string node_liso(double jd_tdb,int tz_off){
+	if(!std::isfinite(jd_tdb)){
+		return "null";
+	}
+	double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
+	return fmt_iso(jd_utc,tz_off,true);
+}
+
+void wr_ecljson(JsonWriter&w,const LunarEclipse&ecl,int year,int tz_off){
+	w.obj_begin();
+	w.key("kind");
+	w.value("lunar_eclipse");
+	w.key("year");
+	w.value(year);
+	w.key("has");
+	w.value(ecl.has);
+	w.key("type");
+	w.value(ecl.type);
+	w.key("pen_mag");
+	if(std::isfinite(ecl.pen_mag)){
+		w.value(ecl.pen_mag);
+	}else{
+		w.null_val();
+	}
+	w.key("umb_mag");
+	if(std::isfinite(ecl.umb_mag)){
+		w.value(ecl.umb_mag);
+	}else{
+		w.null_val();
+	}
+	w.key("p1");
+	wr_enode(w,ecl.jd_tdb_p1,tz_off);
+	w.key("u1");
+	wr_enode(w,ecl.jd_tdb_u1,tz_off);
+	w.key("max");
+	wr_enode(w,ecl.jd_tdb_max,tz_off);
+	w.key("u4");
+	wr_enode(w,ecl.jd_tdb_u4,tz_off);
+	w.key("p4");
+	wr_enode(w,ecl.jd_tdb_p4,tz_off);
+	w.key("u2");
+	wr_enode(w,ecl.jd_tdb_u2,tz_off);
+	w.key("u3");
+	wr_enode(w,ecl.jd_tdb_u3,tz_off);
+	w.obj_end();
+}
+
+LunarEclipse calc_ecl_for_event(EphRead&eph,const EventRec&ev){
+	LunarEclipse ecl;
+	if(is_full_moon_ev(ev)){
+		double jd_tdb=TimeScale::utc_to_tdb(ev.jd_utc);
+		calc_lunar_eclipse(eph,jd_tdb,&ecl);
+	}
+	return ecl;
+}
+
+void wr_ejson(JsonWriter&w,const EventRec&ev,EphRead&eph,bool calc_eclipse=false,
+			  int tz_off=0){
 	w.obj_begin();
 	w.key("kind");
 	w.value(ev.kind);
@@ -720,6 +796,11 @@ void wr_ejson(JsonWriter&w,const EventRec&ev,EphRead&eph){
 	if(is_full_moon_ev(ev)){
 		w.key("moon_dist_km");
 		w.value(full_moon_dist_km(eph,ev.jd_utc));
+		if(calc_eclipse){
+			w.key("lunar_eclipse");
+			LunarEclipse ecl=calc_ecl_for_event(eph,ev);
+			wr_ecljson(w,ecl,ev.year,tz_off);
+		}
 	}
 	w.obj_end();
 }
@@ -1419,7 +1500,7 @@ void use_next(){
 			 <<"  lunar next <bsp> --from <time> --count N\n"
 			 <<"    [--kinds solar_term,lunar_phase] [--tz ...]\n"
 			 <<"    [--format json|txt|csv|ics|jsonl] [--out ...] [--pretty "
-			   "0|1] [--quiet]\n"
+			   "0|1] [--quiet] [--eclipse 0|1]\n"
 			 <<"Examples:\n"
 			 <<"  lunar next D:\\de442.bsp --from 2025-06-01T00:00:00+08:00 "
 			   "--count 5\n"
@@ -1444,7 +1525,7 @@ void use_search(){
 		<<"Usage:\n"
 		<<"  lunar search <bsp> <query> [--from <time>] [--count N]\n"
 		<<"    [--tz ...] [--format json|txt|csv|ics|jsonl] [--out ...] "
-		  "[--pretty 0|1] [--quiet]\n"
+		  "[--pretty 0|1] [--quiet] [--eclipse 0|1]\n"
 		<<"Examples:\n"
 		<<"  lunar search D:\\de442.bsp \"next full_moon\" --from 2025-06-01\n"
 		<<"  lunar search D:\\de442.bsp \"next solar_term 立春\" --from "
@@ -2395,14 +2476,15 @@ std::string csv_quote(const std::string&s){
 
 void wr_eljs(std::ostream&os,const std::string&ephem,const std::string&tz,
 			 bool pretty,const std::vector<EventRec>&events,
-			 const std::string&type,EphRead&eph){
+			 const std::string&type,EphRead&eph,bool calc_eclipse=false,
+			 int tz_off=0){
 	JsonWriter w(os,pretty);
 	w.obj_begin();
 	write_meta(w,ephem,tz,{"type="+type});
 	w.key("data");
 	w.arr_begin();
 	for(const auto&ev : events){
-		wr_ejson(w,ev,eph);
+		wr_ejson(w,ev,eph,calc_eclipse,tz_off);
 	}
 	w.arr_end();
 	w.obj_end();
@@ -2410,33 +2492,62 @@ void wr_eljs(std::ostream&os,const std::string&ephem,const std::string&tz,
 }
 
 void wr_eltxt(std::ostream&os,const std::string&tz,
-			  const std::vector<EventRec>&events,const std::string&type){
+			  const std::vector<EventRec>&events,const std::string&type,
+			  EphRead*eph=nullptr,bool calc_eclipse=false,int tz_off=0){
 	os<<"tool=lunar format=txt type="<<type<<" tz_display="<<tz<<"\n";
-	os<<"kind\tcode\tname\tyear\tjd_utc\ttm_uiso\ttm_liso\n";
+	os<<"kind\tcode\tname\tyear\tjd_utc\ttm_uiso\ttm_liso";
+	if(calc_eclipse){
+		os<<"\tecl_type\tecl_max_liso";
+	}
+	os<<"\n";
 	for(const auto&ev : events){
 		os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"<<ev.year<<"\t"
-		  <<format_num(ev.jd_utc)<<"\t"<<ev.utc_iso<<"\t"<<ev.loc_iso<<"\n";
+		  <<format_num(ev.jd_utc)<<"\t"<<ev.utc_iso<<"\t"<<ev.loc_iso;
+		if(calc_eclipse){
+			if(eph&&is_full_moon_ev(ev)){
+				LunarEclipse ecl=calc_ecl_for_event(*eph,ev);
+				os<<"\t"<<ecl.type<<"\t"<<node_liso(ecl.jd_tdb_max,tz_off);
+			}else{
+				os<<"\tnull\tnull";
+			}
+		}
+		os<<"\n";
 	}
 }
 
-void wr_elcsv(std::ostream&os,const std::vector<EventRec>&events){
-	os<<"kind,code,name,year,jd_utc,utc_iso,loc_iso\n";
+void wr_elcsv(std::ostream&os,const std::vector<EventRec>&events,
+			  EphRead*eph=nullptr,bool calc_eclipse=false,int tz_off=0){
+	os<<"kind,code,name,year,jd_utc,utc_iso,loc_iso";
+	if(calc_eclipse){
+		os<<",eclipse_type,eclipse_max_loc_iso";
+	}
+	os<<"\n";
 	for(const auto&ev : events){
 		os<<csv_quote(ev.kind)<<","<<csv_quote(ev.code)<<","<<csv_quote(ev.name)
 		  <<","<<ev.year<<","<<format_num(ev.jd_utc)<<","<<csv_quote(ev.utc_iso)
-		  <<","<<csv_quote(ev.loc_iso)<<"\n";
+		  <<","<<csv_quote(ev.loc_iso);
+		if(calc_eclipse){
+			if(eph&&is_full_moon_ev(ev)){
+				LunarEclipse ecl=calc_ecl_for_event(*eph,ev);
+				os<<","<<csv_quote(ecl.type)<<","
+				  <<csv_quote(node_liso(ecl.jd_tdb_max,tz_off));
+			}else{
+				os<<",,";
+			}
+		}
+		os<<"\n";
 	}
 }
 
 void wr_eljsl(std::ostream&os,const std::string&ephem,const std::string&tz,
 			  const std::vector<EventRec>&events,const std::string&type,
-			  EphRead&eph){
+			  EphRead&eph,bool calc_eclipse=false,int tz_off=0){
 	for(const auto&ev : events){
 		JsonWriter w(os,false);
 		w.obj_begin();
 		write_meta(w,ephem,tz,{"type="+type});
 		w.key("data");
-		wr_ejson(w,ev,eph);
+		wr_ejson(w,ev,eph,calc_eclipse,tz_off);
 		w.obj_end();
 		os<<"\n";
 	}
@@ -2879,6 +2990,7 @@ int cmd_next(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=cfg.def_prety;
 	bool quiet=false;
+	bool calc_eclipse=false;
 	const OptMap handlers={
 		{"--from",[&](const std::vector<std::string>&src,std::size_t&idx,
 					  const std::string&opt){
@@ -2907,6 +3019,10 @@ int cmd_next(const std::vector<std::string>&args){
 		 }},
 		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
 					   const std::string&){ quiet=true; }},
+		{"--eclipse",[&](const std::vector<std::string>&src,std::size_t&idx,
+						 const std::string&opt){
+			 calc_eclipse=parse_bool01(req_val(src,idx,opt),opt);
+		 }},
 	};
 
 	for(std::size_t i=1;i<args.size();++i){
@@ -2953,11 +3069,19 @@ int cmd_next(const std::vector<std::string>&args){
 	OutTgt out=open_out(out_path);
 	const FmtMap fmt_handlers={
 		{"json",[&](){
-			 wr_eljs(*out.stream,ephem,tz,pretty,picked,"next",eph);
+			 wr_eljs(*out.stream,ephem,tz,pretty,picked,"next",eph,calc_eclipse,
+					 tz_off);
 		 }},
-		{"txt",[&](){ wr_eltxt(*out.stream,tz,picked,"next"); }},
-		{"csv",[&](){ wr_elcsv(*out.stream,picked); }},
-		{"jsonl",[&](){ wr_eljsl(*out.stream,ephem,tz,picked,"next",eph); }},
+		{"txt",[&](){
+			 wr_eltxt(*out.stream,tz,picked,"next",&eph,calc_eclipse,tz_off);
+		 }},
+		{"csv",[&](){
+			 wr_elcsv(*out.stream,picked,&eph,calc_eclipse,tz_off);
+		 }},
+		{"jsonl",[&](){
+			 wr_eljsl(*out.stream,ephem,tz,picked,"next",eph,calc_eclipse,
+					  tz_off);
+		 }},
 		{"ics",[&](){ wr_elics(*out.stream,ephem,"lunar-next",picked); }},
 	};
 	run_fmt(fmt_handlers,format,"next");
@@ -3067,6 +3191,7 @@ int cmd_search(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=true;
 	bool quiet=false;
+	bool calc_eclipse=false;
 	const OptMap handlers={
 		{"--from",[&](const std::vector<std::string>&src,std::size_t&idx,
 					  const std::string&opt){
@@ -3090,6 +3215,10 @@ int cmd_search(const std::vector<std::string>&args){
 		 }},
 		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
 					   const std::string&){ quiet=true; }},
+		{"--eclipse",[&](const std::vector<std::string>&src,std::size_t&idx,
+						 const std::string&opt){
+			 calc_eclipse=parse_bool01(req_val(src,idx,opt),opt);
+		 }},
 	};
 
 	for(std::size_t i=2;i<args.size();++i){
@@ -3123,6 +3252,10 @@ int cmd_search(const std::vector<std::string>&args){
 	next_args.push_back(pretty?"1":"0");
 	if(quiet){
 		next_args.push_back("--quiet");
+	}
+	if(calc_eclipse){
+		next_args.push_back("--eclipse");
+		next_args.push_back("1");
 	}
 
 	const std::unordered_map<std::string,std::string> kind_hints={
