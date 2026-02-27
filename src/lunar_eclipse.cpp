@@ -1,4 +1,5 @@
 #include "lunar/lunar_eclipse.hpp"
+#include "lunar/app_long.hpp"
 
 #include<algorithm>
 #include<cmath>
@@ -60,12 +61,16 @@ Bracket mk_bracket(double t1,double f1,double t2,double f2){
 }
 
 bool eval_shadow(EphRead&eph,double jd_tdb,ShadowGeom&g){
-	auto sun=eph.get_state(eph.SUN,eph.EARTH,jd_tdb);
-	auto moon=eph.get_state(eph.MOON,eph.EARTH,jd_tdb);
-	g.s=sun.first;
-	g.s_dot=sun.second;
-	g.m=moon.first;
-	g.m_dot=moon.second;
+	constexpr double h=2e-6;
+	constexpr int max_iter=3;
+	g.s=AberCorr::geo_app(eph,eph.SUN,jd_tdb,max_iter);
+	g.m=AberCorr::geo_app(eph,eph.MOON,jd_tdb,max_iter);
+	Vec3 s_plus=AberCorr::geo_app(eph,eph.SUN,jd_tdb+h,max_iter);
+	Vec3 s_minus=AberCorr::geo_app(eph,eph.SUN,jd_tdb-h,max_iter);
+	Vec3 m_plus=AberCorr::geo_app(eph,eph.MOON,jd_tdb+h,max_iter);
+	Vec3 m_minus=AberCorr::geo_app(eph,eph.MOON,jd_tdb-h,max_iter);
+	g.s_dot=(s_plus-s_minus)/(2.0*h);
+	g.m_dot=(m_plus-m_minus)/(2.0*h);
 	g.D=g.s.norm();
 	if(!(g.D>0.0)){
 		return false;
