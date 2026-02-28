@@ -27,6 +27,9 @@ static constexpr double K_AU_LIGHT_TIME_DAYS=
 static constexpr double K_AU_LIGHT_TIME_SECONDS=K_AU_METERS/K_LIGHT_SPEED_MPS;
 static constexpr double K_LIGHT_SPEED_AU_PER_DAY=
 	K_SECONDS_PER_DAY/K_AU_LIGHT_TIME_SECONDS;
+static constexpr int K_ERFA_WGS84=1;
+static constexpr int K_ERFA_GRS80=2;
+static constexpr int K_ERFA_WGS72=3;
 
 static inline void fastSinCos(double x,double&s,double&c){
 #if defined(__has_builtin)
@@ -117,10 +120,96 @@ void eraRz(double psi,double r[3][3]){
 	r[1][2]=r12;
 }
 
+void eraRy(double theta,double r[3][3]){
+	double s;
+	double c;
+	fastSinCos(theta,s,c);
+
+	const double r00=c*r[0][0]-s*r[2][0];
+	const double r01=c*r[0][1]-s*r[2][1];
+	const double r02=c*r[0][2]-s*r[2][2];
+	const double r20=s*r[0][0]+c*r[2][0];
+	const double r21=s*r[0][1]+c*r[2][1];
+	const double r22=s*r[0][2]+c*r[2][2];
+
+	r[0][0]=r00;
+	r[0][1]=r01;
+	r[0][2]=r02;
+	r[2][0]=r20;
+	r[2][1]=r21;
+	r[2][2]=r22;
+}
+
 void eraZp(double p[3]){
 	p[0]=0.0;
 	p[1]=0.0;
 	p[2]=0.0;
+}
+
+int eraEform(int n,double*a,double*f){
+	switch(n){
+	case K_ERFA_WGS84:
+		*a=6378137.0;
+		*f=1.0/298.257223563;
+		break;
+	case K_ERFA_GRS80:
+		*a=6378137.0;
+		*f=1.0/298.257222101;
+		break;
+	case K_ERFA_WGS72:
+		*a=6378135.0;
+		*f=1.0/298.26;
+		break;
+	default:
+		*a=0.0;
+		*f=0.0;
+		return -1;
+	}
+	return 0;
+}
+
+int eraGd2gce(double a,double f,double elong,double phi,double height,
+			  double xyz[3]){
+	const double sp=sin(phi);
+	const double cp=cos(phi);
+	double w=1.0-f;
+	w*=w;
+	const double d=cp*cp+w*sp*sp;
+	if(d<=0.0){
+		return -1;
+	}
+
+	const double ac=a/sqrt(d);
+	const double as=w*ac;
+	const double r=(ac+height)*cp;
+
+	xyz[0]=r*cos(elong);
+	xyz[1]=r*sin(elong);
+	xyz[2]=(as+height)*sp;
+	return 0;
+}
+
+int eraGd2gc(int n,double elong,double phi,double height,double xyz[3]){
+	double a;
+	double f;
+	int status=eraEform(n,&a,&f);
+	if(status==0){
+		status=eraGd2gce(a,f,elong,phi,height,xyz);
+		if(status!=0){
+			status=-2;
+		}
+	}
+	if(status!=0){
+		eraZp(xyz);
+	}
+	return status;
+}
+
+void eraPom00(double xp,double yp,double sp,double rpom[3][3]){
+	eraIr(rpom);
+	eraRz(sp,rpom);
+	eraRy(-xp,rpom);
+	eraRx(-yp,rpom);
 }
 
 void eraSxp(double s,double p[3],double sp[3]){
@@ -2403,6 +2492,49 @@ void eraRxp(double r[3][3],double p[3],double rp[3]){
 		wrp[row]=sum;
 	}
 	eraCp(wrp,rp);
+}
+
+void eraTrxp(double r[3][3],double p[3],double trp[3]){
+	const double x=p[0];
+	const double y=p[1];
+	const double z=p[2];
+
+	const double tx=r[0][0]*x+r[1][0]*y+r[2][0]*z;
+	const double ty=r[0][1]*x+r[1][1]*y+r[2][1]*z;
+	const double tz=r[0][2]*x+r[1][2]*y+r[2][2]*z;
+
+	trp[0]=tx;
+	trp[1]=ty;
+	trp[2]=tz;
+}
+
+void eraPvtob(double elong,double phi,double hm,double xp,double yp,double sp,
+			  double theta,double pv[2][3]){
+	static constexpr double kEarthRotationRate=
+		1.00273781191135448*K_TWO_PI/K_SECONDS_PER_DAY;
+
+	double xyzm[3];
+	(void)eraGd2gc(K_ERFA_WGS84,elong,phi,hm,xyzm);
+
+	double rpm[3][3];
+	eraPom00(xp,yp,sp,rpm);
+
+	double xyz[3];
+	eraTrxp(rpm,xyzm,xyz);
+	const double x=xyz[0];
+	const double y=xyz[1];
+	const double z=xyz[2];
+
+	const double s=sin(theta);
+	const double c=cos(theta);
+
+	pv[0][0]=c*x-s*y;
+	pv[0][1]=s*x+c*y;
+	pv[0][2]=z;
+
+	pv[1][0]=kEarthRotationRate*(-s*x-c*y);
+	pv[1][1]=kEarthRotationRate*(c*x-s*y);
+	pv[1][2]=0.0;
 }
 
 double eraSepp(double a[3],double b[3]){
