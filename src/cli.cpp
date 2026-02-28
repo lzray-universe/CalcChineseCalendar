@@ -1183,6 +1183,25 @@ int cmd_event(const std::vector<std::string>&args){
 		use_event();
 		return 0;
 	}
+	if(args.size()>=2){
+		std::string cat=to_low(args[1]);
+		if(cat=="lunar-eclipse"||cat=="lunar_eclipse"){
+			std::vector<std::string> eargs;
+			eargs.push_back(args[0]);
+			for(std::size_t i=2;i<args.size();++i){
+				if(args[i]=="--eclipse"){
+					bool on=parse_bool01(req_val(args,i,"--eclipse"),"--eclipse");
+					if(!on){
+						throw std::invalid_argument(
+							"lunar-eclipse category does not support --eclipse 0");
+					}
+					continue;
+				}
+				eargs.push_back(args[i]);
+			}
+			return cmd_eclipse(eargs);
+		}
+	}
 	if(args.size()<3){
 		throw std::invalid_argument(
 			"event requires: <bsp> <solar-term|lunar-phase> ...");
@@ -1347,10 +1366,17 @@ void use_event(){
 			   "<new_moon|fst_qtr|full_moon|lst_qtr>\n"
 			 <<"    --near <YYYY-MM-DD> [--format json|txt|ics] [--out <path>] "
 			   "[--tz ...] [--pretty 0|1] [--quiet] [--eclipse 0|1]\n"
+			 <<"  lunar event <bsp> lunar-eclipse --near <YYYY-MM-DD>\n"
+			 <<"    [--stage any|umb|total] [--point-lat ... --point-lon ...] "
+			   "[--global-vis 0|1]\n"
+			 <<"    [--format json|txt|geojson] [--out <path>] [--tz ...] "
+			   "[--pretty 0|1] [--quiet]\n"
 			 <<"Examples:\n"
 			 <<"  lunar event D:\\de442.bsp solar-term Z2 2025\n"
 			 <<"  lunar event D:\\de442.bsp lunar-phase full_moon --near "
 			   "2025-09-07\n"
+			 <<"  lunar event D:\\de442.bsp lunar-eclipse --near 2025-09-07 "
+			   "--global-vis 1 --global-format geojson --format json\n"
 			 <<"  lunar event D:\\de442.bsp solar-term J1 2025 --format ics "
 			   "--out event.ics\n"
 			 <<"Notes:\n"
@@ -1382,6 +1408,7 @@ void use_main(){
 			 <<"  lunar next     ...\n"
 			 <<"  lunar range    ...\n"
 			 <<"  lunar search   ...\n"
+			 <<"  lunar eclipse  ...\n"
 			 <<"  lunar festival ...\n"
 			 <<"  lunar almanac  ...\n"
 			 <<"  lunar info     ...\n"
@@ -1405,6 +1432,7 @@ void use_main(){
 			 <<"  lunar next --help\n"
 			 <<"  lunar range --help\n"
 			 <<"  lunar search --help\n"
+			 <<"  lunar eclipse --help\n"
 			 <<"  lunar festival --help\n"
 			 <<"  lunar almanac --help\n"
 			 <<"  lunar info --help\n"

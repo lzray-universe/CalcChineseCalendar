@@ -529,6 +529,7 @@ struct BatchIssue{
 struct EvtFilt{
 	bool inc_st=true;
 	bool inc_lph=true;
+	bool inc_ecl=false;
 };
 
 std::tuple<int,int,int> parse_ymd(const std::string&s){
@@ -767,10 +768,153 @@ void wr_ecljson(JsonWriter&w,const LunarEclipse&ecl,int year,int tz_off){
 	w.obj_end();
 }
 
+void wr_ptvis_json(JsonWriter&w,const LunarEclipsePointVis&pv,int tz_off){
+	w.obj_begin();
+	w.key("stage_window");
+	w.value(pv.stage_window);
+	w.key("lat_deg");
+	w.value(pv.lat_deg);
+	w.key("lon_deg");
+	w.value(pv.lon_deg);
+	w.key("height_m");
+	w.value(pv.height_m);
+	w.key("visible");
+	w.value(pv.visible);
+	w.key("max_alt_deg");
+	if(std::isfinite(pv.max_alt_deg)){
+		w.value(pv.max_alt_deg);
+	}else{
+		w.null_val();
+	}
+	w.key("first_visible");
+	if(std::isfinite(pv.first_jd_utc)){
+		w.obj_begin();
+		w.key("jd_utc");
+		w.value(pv.first_jd_utc);
+		w.key("utc_iso");
+		w.value(fmt_iso(pv.first_jd_utc,0,true));
+		w.key("loc_iso");
+		w.value(fmt_iso(pv.first_jd_utc,tz_off,true));
+		w.obj_end();
+	}else{
+		w.null_val();
+	}
+	w.key("last_visible");
+	if(std::isfinite(pv.last_jd_utc)){
+		w.obj_begin();
+		w.key("jd_utc");
+		w.value(pv.last_jd_utc);
+		w.key("utc_iso");
+		w.value(fmt_iso(pv.last_jd_utc,0,true));
+		w.key("loc_iso");
+		w.value(fmt_iso(pv.last_jd_utc,tz_off,true));
+		w.obj_end();
+	}else{
+		w.null_val();
+	}
+	w.key("sample_count");
+	w.value(pv.sample_count);
+	w.obj_end();
+}
+
+void wr_glbvis_json(JsonWriter&w,const LunarEclipseGlobalVis&gv,int tz_off){
+	w.obj_begin();
+	w.key("stage_window");
+	w.value(gv.stage_window);
+	w.key("jd_start_utc");
+	w.value(gv.jd_start_utc);
+	w.key("jd_end_utc");
+	w.value(gv.jd_end_utc);
+	w.key("utc_start_iso");
+	w.value(fmt_iso(gv.jd_start_utc,0,true));
+	w.key("utc_end_iso");
+	w.value(fmt_iso(gv.jd_end_utc,0,true));
+	w.key("loc_start_iso");
+	w.value(fmt_iso(gv.jd_start_utc,tz_off,true));
+	w.key("loc_end_iso");
+	w.value(fmt_iso(gv.jd_end_utc,tz_off,true));
+	w.key("lat_step_deg");
+	w.value(gv.lat_step_deg);
+	w.key("lon_step_deg");
+	w.value(gv.lon_step_deg);
+	w.key("sample_count");
+	w.value(gv.sample_count);
+	w.key("points");
+	w.arr_begin();
+	for(const auto&pt : gv.points){
+		w.obj_begin();
+		w.key("lat");
+		w.value(pt.lat_deg);
+		w.key("lon");
+		w.value(pt.lon_deg);
+		w.key("max_alt_deg");
+		w.value(pt.max_alt_deg);
+		w.key("first_visible");
+		w.value(fmt_iso(pt.first_jd_utc,tz_off,true));
+		w.key("last_visible");
+		w.value(fmt_iso(pt.last_jd_utc,tz_off,true));
+		w.obj_end();
+	}
+	w.arr_end();
+	w.obj_end();
+}
+
+void wr_glbvis_geojson(JsonWriter&w,const LunarEclipseGlobalVis&gv,int tz_off){
+	w.obj_begin();
+	w.key("type");
+	w.value("FeatureCollection");
+	w.key("stage_window");
+	w.value(gv.stage_window);
+	w.key("utc_start_iso");
+	w.value(fmt_iso(gv.jd_start_utc,0,true));
+	w.key("utc_end_iso");
+	w.value(fmt_iso(gv.jd_end_utc,0,true));
+	w.key("loc_start_iso");
+	w.value(fmt_iso(gv.jd_start_utc,tz_off,true));
+	w.key("loc_end_iso");
+	w.value(fmt_iso(gv.jd_end_utc,tz_off,true));
+	w.key("lat_step_deg");
+	w.value(gv.lat_step_deg);
+	w.key("lon_step_deg");
+	w.value(gv.lon_step_deg);
+	w.key("sample_count");
+	w.value(gv.sample_count);
+	w.key("features");
+	w.arr_begin();
+	for(const auto&pt : gv.points){
+		w.obj_begin();
+		w.key("type");
+		w.value("Feature");
+		w.key("geometry");
+		w.obj_begin();
+		w.key("type");
+		w.value("Point");
+		w.key("coordinates");
+		w.arr_begin();
+		w.value(pt.lon_deg);
+		w.value(pt.lat_deg);
+		w.arr_end();
+		w.obj_end();
+		w.key("properties");
+		w.obj_begin();
+		w.key("max_alt_deg");
+		w.value(pt.max_alt_deg);
+		w.key("first_visible");
+		w.value(fmt_iso(pt.first_jd_utc,tz_off,true));
+		w.key("last_visible");
+		w.value(fmt_iso(pt.last_jd_utc,tz_off,true));
+		w.obj_end();
+		w.obj_end();
+	}
+	w.arr_end();
+	w.obj_end();
+}
+
 LunarEclipse calc_ecl_for_event(EphRead&eph,const EventRec&ev){
 	LunarEclipse ecl;
-	if(is_full_moon_ev(ev)){
-		double jd_tdb=TimeScale::utc_to_tdb(ev.jd_utc);
+	if(is_full_moon_ev(ev)||ev.kind=="lunar_eclipse"){
+		double jd_tdb=
+			std::isfinite(ev.jd_tdb)?ev.jd_tdb:TimeScale::utc_to_tdb(ev.jd_utc);
 		calc_lunar_eclipse(eph,jd_tdb,&ecl);
 	}
 	return ecl;
@@ -793,6 +937,11 @@ void wr_ejson(JsonWriter&w,const EventRec&ev,EphRead&eph,bool calc_eclipse=false
 	w.value(ev.utc_iso);
 	w.key("loc_iso");
 	w.value(ev.loc_iso);
+	if(ev.kind=="lunar_eclipse"){
+		w.key("lunar_eclipse");
+		LunarEclipse ecl=calc_ecl_for_event(eph,ev);
+		wr_ecljson(w,ecl,ev.year,tz_off);
+	}
 	if(is_full_moon_ev(ev)){
 		w.key("moon_dist_km");
 		w.value(full_moon_dist_km(eph,ev.jd_utc));
@@ -958,7 +1107,7 @@ void wr_atxt(std::ostream&os,const AtData&d,bool hdr_on){
 }
 
 std::vector<EventRec> col_eyrs(EphRead&eph,const std::set<int>&years,int tz_off,
-							   std::ostream*log){
+							   std::ostream*log,bool inc_eclipse=false){
 	SolLunCal solver(eph);
 	std::vector<EventRec> events;
 	for(int y : years){
@@ -967,6 +1116,10 @@ std::vector<EventRec> col_eyrs(EphRead&eph,const std::set<int>&years,int tz_off,
 		std::vector<EventRec> phase=bld_lpev(yr,tz_off);
 		events.insert(events.end(),solar.begin(),solar.end());
 		events.insert(events.end(),phase.begin(),phase.end());
+		if(inc_eclipse){
+			std::vector<EventRec> ecl=bld_lunar_eclipse_events(eph,yr,tz_off);
+			events.insert(events.end(),ecl.begin(),ecl.end());
+		}
 	}
 	std::sort(events.begin(),events.end(),[](const EventRec&a,const EventRec&b){
 		return a.jd_utc<b.jd_utc;
@@ -981,6 +1134,7 @@ EvtFilt parse_ef(const std::string&text){
 	}
 	f.inc_st=false;
 	f.inc_lph=false;
+	f.inc_ecl=false;
 	std::string token;
 	std::istringstream iss(text);
 	while(std::getline(iss,token,',')){
@@ -989,11 +1143,14 @@ EvtFilt parse_ef(const std::string&text){
 			f.inc_st=true;
 		}else if(token=="lunar_phase"||token=="lunar-phase"){
 			f.inc_lph=true;
+		}else if(token=="lunar_eclipse"||token=="lunar-eclipse"||
+				 token=="eclipse"){
+			f.inc_ecl=true;
 		}else if(!token.empty()){
 			throw std::invalid_argument("invalid kind: "+token);
 		}
 	}
-	if(!f.inc_st&&!f.inc_lph){
+	if(!f.inc_st&&!f.inc_lph&&!f.inc_ecl){
 		throw std::invalid_argument("kinds filter cannot be empty");
 	}
 	return f;
@@ -1005,6 +1162,9 @@ bool pass_flt(const EventRec&ev,const EvtFilt&f){
 	}
 	if(ev.kind=="lunar_phase"){
 		return f.inc_lph;
+	}
+	if(ev.kind=="lunar_eclipse"){
+		return f.inc_ecl;
 	}
 	return false;
 }
@@ -1428,15 +1588,17 @@ int cmd_comp(const std::vector<std::string>&args){
 				 <<"  COMPREPLY=()\n"
 				 <<"  cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
 				 <<"  local cmds=\"months calendar year event download at "
-				   "convert day monthview next range search festival almanac "
-				   "info selftest config completion\"\n"
+				   "convert day monthview next range search eclipse festival "
+				   "almanac info selftest config completion\"\n"
 				 <<"  if [[ ${COMP_CWORD} -eq 1 ]]; then\n"
 				 <<"    COMPREPLY=( $(compgen -W \"${cmds}\" -- \"${cur}\") )\n"
 				 <<"    return 0\n"
 				 <<"  fi\n"
 				 <<"  local opts=\"--help --format --out --tz --pretty --quiet "
 				   "--stdin --file --jobs --meta-once --from --to --count "
-				   "--kinds --eot-lon\"\n"
+				   "--kinds --eot-lon --near --stage --sample-min --point-lat "
+				   "--point-lon --point-height --point-refine --global-vis "
+				   "--global --global-format --grid-lat-step --grid-lon-step\"\n"
 				 <<"  COMPREPLY=( $(compgen -W \"${opts}\" -- \"${cur}\") )\n"
 				 <<"}\n"
 				 <<"complete -F _lunar_complete lunar\n";
@@ -1446,7 +1608,7 @@ int cmd_comp(const std::vector<std::string>&args){
 		std::cout<<"complete -c lunar -f\n"
 				 <<"complete -c lunar -n '__fish_use_subcommand' -a 'months "
 				   "calendar year event download at convert day monthview next "
-				   "range search festival almanac info selftest config "
+				   "range search eclipse festival almanac info selftest config "
 				   "completion'\n";
 		return 0;
 	}
@@ -1457,8 +1619,8 @@ int cmd_comp(const std::vector<std::string>&args){
 			<<"  param($wordToComplete, $commandAst, $cursorPosition)\n"
 			<<"  $cmds = "
 			  "'months','calendar','year','event','download','at','convert','"
-			  "day','monthview','next','range','search','festival','almanac','"
-			  "info','selftest','config','completion'\n"
+			  "day','monthview','next','range','search','eclipse','festival',"
+			  "'almanac','info','selftest','config','completion'\n"
 			<<"  $cmds | Where-Object { $_ -like \"$wordToComplete*\" } | "
 			  "ForEach-Object {\n"
 			<<"    "
@@ -1498,7 +1660,7 @@ void use_mview(){
 void use_next(){
 	std::cout<<"Usage:\n"
 			 <<"  lunar next <bsp> --from <time> --count N\n"
-			 <<"    [--kinds solar_term,lunar_phase] [--tz ...]\n"
+			 <<"    [--kinds solar_term,lunar_phase,lunar_eclipse] [--tz ...]\n"
 			 <<"    [--format json|txt|csv|ics|jsonl] [--out ...] [--pretty "
 			   "0|1] [--quiet] [--eclipse 0|1]\n"
 			 <<"Examples:\n"
@@ -1511,7 +1673,7 @@ void use_next(){
 void use_range(){
 	std::cout<<"Usage:\n"
 			 <<"  lunar range <bsp> --from <time> --to <time>\n"
-			 <<"    [--kinds solar_term,lunar_phase] [--tz ...]\n"
+			 <<"    [--kinds solar_term,lunar_phase,lunar_eclipse] [--tz ...]\n"
 			 <<"    [--format json|txt|csv|ics|jsonl] [--out ...] [--pretty "
 			   "0|1] [--quiet]\n"
 			 <<"Examples:\n"
@@ -1528,8 +1690,27 @@ void use_search(){
 		  "[--pretty 0|1] [--quiet] [--eclipse 0|1]\n"
 		<<"Examples:\n"
 		<<"  lunar search D:\\de442.bsp \"next full_moon\" --from 2025-06-01\n"
-		<<"  lunar search D:\\de442.bsp \"next solar_term 立春\" --from "
+		<<"  lunar search D:\\de442.bsp \"next lunar_eclipse\" --from "
 		  "2025-01-01 --format json\n";
+}
+
+void use_eclipse(){
+	std::cout
+		<<"Usage:\n"
+		<<"  lunar eclipse <bsp> --near <YYYY-MM-DD>\n"
+		<<"    [--stage any|umb|total] [--sample-min <minutes>]\n"
+		<<"    [--point-lat <deg> --point-lon <deg> [--point-height <m>]] "
+		  "[--point-refine 0|1]\n"
+		<<"    [--global-vis 0|1] [--grid-lat-step <deg>] [--grid-lon-step "
+		  "<deg>] [--global-format json|geojson]\n"
+		<<"    [--tz ...] [--format json|txt|geojson] [--out ...] [--pretty "
+		  "0|1] [--quiet]\n"
+		<<"Examples:\n"
+		<<"  lunar eclipse D:\\de442.bsp --near 2025-09-07 --format json\n"
+		<<"  lunar eclipse D:\\de442.bsp --near 2025-09-07 --global-vis 1 "
+		  "--global-format geojson --format json\n"
+		<<"  lunar eclipse D:\\de442.bsp --near 2025-09-07 --point-lat 31.23 "
+		  "--point-lon 121.47 --point-height 10\n";
 }
 
 void use_fest(){
@@ -2504,7 +2685,7 @@ void wr_eltxt(std::ostream&os,const std::string&tz,
 		os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"<<ev.year<<"\t"
 		  <<format_num(ev.jd_utc)<<"\t"<<ev.utc_iso<<"\t"<<ev.loc_iso;
 		if(calc_eclipse){
-			if(eph&&is_full_moon_ev(ev)){
+			if(eph&&(is_full_moon_ev(ev)||ev.kind=="lunar_eclipse")){
 				LunarEclipse ecl=calc_ecl_for_event(*eph,ev);
 				os<<"\t"<<ecl.type<<"\t"<<node_liso(ecl.jd_tdb_max,tz_off);
 			}else{
@@ -2527,7 +2708,7 @@ void wr_elcsv(std::ostream&os,const std::vector<EventRec>&events,
 		  <<","<<ev.year<<","<<format_num(ev.jd_utc)<<","<<csv_quote(ev.utc_iso)
 		  <<","<<csv_quote(ev.loc_iso);
 		if(calc_eclipse){
-			if(eph&&is_full_moon_ev(ev)){
+			if(eph&&(is_full_moon_ev(ev)||ev.kind=="lunar_eclipse")){
 				LunarEclipse ecl=calc_ecl_for_event(*eph,ev);
 				os<<","<<csv_quote(ecl.type)<<","
 				  <<csv_quote(node_liso(ecl.jd_tdb_max,tz_off));
@@ -2590,11 +2771,46 @@ std::vector<EventRec> load_evs(EphRead&eph,double jd_from,double jd_to,
 		years.insert(y);
 	}
 	std::vector<EventRec> events=
-		col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr);
+		col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr,filter.inc_ecl);
 	std::sort(events.begin(),events.end(),[](const EventRec&a,const EventRec&b){
 		return a.jd_utc<b.jd_utc;
 	});
 	return filt_evs(events,filter,jd_from,jd_to,true,gt_from);
+}
+
+EventRec nearest_ecl(EphRead&eph,double jd_utc,int tz_off,bool quiet){
+	int cst_year=0;
+	int cst_month=0;
+	int cst_day=0;
+	utc2cst(jd_utc,cst_year,cst_month,cst_day);
+
+	EventRec best;
+	bool has_best=false;
+	double best_abs=std::numeric_limits<double>::infinity();
+
+	for(int span : {2,4,8}){
+		std::set<int> years;
+		for(int y=cst_year-span;y<=cst_year+span;++y){
+			years.insert(y);
+		}
+		std::vector<EventRec> evs=
+			col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr,true);
+		for(const auto&ev : evs){
+			if(ev.kind!="lunar_eclipse"){
+				continue;
+			}
+			double delta=std::fabs(ev.jd_utc-jd_utc);
+			if(delta<best_abs){
+				best_abs=delta;
+				best=ev;
+				has_best=true;
+			}
+		}
+		if(has_best){
+			return best;
+		}
+	}
+	throw std::runtime_error("failed to locate nearby lunar eclipse event");
 }
 
 std::vector<EventRec> bld_fest(EphRead&eph,int lunar_year,int tz_off,
@@ -2980,7 +3196,7 @@ int cmd_next(const std::vector<std::string>&args){
 	std::string ephem=args[0];
 	std::string from_time;
 	int count=1;
-	std::string kinds="solar_term,lunar_phase";
+	std::string kinds="solar_term,lunar_phase,lunar_eclipse";
 	std::string tz=cfg.default_tz;
 	std::string format=to_low(cfg.def_fmt);
 	if(format!="txt"&&format!="json"&&format!="csv"&&format!="ics"&&
@@ -3102,7 +3318,7 @@ int cmd_range(const std::vector<std::string>&args){
 	std::string ephem=args[0];
 	std::string from_time;
 	std::string to_time;
-	std::string kinds="solar_term,lunar_phase";
+	std::string kinds="solar_term,lunar_phase,lunar_eclipse";
 	std::string tz=cfg.default_tz;
 	std::string format=to_low(cfg.def_fmt);
 	if(format!="txt"&&format!="json"&&format!="csv"&&format!="ics"&&
@@ -3265,6 +3481,12 @@ int cmd_search(const std::vector<std::string>&args){
 		{"lst_qtr","lunar_phase"},
 		{"solar_term","solar_term"},
 		{"lunar_phase","lunar_phase"},
+		{"lunar_eclipse","lunar_eclipse"},
+		{"lunar-eclipse","lunar_eclipse"},
+		{"eclipse","lunar_eclipse"},
+		{"total_eclipse","lunar_eclipse"},
+		{"partial_eclipse","lunar_eclipse"},
+		{"penumbral_eclipse","lunar_eclipse"},
 	};
 	auto it=kind_hints.find(b);
 	if(it!=kind_hints.end()){
@@ -3272,6 +3494,304 @@ int cmd_search(const std::vector<std::string>&args){
 		next_args.push_back(it->second);
 	}
 	return cmd_next(next_args);
+}
+
+int cmd_eclipse(const std::vector<std::string>&args){
+	if(args.size()==1&&(args[0]=="-h"||args[0]=="--help")){
+		use_eclipse();
+		return 0;
+	}
+	if(args.empty()){
+		throw std::invalid_argument("eclipse requires: <bsp> --near <YYYY-MM-DD>");
+	}
+
+	InterCfg cfg=load_def();
+	std::string ephem=args[0];
+	std::string near_date;
+	std::string stage_window="any";
+	std::string tz=cfg.default_tz;
+	std::string format=to_low(cfg.def_fmt);
+	if(format!="json"&&format!="txt"&&format!="geojson"){
+		format="json";
+	}
+	std::string out_path;
+	bool pretty=cfg.def_prety;
+	bool quiet=false;
+
+	double sample_minutes=2.0;
+	bool point_refine=true;
+	double point_lat=0.0;
+	double point_lon=0.0;
+	double point_height_m=0.0;
+	bool has_point_lat=false;
+	bool has_point_lon=false;
+
+	bool global_vis=false;
+	std::string global_format="json";
+	double grid_lat_step=10.0;
+	double grid_lon_step=10.0;
+
+	const OptMap handlers={
+		{"--near",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 near_date=req_val(src,idx,opt);
+		 }},
+		{"--stage",[&](const std::vector<std::string>&src,std::size_t&idx,
+					   const std::string&opt){
+			 stage_window=to_low(req_val(src,idx,opt));
+		 }},
+		{"--sample-min",[&](const std::vector<std::string>&src,std::size_t&idx,
+							const std::string&opt){
+			 sample_minutes=parse_double(req_val(src,idx,opt),opt);
+		 }},
+		{"--point-refine",[&](const std::vector<std::string>&src,std::size_t&idx,
+							  const std::string&opt){
+			 point_refine=parse_bool01(req_val(src,idx,opt),opt);
+		 }},
+		{"--point-lat",[&](const std::vector<std::string>&src,std::size_t&idx,
+						   const std::string&opt){
+			 point_lat=parse_double(req_val(src,idx,opt),opt);
+			 has_point_lat=true;
+		 }},
+		{"--point-lon",[&](const std::vector<std::string>&src,std::size_t&idx,
+						   const std::string&opt){
+			 point_lon=parse_double(req_val(src,idx,opt),opt);
+			 has_point_lon=true;
+		 }},
+		{"--point-height",[&](const std::vector<std::string>&src,std::size_t&idx,
+							  const std::string&opt){
+			 point_height_m=parse_double(req_val(src,idx,opt),opt);
+		 }},
+		{"--global-vis",[&](const std::vector<std::string>&src,std::size_t&idx,
+							const std::string&opt){
+			 global_vis=parse_bool01(req_val(src,idx,opt),opt);
+		 }},
+		{"--global",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 global_vis=parse_bool01(req_val(src,idx,opt),opt);
+		 }},
+		{"--global-format",[&](const std::vector<std::string>&src,
+							   std::size_t&idx,const std::string&opt){
+			 global_format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--grid-lat-step",[&](const std::vector<std::string>&src,
+							   std::size_t&idx,const std::string&opt){
+			 grid_lat_step=parse_double(req_val(src,idx,opt),opt);
+		 }},
+		{"--grid-lon-step",[&](const std::vector<std::string>&src,
+							   std::size_t&idx,const std::string&opt){
+			 grid_lon_step=parse_double(req_val(src,idx,opt),opt);
+		 }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
+					const std::string&opt){ tz=req_val(src,idx,opt); }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 format=to_low(req_val(src,idx,opt));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
+						const std::string&opt){
+			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ quiet=true; }},
+	};
+
+	for(std::size_t i=1;i<args.size();++i){
+		const std::string&opt=args[i];
+		apply_opt(handlers,args,i,opt,"eclipse");
+	}
+
+	if(near_date.empty()){
+		throw std::invalid_argument("eclipse requires --near <YYYY-MM-DD>");
+	}
+	if(has_point_lat!=has_point_lon){
+		throw std::invalid_argument(
+			"point visibility requires both --point-lat and --point-lon");
+	}
+	if(global_format!="json"&&global_format!="geojson"){
+		throw std::invalid_argument("--global-format must be json or geojson");
+	}
+	chk_fmt(format,{"json","txt","geojson"},"eclipse");
+	if(format=="geojson"){
+		global_vis=true;
+	}
+
+	int y=0;
+	int m=0;
+	int d=0;
+	std::tie(y,m,d)=parse_ymd(near_date);
+	double near_jd_utc=greg2jd(y,m,d,0,0,0.0)-UTC8DAY;
+	int tz_off=parse_tz(tz);
+
+	EphRead eph(ephem);
+	EventRec ev=nearest_ecl(eph,near_jd_utc,tz_off,quiet);
+
+	double jd_tdb=std::isfinite(ev.jd_tdb)?ev.jd_tdb:TimeScale::utc_to_tdb(ev.jd_utc);
+	LunarEclipse ecl;
+	if(!calc_lunar_eclipse(eph,jd_tdb,&ecl)||!ecl.has){
+		throw std::runtime_error("failed to compute lunar eclipse details");
+	}
+
+	bool has_point_vis=false;
+	LunarEclipsePointVis point_vis;
+	if(has_point_lat){
+		if(!lunar_eclipse_point_visibility(eph,ecl,stage_window,point_lat,point_lon,
+										   point_height_m,sample_minutes,point_refine,
+										   &point_vis)){
+			throw std::invalid_argument(
+				"requested stage window is unavailable for this eclipse");
+		}
+		has_point_vis=true;
+	}
+
+	bool has_global_vis=false;
+	LunarEclipseGlobalVis global_data;
+	if(global_vis){
+		if(!lunar_eclipse_global_visibility(eph,ecl,stage_window,grid_lat_step,
+											grid_lon_step,sample_minutes,
+											&global_data)){
+			throw std::invalid_argument(
+				"requested stage window is unavailable for this eclipse");
+		}
+		has_global_vis=true;
+	}
+
+	OutTgt out=open_out(out_path);
+	const FmtMap fmt_handlers={
+		{"json",[&](){
+			 JsonWriter w(*out.stream,pretty);
+			 w.obj_begin();
+			 write_meta(w,ephem,tz,{"type=eclipse"});
+			 w.key("input");
+			 w.obj_begin();
+			 w.key("near");
+			 w.value(near_date);
+			 w.key("stage_window");
+			 w.value(stage_window);
+			 w.key("sample_minutes");
+			 w.value(sample_minutes);
+			 w.key("global_vis");
+			 w.value(global_vis);
+			 w.key("global_format");
+			 w.value(global_format);
+			 if(has_point_lat){
+				 w.key("point");
+				 w.obj_begin();
+				 w.key("lat_deg");
+				 w.value(point_lat);
+				 w.key("lon_deg");
+				 w.value(point_lon);
+				 w.key("height_m");
+				 w.value(point_height_m);
+				 w.key("refine");
+				 w.value(point_refine);
+				 w.obj_end();
+			 }else{
+				 w.key("point");
+				 w.null_val();
+			 }
+			 w.obj_end();
+			 w.key("data");
+			 w.obj_begin();
+			 w.key("event");
+			 wr_ejson(w,ev,eph,false,tz_off);
+			 w.key("lunar_eclipse");
+			 wr_ecljson(w,ecl,ev.year,tz_off);
+			 w.key("point_visibility");
+			 if(has_point_vis){
+				 wr_ptvis_json(w,point_vis,tz_off);
+			 }else{
+				 w.null_val();
+			 }
+			 w.key("global_visibility");
+			 if(has_global_vis){
+				 if(global_format=="geojson"){
+					 wr_glbvis_geojson(w,global_data,tz_off);
+				 }else{
+					 wr_glbvis_json(w,global_data,tz_off);
+				 }
+			 }else{
+				 w.null_val();
+			 }
+			 w.obj_end();
+			 w.obj_end();
+			 *out.stream<<"\n";
+		 }},
+		{"txt",[&](){
+			 std::ostream&os=*out.stream;
+			 os<<"tool=lunar format=txt type=eclipse tz_display="<<tz<<"\n";
+			 os<<"input.near="<<near_date<<"\n";
+			 os<<"input.stage_window="<<stage_window<<"\n";
+			 os<<"input.sample_minutes="<<format_num(sample_minutes)<<"\n";
+			 os<<"data.event.kind="<<ev.kind<<"\n";
+			 os<<"data.event.code="<<ev.code<<"\n";
+			 os<<"data.event.name="<<ev.name<<"\n";
+			 os<<"data.event.loc_iso="<<ev.loc_iso<<"\n";
+			 os<<"[lunar_eclipse]\n";
+			 os<<"type="<<ecl.type<<"\n";
+			 os<<"pen_mag=";
+			 if(std::isfinite(ecl.pen_mag)){
+				 os<<ecl.pen_mag<<"\n";
+			 }else{
+				 os<<"null\n";
+			 }
+			 os<<"umb_mag=";
+			 if(std::isfinite(ecl.umb_mag)){
+				 os<<ecl.umb_mag<<"\n";
+			 }else{
+				 os<<"null\n";
+			 }
+			 os<<"p1_loc="<<node_liso(ecl.jd_tdb_p1,tz_off)<<"\n";
+			 os<<"u1_loc="<<node_liso(ecl.jd_tdb_u1,tz_off)<<"\n";
+			 os<<"max_loc="<<node_liso(ecl.jd_tdb_max,tz_off)<<"\n";
+			 os<<"u4_loc="<<node_liso(ecl.jd_tdb_u4,tz_off)<<"\n";
+			 os<<"p4_loc="<<node_liso(ecl.jd_tdb_p4,tz_off)<<"\n";
+			 os<<"u2_loc="<<node_liso(ecl.jd_tdb_u2,tz_off)<<"\n";
+			 os<<"u3_loc="<<node_liso(ecl.jd_tdb_u3,tz_off)<<"\n";
+			 if(has_point_vis){
+				 os<<"[point_visibility]\n";
+				 os<<"visible="<<(point_vis.visible?"1":"0")<<"\n";
+				 os<<"max_alt_deg="<<format_num(point_vis.max_alt_deg)<<"\n";
+				 os<<"first_visible=";
+				 if(std::isfinite(point_vis.first_jd_utc)){
+					 os<<fmt_iso(point_vis.first_jd_utc,tz_off,true)<<"\n";
+				 }else{
+					 os<<"null\n";
+				 }
+				 os<<"last_visible=";
+				 if(std::isfinite(point_vis.last_jd_utc)){
+					 os<<fmt_iso(point_vis.last_jd_utc,tz_off,true)<<"\n";
+				 }else{
+					 os<<"null\n";
+				 }
+				 os<<"sample_count="<<point_vis.sample_count<<"\n";
+			 }
+			 if(has_global_vis){
+				 os<<"[global_visibility]\n";
+				 os<<"points="<<global_data.points.size()<<"\n";
+				 os<<"lat\tlon\tmax_alt_deg\tfirst_visible\tlast_visible\n";
+				 for(const auto&pt : global_data.points){
+					 os<<format_num(pt.lat_deg)<<"\t"<<format_num(pt.lon_deg)
+					   <<"\t"<<format_num(pt.max_alt_deg)<<"\t"
+					   <<fmt_iso(pt.first_jd_utc,tz_off,true)<<"\t"
+					   <<fmt_iso(pt.last_jd_utc,tz_off,true)<<"\n";
+				 }
+			 }
+		 }},
+		{"geojson",[&](){
+			 if(!has_global_vis){
+				 throw std::runtime_error("geojson output requires global visibility");
+			 }
+			 JsonWriter w(*out.stream,pretty);
+			 wr_glbvis_geojson(w,global_data,tz_off);
+			 *out.stream<<"\n";
+		 }},
+	};
+	run_fmt(fmt_handlers,format,"eclipse");
+	note_out(out_path,quiet);
+	return 0;
 }
 
 int cmd_fest(const std::vector<std::string>&args){

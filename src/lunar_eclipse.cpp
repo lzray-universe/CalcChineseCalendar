@@ -1,11 +1,16 @@
 #include "lunar/lunar_eclipse.hpp"
 #include "lunar/app_long.hpp"
+#include "lunar/format.hpp"
+#include "lunar/precnut_core.hpp"
+#include "lunar/time_scale.hpp"
 
 #include<algorithm>
+#include<cctype>
 #include<cmath>
 #include<functional>
 #include<limits>
 #include<stdexcept>
+#include<vector>
 
 namespace{
 
@@ -474,5 +479,444 @@ bool calc_lunar_eclipse(EphRead&eph,double jd_tdb_near_full_moon,
 	}
 
 	*out=ans;
+	return true;
+}
+
+namespace{
+
+std::string to_low(std::string s){
+	for(char&c : s){
+		c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+	}
+	return s;
+}
+
+bool stage_norm(const std::string&in,std::string&out){
+	std::string v=to_low(in);
+	if(v=="any"||v=="all"||v=="pen"||v=="penumbral"){
+		out="any";
+		return true;
+	}
+	if(v=="umb"||v=="umbral"){
+		out="umb";
+		return true;
+	}
+	if(v=="total"||v=="tot"){
+		out="total";
+		return true;
+	}
+	return false;
+}
+
+std::string ecl_code(const std::string&type){
+	if(type=="T"){
+		return "total";
+	}
+	if(type=="U"){
+		return "partial";
+	}
+	return "penumbral";
+}
+
+std::string ecl_name(const std::string&type){
+	if(type=="T"){
+		return "月全食";
+	}
+	if(type=="U"){
+		return "月偏食";
+	}
+	return "半影月食";
+}
+
+double clamp_unit(double v){
+	if(v>1.0){
+		return 1.0;
+	}
+	if(v<-1.0){
+		return -1.0;
+	}
+	return v;
+}
+
+Vec3 geodetic_to_ecef(double lat_deg,double lon_deg,double h_m){
+	constexpr double a_m=6378137.0;
+	constexpr double inv_f=298.257223563;
+	const double f=1.0/inv_f;
+	const double e2=f*(2.0-f);
+
+	double lat=lat_deg*PI/180.0;
+	double lon=lon_deg*PI/180.0;
+	double s_lat=std::sin(lat);
+	double c_lat=std::cos(lat);
+	double s_lon=std::sin(lon);
+	double c_lon=std::cos(lon);
+
+	double N=a_m/std::sqrt(1.0-e2*s_lat*s_lat);
+	double x=(N+h_m)*c_lat*c_lon;
+	double y=(N+h_m)*c_lat*s_lon;
+	double z=(N*(1.0-e2)+h_m)*s_lat;
+
+	double au_m=AU_KM*1000.0;
+	return Vec3(x/au_m,y/au_m,z/au_m);
+}
+
+Vec3 up_ecef(double lat_deg,double lon_deg){
+	double lat=lat_deg*PI/180.0;
+	double lon=lon_deg*PI/180.0;
+	double c_lat=std::cos(lat);
+	return Vec3(c_lat*std::cos(lon),c_lat*std::sin(lon),std::sin(lat));
+}
+
+Vec3 moon_ecef(EphRead&eph,double jd_utc){
+	double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
+	Vec3 moon_geo=AberCorr::geo_app(eph,eph.MOON,jd_tdb,3);
+
+	Mat3 P=PrecNut::prec_mat(jd_tdb);
+	Mat3 N=PrecNut::nut_mat(jd_tdb);
+	Mat3 eq_true=N*P*CoordTf::bias_mat();
+	Vec3 moon_eq=eq_true*moon_geo;
+
+	double uta=std::floor(jd_utc);
+	double utb=jd_utc-uta;
+	double tta=std::floor(jd_tdb);
+	double ttb=jd_tdb-tta;
+	double gast=lunar::precnut::gst06a(uta,utb,tta,ttb);
+	return CoordTf::R3(gast)*moon_eq;
+}
+
+double topocentric_alt_deg(const Vec3&moon_ecef,const Vec3&obs_ecef,
+						   const Vec3&up_dir){
+	Vec3 topo=moon_ecef-obs_ecef;
+	double rn=topo.norm();
+	if(!(rn>0.0)){
+		return -90.0;
+	}
+	double s=Vec3::dot(topo/rn,up_dir);
+	return std::asin(clamp_unit(s))*180.0/PI;
+}
+
+double point_alt_deg(EphRead&eph,double jd_utc,const Vec3&obs_ecef,
+					 const Vec3&up_dir){
+	Vec3 moon=moon_ecef(eph,jd_utc);
+	return topocentric_alt_deg(moon,obs_ecef,up_dir);
+}
+
+std::vector<double> sample_grid(double t1,double t2,double sample_minutes){
+	if(!(t2>=t1)){
+		return {};
+	}
+	double step=sample_minutes/1440.0;
+	if(!(step>0.0)){
+		step=2.0/1440.0;
+	}
+	int n=static_cast<int>(std::ceil((t2-t1)/step))+1;
+	if(n<2){
+		n=2;
+	}
+	if(n>4000){
+		n=4000;
+	}
+	std::vector<double> out;
+	out.reserve(static_cast<std::size_t>(n));
+	for(int i=0;i<n;++i){
+		double u=(n==1)?0.0:static_cast<double>(i)/static_cast<double>(n-1);
+		out.push_back(t1+(t2-t1)*u);
+	}
+	return out;
+}
+
+double refine_cross(EphRead&eph,double left,double right,const Vec3&obs_ecef,
+					const Vec3&up_dir){
+	double f_left=point_alt_deg(eph,left,obs_ecef,up_dir);
+	double f_right=point_alt_deg(eph,right,obs_ecef,up_dir);
+	if(!std::isfinite(f_left)||!std::isfinite(f_right)){
+		return 0.5*(left+right);
+	}
+	if(f_left==0.0){
+		return left;
+	}
+	if(f_right==0.0){
+		return right;
+	}
+	if(f_left*f_right>0.0){
+		return 0.5*(left+right);
+	}
+	double a=left;
+	double b=right;
+	double fa=f_left;
+	for(int i=0;i<30;++i){
+		double m=0.5*(a+b);
+		double fm=point_alt_deg(eph,m,obs_ecef,up_dir);
+		if(!std::isfinite(fm)){
+			return m;
+		}
+		if(std::fabs(fm)<=1e-6){
+			return m;
+		}
+		if(fa*fm<=0.0){
+			b=m;
+		}else{
+			a=m;
+			fa=fm;
+		}
+	}
+	return 0.5*(a+b);
+}
+
+std::vector<double> build_lat_grid(double step_deg){
+	if(!(step_deg>0.0)){
+		step_deg=10.0;
+	}
+	std::vector<double> out;
+	for(double lat=-90.0;lat<90.0-1e-12;lat+=step_deg){
+		out.push_back(lat);
+	}
+	if(out.empty()||std::fabs(out.back()-90.0)>1e-9){
+		out.push_back(90.0);
+	}
+	return out;
+}
+
+std::vector<double> build_lon_grid(double step_deg){
+	if(!(step_deg>0.0)){
+		step_deg=10.0;
+	}
+	std::vector<double> out;
+	for(double lon=-180.0;lon<180.0-1e-12;lon+=step_deg){
+		out.push_back(lon);
+	}
+	if(out.empty()){
+		out.push_back(0.0);
+	}
+	return out;
+}
+
+} // namespace
+
+std::vector<EventRec> bld_lunar_eclipse_events(EphRead&eph,const YearResult&yr,
+												int tz_off){
+	std::vector<EventRec> out;
+	out.reserve(yr.lun_phase.size());
+	for(const auto&item : yr.lun_phase){
+		double jd_utc=item.full_moon.toUtcJD();
+		double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
+		LunarEclipse ecl;
+		if(!calc_lunar_eclipse(eph,jd_tdb,&ecl)||!ecl.has){
+			continue;
+		}
+		EventRec ev;
+		ev.kind="lunar_eclipse";
+		ev.code=ecl_code(ecl.type);
+		ev.name=ecl_name(ecl.type);
+		ev.year=yr.year;
+		ev.jd_tdb=ecl.jd_tdb_max;
+		ev.jd_utc=TimeScale::tdb_to_utc(ecl.jd_tdb_max);
+		ev.utc_iso=fmt_iso(ev.jd_utc,0,true);
+		ev.loc_iso=fmt_iso(ev.jd_utc,tz_off,true);
+		out.push_back(std::move(ev));
+	}
+	std::sort(out.begin(),out.end(),[](const EventRec&a,const EventRec&b){
+		return a.jd_utc<b.jd_utc;
+	});
+	out.erase(
+		std::unique(out.begin(),out.end(),[](const EventRec&a,const EventRec&b){
+			return std::fabs(a.jd_utc-b.jd_utc)<1e-9;
+		}),
+		out.end());
+	return out;
+}
+
+bool lunar_eclipse_window_tdb(const LunarEclipse&ecl,const std::string&stage_window,
+							  double*jd_tdb_start,double*jd_tdb_end){
+	if(jd_tdb_start==nullptr||jd_tdb_end==nullptr||!ecl.has){
+		return false;
+	}
+	std::string stage;
+	if(!stage_norm(stage_window,stage)){
+		return false;
+	}
+
+	double t1=std::numeric_limits<double>::quiet_NaN();
+	double t2=std::numeric_limits<double>::quiet_NaN();
+	if(stage=="any"){
+		t1=ecl.jd_tdb_p1;
+		t2=ecl.jd_tdb_p4;
+	}else if(stage=="umb"){
+		t1=ecl.jd_tdb_u1;
+		t2=ecl.jd_tdb_u4;
+	}else{
+		t1=ecl.jd_tdb_u2;
+		t2=ecl.jd_tdb_u3;
+	}
+	if(!std::isfinite(t1)||!std::isfinite(t2)||!(t2>=t1)){
+		return false;
+	}
+	*jd_tdb_start=t1;
+	*jd_tdb_end=t2;
+	return true;
+}
+
+bool lunar_eclipse_point_visibility(EphRead&eph,const LunarEclipse&ecl,
+									const std::string&stage_window,
+									double lat_deg,double lon_deg,double height_m,
+									double sample_minutes,bool refine_edge,
+									LunarEclipsePointVis*out){
+	if(out==nullptr){
+		throw std::invalid_argument("out must not be null");
+	}
+	if(!std::isfinite(lat_deg)||!std::isfinite(lon_deg)||!std::isfinite(height_m)){
+		throw std::invalid_argument("point visibility inputs must be finite");
+	}
+	if(lat_deg<-90.0||lat_deg>90.0){
+		throw std::invalid_argument("lat_deg must be in [-90,90]");
+	}
+	if(lon_deg<-180.0||lon_deg>180.0){
+		throw std::invalid_argument("lon_deg must be in [-180,180]");
+	}
+
+	std::string stage;
+	if(!stage_norm(stage_window,stage)){
+		throw std::invalid_argument("stage_window must be any|umb|total");
+	}
+
+	double t1_tdb=0.0;
+	double t2_tdb=0.0;
+	if(!lunar_eclipse_window_tdb(ecl,stage,&t1_tdb,&t2_tdb)){
+		return false;
+	}
+	double t1_utc=TimeScale::tdb_to_utc(t1_tdb);
+	double t2_utc=TimeScale::tdb_to_utc(t2_tdb);
+	std::vector<double> times=sample_grid(t1_utc,t2_utc,sample_minutes);
+	if(times.empty()){
+		return false;
+	}
+
+	Vec3 obs=geodetic_to_ecef(lat_deg,lon_deg,height_m);
+	Vec3 up=up_ecef(lat_deg,lon_deg);
+
+	double max_alt=-90.0;
+	int first_idx=-1;
+	int last_idx=-1;
+	for(std::size_t i=0;i<times.size();++i){
+		double alt=point_alt_deg(eph,times[i],obs,up);
+		if(std::isfinite(alt)&&alt>max_alt){
+			max_alt=alt;
+		}
+		if(alt>0.0){
+			if(first_idx<0){
+				first_idx=static_cast<int>(i);
+			}
+			last_idx=static_cast<int>(i);
+		}
+	}
+
+	*out=LunarEclipsePointVis{};
+	out->stage_window=stage;
+	out->lat_deg=lat_deg;
+	out->lon_deg=lon_deg;
+	out->height_m=height_m;
+	out->sample_count=static_cast<int>(times.size());
+	out->max_alt_deg=max_alt;
+	out->visible=(first_idx>=0);
+	if(out->visible){
+		out->first_jd_utc=times[static_cast<std::size_t>(first_idx)];
+		out->last_jd_utc=times[static_cast<std::size_t>(last_idx)];
+		if(refine_edge){
+			if(first_idx>0){
+				double a=times[static_cast<std::size_t>(first_idx-1)];
+				double b=times[static_cast<std::size_t>(first_idx)];
+				out->first_jd_utc=refine_cross(eph,a,b,obs,up);
+			}
+			if(last_idx+1<static_cast<int>(times.size())){
+				double a=times[static_cast<std::size_t>(last_idx)];
+				double b=times[static_cast<std::size_t>(last_idx+1)];
+				out->last_jd_utc=refine_cross(eph,a,b,obs,up);
+			}
+		}
+	}
+	return true;
+}
+
+bool lunar_eclipse_global_visibility(EphRead&eph,const LunarEclipse&ecl,
+									 const std::string&stage_window,
+									 double lat_step_deg,double lon_step_deg,
+									 double sample_minutes,
+									 LunarEclipseGlobalVis*out){
+	if(out==nullptr){
+		throw std::invalid_argument("out must not be null");
+	}
+	if(!std::isfinite(lat_step_deg)||!std::isfinite(lon_step_deg)||
+	   !std::isfinite(sample_minutes)){
+		throw std::invalid_argument("global visibility inputs must be finite");
+	}
+	if(!(lat_step_deg>0.0)||!(lon_step_deg>0.0)){
+		throw std::invalid_argument("grid steps must be >0");
+	}
+
+	std::string stage;
+	if(!stage_norm(stage_window,stage)){
+		throw std::invalid_argument("stage_window must be any|umb|total");
+	}
+
+	double t1_tdb=0.0;
+	double t2_tdb=0.0;
+	if(!lunar_eclipse_window_tdb(ecl,stage,&t1_tdb,&t2_tdb)){
+		return false;
+	}
+	double t1_utc=TimeScale::tdb_to_utc(t1_tdb);
+	double t2_utc=TimeScale::tdb_to_utc(t2_tdb);
+	std::vector<double> times=sample_grid(t1_utc,t2_utc,sample_minutes);
+	if(times.empty()){
+		return false;
+	}
+	std::vector<Vec3> moon_series;
+	moon_series.reserve(times.size());
+	for(double jd_utc : times){
+		moon_series.push_back(moon_ecef(eph,jd_utc));
+	}
+
+	std::vector<double> lat_grid=build_lat_grid(lat_step_deg);
+	std::vector<double> lon_grid=build_lon_grid(lon_step_deg);
+
+	*out=LunarEclipseGlobalVis{};
+	out->stage_window=stage;
+	out->jd_start_utc=t1_utc;
+	out->jd_end_utc=t2_utc;
+	out->lat_step_deg=lat_step_deg;
+	out->lon_step_deg=lon_step_deg;
+	out->sample_count=static_cast<int>(times.size());
+
+	for(double lat : lat_grid){
+		for(double lon : lon_grid){
+			Vec3 obs=geodetic_to_ecef(lat,lon,0.0);
+			Vec3 up=up_ecef(lat,lon);
+			bool vis=false;
+			int first_idx=-1;
+			int last_idx=-1;
+			double max_alt=-90.0;
+			for(std::size_t i=0;i<moon_series.size();++i){
+				double alt=topocentric_alt_deg(moon_series[i],obs,up);
+				if(std::isfinite(alt)&&alt>max_alt){
+					max_alt=alt;
+				}
+				if(alt>0.0){
+					if(!vis){
+						first_idx=static_cast<int>(i);
+					}
+					vis=true;
+					last_idx=static_cast<int>(i);
+				}
+			}
+			if(vis){
+				LunarEclipseGlobalPoint pt;
+				pt.lat_deg=lat;
+				pt.lon_deg=lon;
+				pt.max_alt_deg=max_alt;
+				pt.first_jd_utc=times[static_cast<std::size_t>(first_idx)];
+				pt.last_jd_utc=times[static_cast<std::size_t>(last_idx)];
+				out->points.push_back(pt);
+			}
+		}
+	}
 	return true;
 }

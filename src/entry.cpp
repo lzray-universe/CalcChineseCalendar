@@ -68,6 +68,9 @@ int run_cli_args(const std::vector<std::string>&args){
 	if(first=="search"){
 		return cmd_search(std::vector<std::string>(args.begin()+1,args.end()));
 	}
+	if(first=="eclipse"){
+		return cmd_eclipse(std::vector<std::string>(args.begin()+1,args.end()));
+	}
 	if(first=="festival"){
 		return cmd_fest(std::vector<std::string>(args.begin()+1,args.end()));
 	}
