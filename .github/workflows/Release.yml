@@ -22,12 +22,23 @@ jobs:
           - os: ubuntu-latest
             name: linux-x64-musl
             kind: musl
+            zig_target: x86_64-linux-musl
+
+          - os: ubuntu-latest
+            name: linux-arm64-musl
+            kind: musl
+            zig_target: aarch64-linux-musl
 
           
           - os: windows-latest
             name: windows-x64
             kind: native
             cmake_args: ""
+
+          - os: windows-latest
+            name: windows-arm64
+            kind: native
+            cmake_args: "-A ARM64"
 
           
           - os: macos-latest
@@ -62,12 +73,12 @@ jobs:
 
           cat > zigcc <<'EOF'
           #!/usr/bin/env bash
-          exec zig cc -target x86_64-linux-musl "$@"
+          exec zig cc -target ${{ matrix.zig_target }} "$@"
           EOF
 
           cat > zigcxx <<'EOF'
           #!/usr/bin/env bash
-          exec zig c++ -target x86_64-linux-musl "$@"
+          exec zig c++ -target ${{ matrix.zig_target }} "$@"
           EOF
 
           chmod +x zigcc zigcxx
