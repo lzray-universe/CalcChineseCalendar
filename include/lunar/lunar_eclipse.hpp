@@ -8,18 +8,61 @@
 #include "lunar/events.hpp"
 #include "lunar/spc_ephem.hpp"
 
+struct EclipseGeoCoord{
+	double ra_deg=std::numeric_limits<double>::quiet_NaN();
+	double dec_deg=std::numeric_limits<double>::quiet_NaN();
+	double sd_deg=std::numeric_limits<double>::quiet_NaN();
+	double ehp_deg=std::numeric_limits<double>::quiet_NaN();
+};
+
+struct EclipseLibration{
+	double l_deg=std::numeric_limits<double>::quiet_NaN();
+	double b_deg=std::numeric_limits<double>::quiet_NaN();
+	double c_deg=std::numeric_limits<double>::quiet_NaN();
+};
+
+struct EclipsePointMeta{
+	double zen_lat_deg=std::numeric_limits<double>::quiet_NaN();
+	double zen_lon_deg=std::numeric_limits<double>::quiet_NaN();
+	double pa_deg=std::numeric_limits<double>::quiet_NaN();
+	double axis_deg=std::numeric_limits<double>::quiet_NaN();
+};
+
 struct LunarEclipse{
 	bool has=false;
 	std::string type="N";
 	double jd_tdb_p1=std::numeric_limits<double>::quiet_NaN();
 	double jd_tdb_u1=std::numeric_limits<double>::quiet_NaN();
 	double jd_tdb_max=std::numeric_limits<double>::quiet_NaN();
+	double jd_tdb_opp=std::numeric_limits<double>::quiet_NaN();
 	double jd_tdb_u4=std::numeric_limits<double>::quiet_NaN();
 	double jd_tdb_p4=std::numeric_limits<double>::quiet_NaN();
 	double jd_tdb_u2=std::numeric_limits<double>::quiet_NaN();
 	double jd_tdb_u3=std::numeric_limits<double>::quiet_NaN();
 	double pen_mag=std::numeric_limits<double>::quiet_NaN();
 	double umb_mag=std::numeric_limits<double>::quiet_NaN();
+	double rp_re=std::numeric_limits<double>::quiet_NaN();
+	double ru_re=std::numeric_limits<double>::quiet_NaN();
+	double opp_rp_re=std::numeric_limits<double>::quiet_NaN();
+	double opp_ru_re=std::numeric_limits<double>::quiet_NaN();
+	double dur_pen_sec=std::numeric_limits<double>::quiet_NaN();
+	double dur_umb_sec=std::numeric_limits<double>::quiet_NaN();
+	double dur_tot_sec=std::numeric_limits<double>::quiet_NaN();
+	double dt_max_sec=std::numeric_limits<double>::quiet_NaN();
+	double moon_dist_km=std::numeric_limits<double>::quiet_NaN();
+	double gamma=std::numeric_limits<double>::quiet_NaN();
+	double eps_deg=std::numeric_limits<double>::quiet_NaN();
+	EclipseGeoCoord sun_geo;
+	EclipseGeoCoord moon_geo;
+	EclipseLibration lib;
+	EclipsePointMeta p1_meta;
+	EclipsePointMeta u1_meta;
+	EclipsePointMeta u2_meta;
+	EclipsePointMeta max_meta;
+	EclipsePointMeta u3_meta;
+	EclipsePointMeta u4_meta;
+	EclipsePointMeta p4_meta;
+	EclipsePointMeta opp_meta;
 };
 
 bool calc_lunar_eclipse(EphRead&eph,double jd_tdb_near_full_moon,

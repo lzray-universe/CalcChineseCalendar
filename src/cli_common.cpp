@@ -140,4 +140,4 @@ std::vector<EventRec> bld_lpev(const YearResult&yr,int tz_off){
 	return out;
 }
 
-} // namespace cli_util
+}

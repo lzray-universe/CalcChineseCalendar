@@ -1241,7 +1241,7 @@ std::unordered_map<std::string,std::weak_ptr<SpkFile>>&cache_map(){
 	return cache;
 }
 
-} // namespace
+}
 
 struct SpkFile{
 	std::string filepath;
@@ -2712,7 +2712,7 @@ std::shared_ptr<SpkFile>acq_kernel(const std::string&filepath){
 	return fresh;
 }
 
-} // namespace
+}
 
 EphRead::EphRead(const std::string&path){
 	filepath=path;

@@ -1,10 +1,12 @@
 #include "lunar/lunar_eclipse.hpp"
 #include "lunar/app_long.hpp"
 #include "lunar/format.hpp"
+#include "lunar/frames.hpp"
 #include "lunar/precnut_core.hpp"
 #include "lunar/time_scale.hpp"
 
 #include<algorithm>
+#include<array>
 #include<cctype>
 #include<cmath>
 #include<functional>
@@ -19,10 +21,193 @@ constexpr double kRsKm=695700.0;
 constexpr double kRmKm=1737.4;
 constexpr double kDanjonKm=75.0;
 constexpr double kEarthRotationRateRadPerDay=1.00273781191135448*TWO_PI;
+constexpr double kDegPerRad=180.0/PI;
+constexpr double kRadPerDeg=PI/180.0;
 
+constexpr double kRe0A=kReKm/AU_KM;
 constexpr double kReA=(kReKm+kDanjonKm)/AU_KM;
 constexpr double kRsA=kRsKm/AU_KM;
 constexpr double kRmA=kRmKm/AU_KM;
+
+struct EqSph{
+	double ra=std::numeric_limits<double>::quiet_NaN();
+	double dec=std::numeric_limits<double>::quiet_NaN();
+};
+
+double norm2pi(double angle){
+	double v=std::fmod(angle,TWO_PI);
+	if(v<0.0){
+		v+=TWO_PI;
+	}
+	return v;
+}
+
+double norm_pm_pi(double angle){
+	double v=norm2pi(angle+PI);
+	return v-PI;
+}
+
+double norm_deg360(double angle_deg){
+	double v=std::fmod(angle_deg,360.0);
+	if(v<0.0){
+		v+=360.0;
+	}
+	return v;
+}
+
+double clamp_unit(double v){
+	if(v>1.0){
+		return 1.0;
+	}
+	if(v<-1.0){
+		return -1.0;
+	}
+	return v;
+}
+
+EqSph vec_to_eqsph(const Vec3&v){
+	EqSph out;
+	double r=v.norm();
+	if(!(r>0.0)){
+		return out;
+	}
+	out.ra=norm2pi(std::atan2(v.y,v.x));
+	out.dec=std::asin(clamp_unit(v.z/r));
+	return out;
+}
+
+Mat3 eq_true_mat(double jd_tdb){
+	Mat3 P=PrecNut::prec_mat(jd_tdb);
+	Mat3 N=PrecNut::nut_mat(jd_tdb);
+	return N*P*CoordTf::bias_mat();
+}
+
+bool fill_geo_coord(const Vec3&geo_eq,double radius_km,EclipseGeoCoord*out){
+	if(out==nullptr){
+		return false;
+	}
+	double dist_km=geo_eq.norm()*AU_KM;
+	EqSph sph=vec_to_eqsph(geo_eq);
+	if(!(dist_km>0.0)||!std::isfinite(sph.ra)||!std::isfinite(sph.dec)){
+		return false;
+	}
+
+	double sd=std::asin(clamp_unit(radius_km/dist_km));
+	double ehp=std::asin(clamp_unit(kReKm/dist_km));
+	out->ra_deg=sph.ra*kDegPerRad;
+	out->dec_deg=sph.dec*kDegPerRad;
+	out->sd_deg=sd*kDegPerRad;
+	out->ehp_deg=ehp*kDegPerRad;
+	return std::isfinite(out->ra_deg)&&std::isfinite(out->dec_deg)&&
+		   std::isfinite(out->sd_deg)&&std::isfinite(out->ehp_deg);
+}
+
+struct MoonOrient{
+	double ra_rad=std::numeric_limits<double>::quiet_NaN();
+	double dec_rad=std::numeric_limits<double>::quiet_NaN();
+	double w_rad=std::numeric_limits<double>::quiet_NaN();
+};
+
+MoonOrient moon_orient_iau(double jd_tdb){
+	double d=jd_tdb-2451545.0;
+	double T=d/36525.0;
+	auto d2r=[](double v) -> double{ return v*kRadPerDeg; };
+	auto arg=[&](double c0,double c1) -> double{ return d2r(c0+c1*d); };
+
+	double E1=arg(125.045,-0.0529921);
+	double E2=arg(250.089,-0.1059842);
+	double E3=arg(260.008,13.0120009);
+	double E4=arg(176.625,13.3407154);
+	double E5=arg(357.529,0.9856003);
+	double E6=arg(311.589,26.4057084);
+	double E7=arg(134.963,13.0649930);
+	double E8=arg(276.617,0.3287146);
+	double E9=arg(34.226,1.7484877);
+	double E10=arg(15.134,-0.1589763);
+	double E11=arg(119.743,0.0036096);
+	double E12=arg(239.961,0.1643573);
+	double E13=arg(25.053,12.9590088);
+
+	double ra_deg=269.9949+0.0031*T-3.8787*std::sin(E1)-0.1204*std::sin(E2)+
+				  0.0700*std::sin(E3)-0.0172*std::sin(E4)+0.0072*std::sin(E6)-
+				  0.0052*std::sin(E10)+0.0043*std::sin(E13);
+
+	double dec_deg=66.5392+0.0130*T+1.5419*std::cos(E1)+0.0239*std::cos(E2)-
+				   0.0278*std::cos(E3)+0.0068*std::cos(E4)-0.0029*std::cos(E6)+
+				   0.0009*std::cos(E7)+0.0008*std::cos(E10)-0.0009*std::cos(E13);
+
+	double w_deg=38.3213+13.17635815*d-1.4e-12*d*d+3.5610*std::sin(E1)+
+				 0.1208*std::sin(E2)-0.0642*std::sin(E3)+0.0158*std::sin(E4)+
+				 0.0252*std::sin(E5)-0.0066*std::sin(E6)-0.0047*std::sin(E7)-
+				 0.0046*std::sin(E8)+0.0028*std::sin(E9)+0.0052*std::sin(E10)+
+				 0.0040*std::sin(E11)+0.0019*std::sin(E12)-0.0044*std::sin(E13);
+
+	MoonOrient out;
+	out.ra_rad=d2r(norm_deg360(ra_deg));
+	out.dec_rad=d2r(dec_deg);
+	out.w_rad=d2r(norm_deg360(w_deg));
+	return out;
+}
+
+Mat3 m_inertial_to_moon_fixed(double ra_rad,double dec_rad,double w_rad){
+	double sa=std::sin(ra_rad);
+	double ca=std::cos(ra_rad);
+	double sd=std::sin(dec_rad);
+	double cd=std::cos(dec_rad);
+	double sw=std::sin(w_rad);
+	double cw=std::cos(w_rad);
+
+	Mat3 m;
+	m.m[0][0]=-sa*cw-ca*sd*sw;
+	m.m[0][1]=ca*cw-sa*sd*sw;
+	m.m[0][2]=cd*sw;
+
+	m.m[1][0]=sa*sw-ca*sd*cw;
+	m.m[1][1]=-ca*sw-sa*sd*cw;
+	m.m[1][2]=cd*cw;
+
+	m.m[2][0]=ca*cd;
+	m.m[2][1]=sa*cd;
+	m.m[2][2]=sd;
+	return m;
+}
+
+bool fill_libration(const Vec3&moon_eq,double jd_tdb,EclipseLibration*out){
+	if(out==nullptr){
+		return false;
+	}
+	double rn=moon_eq.norm();
+	if(!(rn>0.0)){
+		return false;
+	}
+
+	EqSph moon_sph=vec_to_eqsph(moon_eq);
+	if(!std::isfinite(moon_sph.ra)||!std::isfinite(moon_sph.dec)){
+		return false;
+	}
+
+	MoonOrient o=moon_orient_iau(jd_tdb);
+	if(!std::isfinite(o.ra_rad)||!std::isfinite(o.dec_rad)||!std::isfinite(o.w_rad)){
+		return false;
+	}
+	Mat3 to_fix=m_inertial_to_moon_fixed(o.ra_rad,o.dec_rad,o.w_rad);
+	Vec3 to_earth=(-1.0/rn)*moon_eq;
+	Vec3 eb=to_fix*to_earth;
+
+	double l=std::atan2(eb.y,eb.x)*kDegPerRad;
+	double b=std::asin(clamp_unit(eb.z))*kDegPerRad;
+
+	double da=norm_pm_pi(o.ra_rad-moon_sph.ra);
+	double y=std::cos(o.dec_rad)*std::sin(da);
+	double x=std::sin(o.dec_rad)*std::cos(moon_sph.dec)-
+			 std::cos(o.dec_rad)*std::sin(moon_sph.dec)*std::cos(da);
+	double c=std::atan2(y,x)*kDegPerRad;
+
+	out->l_deg=l;
+	out->b_deg=b;
+	out->c_deg=c;
+	return std::isfinite(l)&&std::isfinite(b)&&std::isfinite(c);
+}
 
 enum class ContactMode{
 	PenOuter,
@@ -52,6 +237,13 @@ struct ShadowGeom{
 	double ru_dot=0.0;
 };
 
+struct ShadowBodyState{
+	Vec3 s;
+	Vec3 s_dot;
+	Vec3 m;
+	Vec3 m_dot;
+};
+
 struct Bracket{
 	double left=0.0;
 	double right=0.0;
@@ -66,17 +258,47 @@ Bracket mk_bracket(double t1,double f1,double t2,double f2){
 	return {t2,t1,f2,f1};
 }
 
-bool eval_shadow(EphRead&eph,double jd_tdb,ShadowGeom&g){
-	constexpr double h=2e-6;
+bool finite_vec(const Vec3&v){
+	return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z);
+}
+
+bool eval_shadow_state(EphRead&eph,double jd_tdb,ShadowBodyState&st){
 	constexpr int max_iter=3;
-	g.s=AberCorr::geo_app(eph,eph.SUN,jd_tdb,max_iter);
-	g.m=AberCorr::geo_app(eph,eph.MOON,jd_tdb,max_iter);
-	Vec3 s_plus=AberCorr::geo_app(eph,eph.SUN,jd_tdb+h,max_iter);
-	Vec3 s_minus=AberCorr::geo_app(eph,eph.SUN,jd_tdb-h,max_iter);
-	Vec3 m_plus=AberCorr::geo_app(eph,eph.MOON,jd_tdb+h,max_iter);
-	Vec3 m_minus=AberCorr::geo_app(eph,eph.MOON,jd_tdb-h,max_iter);
-	g.s_dot=(s_plus-s_minus)/(2.0*h);
-	g.m_dot=(m_plus-m_minus)/(2.0*h);
+	RetProp sun=AberCorr::geo_prop(eph,eph.SUN,jd_tdb,max_iter);
+	auto moon=eph.get_state(eph.MOON,eph.EARTH,jd_tdb);
+	st.s=sun.X;
+	st.s_dot=sun.V;
+	st.m=moon.first;
+	st.m_dot=moon.second;
+	return finite_vec(st.s)&&finite_vec(st.s_dot)&&finite_vec(st.m)&&
+		   finite_vec(st.m_dot);
+}
+
+bool cone_slope(double c,double D,double D_dot,double&slope,double&slope_dot){
+	if(!(D>0.0)){
+		return false;
+	}
+	double z=c/D;
+	double one_minus=1.0-z*z;
+	if(!(one_minus>0.0)){
+		return false;
+	}
+	double root=std::sqrt(one_minus);
+	double z_dot=-(c*D_dot)/(D*D);
+	slope=z/root;
+	slope_dot=z_dot/(one_minus*root);
+	return std::isfinite(slope)&&std::isfinite(slope_dot);
+}
+
+bool eval_shadow(EphRead&eph,double jd_tdb,ShadowGeom&g){
+	ShadowBodyState st;
+	if(!eval_shadow_state(eph,jd_tdb,st)){
+		return false;
+	}
+	g.s=st.s;
+	g.s_dot=st.s_dot;
+	g.m=st.m;
+	g.m_dot=st.m_dot;
 	g.D=g.s.norm();
 	if(!(g.D>0.0)){
 		return false;
@@ -108,16 +330,87 @@ bool eval_shadow(EphRead&eph,double jd_tdb,ShadowGeom&g){
 		g.d_dot=0.0;
 	}
 
-	double x_div_D=g.x/g.D;
-	double x_div_D_dot=(g.x_dot*g.D-g.x*g.D_dot)/(g.D*g.D);
-	g.rp=kReA+(kRsA+kReA)*x_div_D;
-	g.ru=kReA-(kRsA-kReA)*x_div_D;
-	g.rp_dot=(kRsA+kReA)*x_div_D_dot;
-	g.ru_dot=-(kRsA-kReA)*x_div_D_dot;
+	double tan_pen=0.0;
+	double tan_pen_dot=0.0;
+	double tan_umb=0.0;
+	double tan_umb_dot=0.0;
+	if(!cone_slope(kRsA+kReA,g.D,g.D_dot,tan_pen,tan_pen_dot)){
+		return false;
+	}
+	if(!cone_slope(kRsA-kReA,g.D,g.D_dot,tan_umb,tan_umb_dot)){
+		return false;
+	}
+	g.rp=kReA+g.x*tan_pen;
+	g.ru=kReA-g.x*tan_umb;
+	g.rp_dot=g.x_dot*tan_pen+g.x*tan_pen_dot;
+	g.ru_dot=-(g.x_dot*tan_umb+g.x*tan_umb_dot);
 
 	return std::isfinite(g.x)&&std::isfinite(g.x_dot)&&std::isfinite(g.d)&&
 		   std::isfinite(g.d_dot)&&std::isfinite(g.rp)&&std::isfinite(g.ru)&&
 		   std::isfinite(g.rp_dot)&&std::isfinite(g.ru_dot);
+}
+
+bool fill_point_meta(EphRead&eph,double jd_tdb,bool inner_touch,
+					 EclipsePointMeta*out){
+	if(out==nullptr||!std::isfinite(jd_tdb)){
+		return false;
+	}
+	ShadowGeom g;
+	if(!eval_shadow(eph,jd_tdb,g)){
+		return false;
+	}
+
+	Mat3 eq=eq_true_mat(jd_tdb);
+	Vec3 moon_eq=eq*g.m;
+	Vec3 axis_eq=eq*g.axis;
+	double rn=moon_eq.norm();
+	double an=axis_eq.norm();
+	if(!(rn>0.0)||!(an>0.0)){
+		return false;
+	}
+	Vec3 moon_u=moon_eq/rn;
+	Vec3 axis_u=axis_eq/an;
+	EqSph m=vec_to_eqsph(moon_u);
+	if(!std::isfinite(m.ra)||!std::isfinite(m.dec)){
+		return false;
+	}
+
+	double jd_td=TimeScale::tdb_to_tt(jd_tdb);
+	double jd_ut1=TimeScale::tdb_to_utc(jd_tdb);
+	double uta=std::floor(jd_ut1);
+	double utb=jd_ut1-uta;
+	double tta=std::floor(jd_td);
+	double ttb=jd_td-tta;
+	double gast=lunar::precnut::gst06a(uta,utb,tta,ttb);
+	double zen_lon=norm_pm_pi(m.ra-gast)*kDegPerRad;
+	double zen_lat=m.dec*kDegPerRad;
+
+	double cs=clamp_unit(Vec3::dot(moon_u,axis_u));
+	double axis_deg=std::acos(cs)*kDegPerRad;
+
+	Vec3 east(-std::sin(m.ra),std::cos(m.ra),0.0);
+	Vec3 north(-std::cos(m.ra)*std::sin(m.dec),-std::sin(m.ra)*std::sin(m.dec),
+			   std::cos(m.dec));
+
+	Vec3 t=axis_u-Vec3::dot(axis_u,moon_u)*moon_u;
+	double tn=t.norm();
+	double pa=std::numeric_limits<double>::quiet_NaN();
+	if(tn>0.0){
+		t=t/tn;
+		if(inner_touch){
+			t=(-1.0)*t;
+		}
+		double e=Vec3::dot(t,east);
+		double n=Vec3::dot(t,north);
+		pa=norm_deg360(std::atan2(e,n)*kDegPerRad);
+	}
+
+	out->zen_lat_deg=zen_lat;
+	out->zen_lon_deg=zen_lon;
+	out->pa_deg=pa;
+	out->axis_deg=axis_deg;
+	return std::isfinite(zen_lat)&&std::isfinite(zen_lon)&&
+		   std::isfinite(axis_deg);
 }
 
 double contact_radius(const ShadowGeom&g,ContactMode mode){
@@ -385,6 +678,87 @@ bool solve_contact_pair(EphRead&eph,double jd_max,const ShadowGeom&g_max,
 	return std::isfinite(t1)&&std::isfinite(t2)&&t1<t2;
 }
 
+double opp_value(EphRead&eph,double jd_tdb){
+	ShadowBodyState st;
+	if(!eval_shadow_state(eph,jd_tdb,st)){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	Mat3 eq=eq_true_mat(jd_tdb);
+	Vec3 sun_eq=eq*st.s;
+	Vec3 moon_eq=eq*st.m;
+	EqSph s=vec_to_eqsph(sun_eq);
+	EqSph m=vec_to_eqsph(moon_eq);
+	if(!std::isfinite(s.ra)||!std::isfinite(m.ra)){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	return norm_pm_pi(m.ra-s.ra-PI);
+}
+
+double opp_derivative(EphRead&eph,double jd_tdb){
+	constexpr double h=1e-5;
+	double f1=opp_value(eph,jd_tdb+h);
+	double f2=opp_value(eph,jd_tdb-h);
+	if(!std::isfinite(f1)||!std::isfinite(f2)){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	return norm_pm_pi(f1-f2)/(2.0*h);
+}
+
+bool solve_opp(EphRead&eph,double jd_near,double*jd_opp){
+	if(jd_opp==nullptr||!std::isfinite(jd_near)){
+		return false;
+	}
+	auto fn=[&](double jd) -> double{ return opp_value(eph,jd); };
+	auto dfn=[&](double jd) -> double{ return opp_derivative(eph,jd); };
+
+	Bracket br;
+	if(!bracket_near(fn,jd_near,2.0,1.0/24.0,br)){
+		if(!bracket_near(fn,jd_near,3.0,1.0/48.0,br)){
+			return false;
+		}
+	}
+
+	double guess=std::clamp(jd_near,br.left,br.right);
+	double root=0.0;
+	try{
+		root=solve_bracketed(fn,dfn,br,guess,1e-10);
+	}catch(const std::exception&){
+		return false;
+	}
+	if(!std::isfinite(root)){
+		return false;
+	}
+	*jd_opp=root;
+	return true;
+}
+
+double signed_gamma_re(const ShadowGeom&g,double jd_tdb){
+	double gamma_abs=g.d/kRe0A;
+	if(!(gamma_abs>0.0)){
+		return 0.0;
+	}
+
+	Mat3 eq=eq_true_mat(jd_tdb);
+	Vec3 axis_eq=eq*g.axis;
+	Vec3 dvec_eq=eq*g.dvec;
+	double an=axis_eq.norm();
+	if(!(an>0.0)){
+		return gamma_abs;
+	}
+	Vec3 axis_u=axis_eq/an;
+	Vec3 north_eq(0.0,0.0,1.0);
+	Vec3 n_proj=north_eq-Vec3::dot(north_eq,axis_u)*axis_u;
+	double nn=n_proj.norm();
+	if(!(nn>0.0)){
+		return gamma_abs;
+	}
+	n_proj=n_proj/nn;
+	if(Vec3::dot(dvec_eq,n_proj)<0.0){
+		return -gamma_abs;
+	}
+	return gamma_abs;
+}
+
 }
 
 bool calc_lunar_eclipse(EphRead&eph,double jd_tdb_near_full_moon,
@@ -479,6 +853,53 @@ bool calc_lunar_eclipse(EphRead&eph,double jd_tdb_near_full_moon,
 		}
 	}
 
+	ans.rp_re=g_max.rp/kRe0A;
+	ans.ru_re=g_max.ru/kRe0A;
+	ans.gamma=signed_gamma_re(g_max,ans.jd_tdb_max);
+	ans.eps_deg=std::atan2(g_max.d,g_max.x)*kDegPerRad;
+	ans.moon_dist_km=g_max.m.norm()*AU_KM;
+
+	if(std::isfinite(ans.jd_tdb_p1)&&std::isfinite(ans.jd_tdb_p4)){
+		ans.dur_pen_sec=(ans.jd_tdb_p4-ans.jd_tdb_p1)*SEC_DAY;
+	}
+	if(std::isfinite(ans.jd_tdb_u1)&&std::isfinite(ans.jd_tdb_u4)){
+		ans.dur_umb_sec=(ans.jd_tdb_u4-ans.jd_tdb_u1)*SEC_DAY;
+	}
+	if(std::isfinite(ans.jd_tdb_u2)&&std::isfinite(ans.jd_tdb_u3)){
+		ans.dur_tot_sec=(ans.jd_tdb_u3-ans.jd_tdb_u2)*SEC_DAY;
+	}
+
+	double jd_utc_max=TimeScale::tdb_to_utc(ans.jd_tdb_max);
+	ans.dt_max_sec=(ans.jd_tdb_max-jd_utc_max)*SEC_DAY;
+
+	double jd_opp=jd_tdb_near_full_moon;
+	double jd_opp_solved=std::numeric_limits<double>::quiet_NaN();
+	if(solve_opp(eph,jd_tdb_near_full_moon,&jd_opp_solved)){
+		jd_opp=jd_opp_solved;
+	}
+	ans.jd_tdb_opp=jd_opp;
+	ShadowGeom g_opp;
+	if(eval_shadow(eph,jd_opp,g_opp)){
+		ans.opp_rp_re=g_opp.rp/kRe0A;
+		ans.opp_ru_re=g_opp.ru/kRe0A;
+	}
+
+	Mat3 eq=eq_true_mat(ans.jd_tdb_max);
+	Vec3 sun_eq=eq*g_max.s;
+	Vec3 moon_eq=eq*g_max.m;
+	fill_geo_coord(sun_eq,kRsKm,&ans.sun_geo);
+	fill_geo_coord(moon_eq,kRmKm,&ans.moon_geo);
+	fill_libration(moon_eq,ans.jd_tdb_max,&ans.lib);
+
+	fill_point_meta(eph,ans.jd_tdb_p1,false,&ans.p1_meta);
+	fill_point_meta(eph,ans.jd_tdb_u1,false,&ans.u1_meta);
+	fill_point_meta(eph,ans.jd_tdb_u2,true,&ans.u2_meta);
+	fill_point_meta(eph,ans.jd_tdb_max,false,&ans.max_meta);
+	fill_point_meta(eph,ans.jd_tdb_u3,true,&ans.u3_meta);
+	fill_point_meta(eph,ans.jd_tdb_u4,false,&ans.u4_meta);
+	fill_point_meta(eph,ans.jd_tdb_p4,false,&ans.p4_meta);
+	fill_point_meta(eph,ans.jd_tdb_opp,false,&ans.opp_meta);
+
 	*out=ans;
 	return true;
 }
@@ -527,16 +948,6 @@ std::string ecl_name(const std::string&type){
 		return "月偏食";
 	}
 	return "半影月食";
-}
-
-double clamp_unit(double v){
-	if(v>1.0){
-		return 1.0;
-	}
-	if(v<-1.0){
-		return -1.0;
-	}
-	return v;
 }
 
 Vec3 geodetic_to_ecef(double lat_deg,double lon_deg,double h_m){
@@ -722,7 +1133,7 @@ std::vector<double> build_lon_grid(double step_deg){
 	return out;
 }
 
-} // namespace
+}
 
 std::vector<EventRec> bld_lunar_eclipse_events(EphRead&eph,const YearResult&yr,
 												int tz_off){

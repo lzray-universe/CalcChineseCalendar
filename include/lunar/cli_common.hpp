@@ -45,4 +45,4 @@ std::vector<EventRec> bld_stev(const YearResult&yr,int tz_off);
 
 std::vector<EventRec> bld_lpev(const YearResult&yr,int tz_off);
 
-} // namespace cli_util
+}
