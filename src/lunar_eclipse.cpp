@@ -20,12 +20,16 @@ constexpr double kReKm=6378.1366;
 constexpr double kRsKm=695700.0;
 constexpr double kRmKm=1737.4;
 constexpr double kDanjonKm=75.0;
+constexpr double kWgs84InvF=298.257223563;
+constexpr double kWgs84F=1.0/kWgs84InvF;
+constexpr double kRpKm=kReKm*(1.0-kWgs84F);
 constexpr double kEarthRotationRateRadPerDay=1.00273781191135448*TWO_PI;
 constexpr double kDegPerRad=180.0/PI;
 constexpr double kRadPerDeg=PI/180.0;
 
 constexpr double kRe0A=kReKm/AU_KM;
-constexpr double kReA=(kReKm+kDanjonKm)/AU_KM;
+constexpr double kRp0A=kRpKm/AU_KM;
+constexpr double kDanjonA=kDanjonKm/AU_KM;
 constexpr double kRsA=kRsKm/AU_KM;
 constexpr double kRmA=kRmKm/AU_KM;
 
@@ -231,10 +235,18 @@ struct ShadowGeom{
 	double d2=0.0;
 	double d=0.0;
 	double d_dot=0.0;
+	double re1=0.0;
+	double re2=0.0;
+	double rp1=0.0;
+	double rp2=0.0;
+	double ru1=0.0;
+	double ru2=0.0;
 	double rp=0.0;
-	double rp_dot=0.0;
 	double ru=0.0;
-	double ru_dot=0.0;
+	Vec3 e1_eq;
+	Vec3 e2_eq;
+	double p1=0.0;
+	double p2=0.0;
 };
 
 struct ShadowBodyState{
@@ -260,6 +272,53 @@ Bracket mk_bracket(double t1,double f1,double t2,double f2){
 
 bool finite_vec(const Vec3&v){
 	return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z);
+}
+
+Vec3 cross_vec(const Vec3&a,const Vec3&b){
+	return Vec3(a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x);
+}
+
+bool build_shadow_plane_basis(const Vec3&axis_eq,Vec3&e1,Vec3&e2){
+	double an=axis_eq.norm();
+	if(!(an>0.0)){
+		return false;
+	}
+	Vec3 u=axis_eq/an;
+	Vec3 k(0.0,0.0,1.0);
+	Vec3 v=k-Vec3::dot(k,u)*u;
+	double vn=v.norm();
+	if(!(vn>1e-15)){
+		Vec3 ref(1.0,0.0,0.0);
+		if(std::fabs(Vec3::dot(ref,u))>0.9){
+			ref=Vec3(0.0,1.0,0.0);
+		}
+		v=ref-Vec3::dot(ref,u)*u;
+		vn=v.norm();
+		if(!(vn>1e-15)){
+			return false;
+		}
+	}
+	e1=v/vn;
+	e2=cross_vec(u,e1);
+	double e2n=e2.norm();
+	if(!(e2n>0.0)){
+		return false;
+	}
+	e2=e2/e2n;
+	return finite_vec(e1)&&finite_vec(e2);
+}
+
+bool earth_projected_axes(const Vec3&axis_eq,double&re1,double&re2){
+	double an=axis_eq.norm();
+	if(!(an>0.0)){
+		return false;
+	}
+	Vec3 u=axis_eq/an;
+	double mu=std::fabs(clamp_unit(u.z));
+	double re1_core=std::sqrt(kRe0A*kRe0A*mu*mu+kRp0A*kRp0A*(1.0-mu*mu));
+	re1=re1_core+kDanjonA;
+	re2=kRe0A+kDanjonA;
+	return std::isfinite(re1)&&std::isfinite(re2);
 }
 
 bool eval_shadow_state(EphRead&eph,double jd_tdb,ShadowBodyState&st){
@@ -288,6 +347,107 @@ bool cone_slope(double c,double D,double D_dot,double&slope,double&slope_dot){
 	slope=z/root;
 	slope_dot=z_dot/(one_minus*root);
 	return std::isfinite(slope)&&std::isfinite(slope_dot);
+}
+
+double ellipse_radial_radius(double x,double y,double a,double b){
+	if(!(a>0.0)||!(b>0.0)){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	double r=std::hypot(x,y);
+	if(!(r>0.0)){
+		return std::min(a,b);
+	}
+	double ux=x/r;
+	double uy=y/r;
+	double den=(ux*ux)/(a*a)+(uy*uy)/(b*b);
+	if(!(den>0.0)){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	return 1.0/std::sqrt(den);
+}
+
+double ellipse_constraint(double x,double y,double a2,double b2,double lambda){
+	double da=lambda+a2;
+	double db=lambda+b2;
+	if(!(da>0.0)||!(db>0.0)){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	return (a2*x*x)/(da*da)+(b2*y*y)/(db*db)-1.0;
+}
+
+double ellipse_signed_distance(double x,double y,double a,double b){
+	if(!(a>0.0)||!(b>0.0)){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	double q=(x*x)/(a*a)+(y*y)/(b*b);
+	bool inside=q<=1.0;
+	double a2=a*a;
+	double b2=b*b;
+	double lo=0.0;
+	double hi=0.0;
+	double f_lo=0.0;
+	double f_hi=0.0;
+	if(inside){
+		double eps=std::max(1e-30,1e-12*std::min(a2,b2));
+		lo=-std::min(a2,b2)+eps;
+		hi=0.0;
+		f_lo=ellipse_constraint(x,y,a2,b2,lo);
+		f_hi=ellipse_constraint(x,y,a2,b2,hi);
+		if(!std::isfinite(f_lo)||!std::isfinite(f_hi)||!(f_lo>=0.0&&f_hi<=0.0)){
+			return std::numeric_limits<double>::quiet_NaN();
+		}
+	}else{
+		lo=0.0;
+		hi=std::max(a2,b2);
+		f_lo=ellipse_constraint(x,y,a2,b2,lo);
+		f_hi=ellipse_constraint(x,y,a2,b2,hi);
+		if(!std::isfinite(f_lo)||!std::isfinite(f_hi)){
+			return std::numeric_limits<double>::quiet_NaN();
+		}
+		int guard=0;
+		while(f_hi>0.0&&guard<80){
+			hi*=2.0;
+			f_hi=ellipse_constraint(x,y,a2,b2,hi);
+			if(!std::isfinite(f_hi)){
+				return std::numeric_limits<double>::quiet_NaN();
+			}
+			++guard;
+		}
+		if(!(f_lo>=0.0&&f_hi<=0.0)){
+			return std::numeric_limits<double>::quiet_NaN();
+		}
+	}
+
+	double lambda=0.5*(lo+hi);
+	for(int i=0;i<72;++i){
+		double mid=0.5*(lo+hi);
+		double f_mid=ellipse_constraint(x,y,a2,b2,mid);
+		if(!std::isfinite(f_mid)){
+			return std::numeric_limits<double>::quiet_NaN();
+		}
+		lambda=mid;
+		if(std::fabs(f_mid)<=1e-16){
+			break;
+		}
+		if(f_lo*f_mid<=0.0){
+			hi=mid;
+			f_hi=f_mid;
+		}else{
+			lo=mid;
+			f_lo=f_mid;
+		}
+		(void)f_hi;
+	}
+
+	double da=lambda+a2;
+	double db=lambda+b2;
+	if(!(da>0.0)||!(db>0.0)){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	double xe=(a2*x)/da;
+	double ye=(b2*y)/db;
+	double d=std::hypot(x-xe,y-ye);
+	return inside ? -d : d;
 }
 
 bool eval_shadow(EphRead&eph,double jd_tdb,ShadowGeom&g){
@@ -330,24 +490,50 @@ bool eval_shadow(EphRead&eph,double jd_tdb,ShadowGeom&g){
 		g.d_dot=0.0;
 	}
 
-	double tan_pen=0.0;
-	double tan_pen_dot=0.0;
-	double tan_umb=0.0;
-	double tan_umb_dot=0.0;
-	if(!cone_slope(kRsA+kReA,g.D,g.D_dot,tan_pen,tan_pen_dot)){
+	Mat3 eq=eq_true_mat(jd_tdb);
+	Vec3 axis_eq=eq*g.axis;
+	Vec3 dvec_eq=eq*g.dvec;
+	if(!build_shadow_plane_basis(axis_eq,g.e1_eq,g.e2_eq)){
 		return false;
 	}
-	if(!cone_slope(kRsA-kReA,g.D,g.D_dot,tan_umb,tan_umb_dot)){
+	g.p1=Vec3::dot(dvec_eq,g.e1_eq);
+	g.p2=Vec3::dot(dvec_eq,g.e2_eq);
+	if(!earth_projected_axes(axis_eq,g.re1,g.re2)){
 		return false;
 	}
-	g.rp=kReA+g.x*tan_pen;
-	g.ru=kReA-g.x*tan_umb;
-	g.rp_dot=g.x_dot*tan_pen+g.x*tan_pen_dot;
-	g.ru_dot=-(g.x_dot*tan_umb+g.x*tan_umb_dot);
+
+	double tan_pen1=0.0;
+	double tan_pen1_dot=0.0;
+	double tan_pen2=0.0;
+	double tan_pen2_dot=0.0;
+	double tan_umb1=0.0;
+	double tan_umb1_dot=0.0;
+	double tan_umb2=0.0;
+	double tan_umb2_dot=0.0;
+	if(!cone_slope(kRsA+g.re1,g.D,g.D_dot,tan_pen1,tan_pen1_dot)){
+		return false;
+	}
+	if(!cone_slope(kRsA+g.re2,g.D,g.D_dot,tan_pen2,tan_pen2_dot)){
+		return false;
+	}
+	if(!cone_slope(kRsA-g.re1,g.D,g.D_dot,tan_umb1,tan_umb1_dot)){
+		return false;
+	}
+	if(!cone_slope(kRsA-g.re2,g.D,g.D_dot,tan_umb2,tan_umb2_dot)){
+		return false;
+	}
+	g.rp1=g.re1+g.x*tan_pen1;
+	g.rp2=g.re2+g.x*tan_pen2;
+	g.ru1=g.re1-g.x*tan_umb1;
+	g.ru2=g.re2-g.x*tan_umb2;
+	g.rp=ellipse_radial_radius(g.p1,g.p2,g.rp1,g.rp2);
+	g.ru=ellipse_radial_radius(g.p1,g.p2,g.ru1,g.ru2);
 
 	return std::isfinite(g.x)&&std::isfinite(g.x_dot)&&std::isfinite(g.d)&&
-		   std::isfinite(g.d_dot)&&std::isfinite(g.rp)&&std::isfinite(g.ru)&&
-		   std::isfinite(g.rp_dot)&&std::isfinite(g.ru_dot);
+		   std::isfinite(g.d_dot)&&std::isfinite(g.re1)&&std::isfinite(g.re2)&&
+		   std::isfinite(g.rp1)&&std::isfinite(g.rp2)&&std::isfinite(g.ru1)&&
+		   std::isfinite(g.ru2)&&std::isfinite(g.rp)&&std::isfinite(g.ru)&&
+		   std::isfinite(g.p1)&&std::isfinite(g.p2);
 }
 
 bool fill_point_meta(EphRead&eph,double jd_tdb,bool inner_touch,
@@ -413,25 +599,34 @@ bool fill_point_meta(EphRead&eph,double jd_tdb,bool inner_touch,
 		   std::isfinite(axis_deg);
 }
 
-double contact_radius(const ShadowGeom&g,ContactMode mode){
+double contact_radius_eff(const ShadowGeom&g,ContactMode mode){
 	if(mode==ContactMode::PenOuter){
-		return g.rp+kRmA;
+		return std::max(g.rp1,g.rp2)+kRmA;
 	}
 	if(mode==ContactMode::UmbOuter){
-		return g.ru+kRmA;
+		return std::max(g.ru1,g.ru2)+kRmA;
 	}
-	return g.ru-kRmA;
+	return std::min(g.ru1,g.ru2)-kRmA;
 }
 
 double contact_value(const ShadowGeom&g,ContactMode mode){
-	return g.d-contact_radius(g,mode);
-}
-
-double contact_derivative(const ShadowGeom&g,ContactMode mode){
+	double a=0.0;
+	double b=0.0;
 	if(mode==ContactMode::PenOuter){
-		return g.d_dot-g.rp_dot;
+		a=g.rp1;
+		b=g.rp2;
+	}else{
+		a=g.ru1;
+		b=g.ru2;
 	}
-	return g.d_dot-g.ru_dot;
+	double sd=ellipse_signed_distance(g.p1,g.p2,a,b);
+	if(!std::isfinite(sd)){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	if(mode==ContactMode::UmbInner){
+		return sd+kRmA;
+	}
+	return sd-kRmA;
 }
 
 double g_value(EphRead&eph,double jd_tdb){
@@ -626,7 +821,7 @@ bool solve_contact_pair(EphRead&eph,double jd_max,const ShadowGeom&g_max,
 	if(!(v>0.0)){
 		v=1e-6;
 	}
-	double radius=contact_radius(g_max,mode);
+	double radius=contact_radius_eff(g_max,mode);
 	if(!(radius>0.0)){
 		return false;
 	}
@@ -655,11 +850,13 @@ bool solve_contact_pair(EphRead&eph,double jd_max,const ShadowGeom&g_max,
 		return contact_value(g,mode);
 	};
 	auto dfn=[&](double jd) -> double{
-		ShadowGeom g;
-		if(!eval_shadow(eph,jd,g)){
+		constexpr double h=1e-5;
+		double f1=fn(jd+h);
+		double f2=fn(jd-h);
+		if(!std::isfinite(f1)||!std::isfinite(f2)){
 			return std::numeric_limits<double>::quiet_NaN();
 		}
-		return contact_derivative(g,mode);
+		return (f1-f2)/(2.0*h);
 	};
 
 	Bracket b_left;

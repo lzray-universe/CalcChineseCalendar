@@ -3029,7 +3029,7 @@ void wr_elcsv(std::ostream&os,const std::vector<EventRec>&events,
 				  <<","<<csv_quote(node_liso(ecl.jd_tdb_p4,tz_off));
 				auto out_node_csv=[&](double jd_tdb,const EclipsePointMeta&meta){
 					if(!std::isfinite(jd_tdb)){
-						os<<",,,,,,";
+						os<<",,,,,,,";
 						return;
 					}
 					double jd_td=TimeScale::tdb_to_tt(jd_tdb);
