@@ -2678,7 +2678,8 @@ void wr_eltxt(std::ostream&os,const std::string&tz,
 	os<<"tool=lunar format=txt type="<<type<<" tz_display="<<tz<<"\n";
 	os<<"kind\tcode\tname\tyear\tjd_utc\ttm_uiso\ttm_liso";
 	if(calc_eclipse){
-		os<<"\tecl_type\tecl_max_liso";
+		os<<"\tecl_type\tecl_max_liso\tecl_pen_mag\tecl_umb_mag\tecl_p1_liso"
+		  <<"\tecl_u1_liso\tecl_u2_liso\tecl_u3_liso\tecl_u4_liso\tecl_p4_liso";
 	}
 	os<<"\n";
 	for(const auto&ev : events){
@@ -2688,8 +2689,26 @@ void wr_eltxt(std::ostream&os,const std::string&tz,
 			if(eph&&(is_full_moon_ev(ev)||ev.kind=="lunar_eclipse")){
 				LunarEclipse ecl=calc_ecl_for_event(*eph,ev);
 				os<<"\t"<<ecl.type<<"\t"<<node_liso(ecl.jd_tdb_max,tz_off);
+				os<<"\t";
+				if(std::isfinite(ecl.pen_mag)){
+					os<<format_num(ecl.pen_mag);
+				}else{
+					os<<"null";
+				}
+				os<<"\t";
+				if(std::isfinite(ecl.umb_mag)){
+					os<<format_num(ecl.umb_mag);
+				}else{
+					os<<"null";
+				}
+				os<<"\t"<<node_liso(ecl.jd_tdb_p1,tz_off)
+				  <<"\t"<<node_liso(ecl.jd_tdb_u1,tz_off)
+				  <<"\t"<<node_liso(ecl.jd_tdb_u2,tz_off)
+				  <<"\t"<<node_liso(ecl.jd_tdb_u3,tz_off)
+				  <<"\t"<<node_liso(ecl.jd_tdb_u4,tz_off)
+				  <<"\t"<<node_liso(ecl.jd_tdb_p4,tz_off);
 			}else{
-				os<<"\tnull\tnull";
+				os<<"\tnull\tnull\tnull\tnull\tnull\tnull\tnull\tnull\tnull\tnull";
 			}
 		}
 		os<<"\n";
@@ -2700,7 +2719,9 @@ void wr_elcsv(std::ostream&os,const std::vector<EventRec>&events,
 			  EphRead*eph=nullptr,bool calc_eclipse=false,int tz_off=0){
 	os<<"kind,code,name,year,jd_utc,utc_iso,loc_iso";
 	if(calc_eclipse){
-		os<<",eclipse_type,eclipse_max_loc_iso";
+		os<<",eclipse_type,eclipse_max_loc_iso,eclipse_pen_mag,eclipse_umb_mag,"
+		  <<"eclipse_p1_loc_iso,eclipse_u1_loc_iso,eclipse_u2_loc_iso,"
+		  <<"eclipse_u3_loc_iso,eclipse_u4_loc_iso,eclipse_p4_loc_iso";
 	}
 	os<<"\n";
 	for(const auto&ev : events){
@@ -2711,9 +2732,22 @@ void wr_elcsv(std::ostream&os,const std::vector<EventRec>&events,
 			if(eph&&(is_full_moon_ev(ev)||ev.kind=="lunar_eclipse")){
 				LunarEclipse ecl=calc_ecl_for_event(*eph,ev);
 				os<<","<<csv_quote(ecl.type)<<","
-				  <<csv_quote(node_liso(ecl.jd_tdb_max,tz_off));
+				  <<csv_quote(node_liso(ecl.jd_tdb_max,tz_off))<<",";
+				if(std::isfinite(ecl.pen_mag)){
+					os<<format_num(ecl.pen_mag);
+				}
+				os<<",";
+				if(std::isfinite(ecl.umb_mag)){
+					os<<format_num(ecl.umb_mag);
+				}
+				os<<","<<csv_quote(node_liso(ecl.jd_tdb_p1,tz_off))
+				  <<","<<csv_quote(node_liso(ecl.jd_tdb_u1,tz_off))
+				  <<","<<csv_quote(node_liso(ecl.jd_tdb_u2,tz_off))
+				  <<","<<csv_quote(node_liso(ecl.jd_tdb_u3,tz_off))
+				  <<","<<csv_quote(node_liso(ecl.jd_tdb_u4,tz_off))
+				  <<","<<csv_quote(node_liso(ecl.jd_tdb_p4,tz_off));
 			}else{
-				os<<",,";
+				os<<",,,,,,,,,,";
 			}
 		}
 		os<<"\n";

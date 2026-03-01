@@ -226,7 +226,8 @@ void wr_ecljson(JsonWriter&w,const LunarEclipse&ecl,int year,int tz_off){
 }
 
 void wr_ecltxt(std::ostream&os,const std::vector<LunarEclipse>&items,int tz_off){
-	os<<"type\tpen_mag\tumb_mag\tmax_liso\tp1_liso\tu1_liso\tu4_liso\tp4_liso\n";
+	os<<"type\tpen_mag\tumb_mag\tmax_liso\tp1_liso\tu1_liso\tu2_liso\tu3_liso"
+	  <<"\tu4_liso\tp4_liso\n";
 	os<<std::setprecision(17);
 	for(const auto&ecl : items){
 		os<<ecl.type<<"\t";
@@ -244,6 +245,8 @@ void wr_ecltxt(std::ostream&os,const std::vector<LunarEclipse>&items,int tz_off)
 		os<<"\t"<<node_liso(ecl.jd_tdb_max,tz_off)
 		  <<"\t"<<node_liso(ecl.jd_tdb_p1,tz_off)
 		  <<"\t"<<node_liso(ecl.jd_tdb_u1,tz_off)
+		  <<"\t"<<node_liso(ecl.jd_tdb_u2,tz_off)
+		  <<"\t"<<node_liso(ecl.jd_tdb_u3,tz_off)
 		  <<"\t"<<node_liso(ecl.jd_tdb_u4,tz_off)
 		  <<"\t"<<node_liso(ecl.jd_tdb_p4,tz_off)<<"\n";
 	}
