@@ -18,6 +18,7 @@ constexpr double kReKm=6378.1366;
 constexpr double kRsKm=695700.0;
 constexpr double kRmKm=1737.4;
 constexpr double kDanjonKm=75.0;
+constexpr double kEarthRotationRateRadPerDay=1.00273781191135448*TWO_PI;
 
 constexpr double kReA=(kReKm+kDanjonKm)/AU_KM;
 constexpr double kRsA=kRsKm/AU_KM;
@@ -567,6 +568,34 @@ Vec3 up_ecef(double lat_deg,double lon_deg){
 	return Vec3(c_lat*std::cos(lon),c_lat*std::sin(lon),std::sin(lat));
 }
 
+Vec3 observer_beta_ecef(const Vec3&obs_ecef){
+	Vec3 vel_au_per_day(-kEarthRotationRateRadPerDay*obs_ecef.y,
+						kEarthRotationRateRadPerDay*obs_ecef.x,0.0);
+	return vel_au_per_day/C_AUDAY;
+}
+
+Vec3 apply_diurnal_aberration(const Vec3&dir,const Vec3&obs_beta){
+	double beta2=Vec3::dot(obs_beta,obs_beta);
+	if(!(beta2>0.0)){
+		return dir;
+	}
+
+	double gamma_inv=std::sqrt(std::max(0.0,1.0-beta2));
+	double nb=Vec3::dot(dir,obs_beta);
+	double denom=1.0+nb;
+	if(!(denom>0.0)){
+		return dir;
+	}
+
+	Vec3 dir_ab=(gamma_inv*dir)+obs_beta+((nb/(1.0+gamma_inv))*obs_beta);
+	dir_ab=dir_ab/denom;
+	double norm=dir_ab.norm();
+	if(!(norm>0.0)){
+		return dir;
+	}
+	return dir_ab/norm;
+}
+
 Vec3 moon_ecef(EphRead&eph,double jd_utc){
 	double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
 	Vec3 moon_geo=AberCorr::geo_app(eph,eph.MOON,jd_tdb,3);
@@ -585,20 +614,22 @@ Vec3 moon_ecef(EphRead&eph,double jd_utc){
 }
 
 double topocentric_alt_deg(const Vec3&moon_ecef,const Vec3&obs_ecef,
-						   const Vec3&up_dir){
+						   const Vec3&up_dir,const Vec3&obs_beta){
 	Vec3 topo=moon_ecef-obs_ecef;
 	double rn=topo.norm();
 	if(!(rn>0.0)){
 		return -90.0;
 	}
-	double s=Vec3::dot(topo/rn,up_dir);
+	Vec3 sight=topo/rn;
+	sight=apply_diurnal_aberration(sight,obs_beta);
+	double s=Vec3::dot(sight,up_dir);
 	return std::asin(clamp_unit(s))*180.0/PI;
 }
 
 double point_alt_deg(EphRead&eph,double jd_utc,const Vec3&obs_ecef,
-					 const Vec3&up_dir){
+					 const Vec3&up_dir,const Vec3&obs_beta){
 	Vec3 moon=moon_ecef(eph,jd_utc);
-	return topocentric_alt_deg(moon,obs_ecef,up_dir);
+	return topocentric_alt_deg(moon,obs_ecef,up_dir,obs_beta);
 }
 
 std::vector<double> sample_grid(double t1,double t2,double sample_minutes){
@@ -626,9 +657,9 @@ std::vector<double> sample_grid(double t1,double t2,double sample_minutes){
 }
 
 double refine_cross(EphRead&eph,double left,double right,const Vec3&obs_ecef,
-					const Vec3&up_dir){
-	double f_left=point_alt_deg(eph,left,obs_ecef,up_dir);
-	double f_right=point_alt_deg(eph,right,obs_ecef,up_dir);
+					const Vec3&up_dir,const Vec3&obs_beta){
+	double f_left=point_alt_deg(eph,left,obs_ecef,up_dir,obs_beta);
+	double f_right=point_alt_deg(eph,right,obs_ecef,up_dir,obs_beta);
 	if(!std::isfinite(f_left)||!std::isfinite(f_right)){
 		return 0.5*(left+right);
 	}
@@ -646,7 +677,7 @@ double refine_cross(EphRead&eph,double left,double right,const Vec3&obs_ecef,
 	double fa=f_left;
 	for(int i=0;i<30;++i){
 		double m=0.5*(a+b);
-		double fm=point_alt_deg(eph,m,obs_ecef,up_dir);
+		double fm=point_alt_deg(eph,m,obs_ecef,up_dir,obs_beta);
 		if(!std::isfinite(fm)){
 			return m;
 		}
@@ -793,12 +824,13 @@ bool lunar_eclipse_point_visibility(EphRead&eph,const LunarEclipse&ecl,
 
 	Vec3 obs=geodetic_to_ecef(lat_deg,lon_deg,height_m);
 	Vec3 up=up_ecef(lat_deg,lon_deg);
+	Vec3 obs_beta=observer_beta_ecef(obs);
 
 	double max_alt=-90.0;
 	int first_idx=-1;
 	int last_idx=-1;
 	for(std::size_t i=0;i<times.size();++i){
-		double alt=point_alt_deg(eph,times[i],obs,up);
+		double alt=point_alt_deg(eph,times[i],obs,up,obs_beta);
 		if(std::isfinite(alt)&&alt>max_alt){
 			max_alt=alt;
 		}
@@ -825,12 +857,12 @@ bool lunar_eclipse_point_visibility(EphRead&eph,const LunarEclipse&ecl,
 			if(first_idx>0){
 				double a=times[static_cast<std::size_t>(first_idx-1)];
 				double b=times[static_cast<std::size_t>(first_idx)];
-				out->first_jd_utc=refine_cross(eph,a,b,obs,up);
+				out->first_jd_utc=refine_cross(eph,a,b,obs,up,obs_beta);
 			}
 			if(last_idx+1<static_cast<int>(times.size())){
 				double a=times[static_cast<std::size_t>(last_idx)];
 				double b=times[static_cast<std::size_t>(last_idx+1)];
-				out->last_jd_utc=refine_cross(eph,a,b,obs,up);
+				out->last_jd_utc=refine_cross(eph,a,b,obs,up,obs_beta);
 			}
 		}
 	}
@@ -890,12 +922,13 @@ bool lunar_eclipse_global_visibility(EphRead&eph,const LunarEclipse&ecl,
 		for(double lon : lon_grid){
 			Vec3 obs=geodetic_to_ecef(lat,lon,0.0);
 			Vec3 up=up_ecef(lat,lon);
+			Vec3 obs_beta=observer_beta_ecef(obs);
 			bool vis=false;
 			int first_idx=-1;
 			int last_idx=-1;
 			double max_alt=-90.0;
 			for(std::size_t i=0;i<moon_series.size();++i){
-				double alt=topocentric_alt_deg(moon_series[i],obs,up);
+				double alt=topocentric_alt_deg(moon_series[i],obs,up,obs_beta);
 				if(std::isfinite(alt)&&alt>max_alt){
 					max_alt=alt;
 				}
