@@ -65,6 +65,17 @@ struct LunarEclipse{
 	EclipsePointMeta opp_meta;
 };
 
+enum class LunarEclipseCalcMethod{
+	Modern,
+	Legacy,
+};
+
+void set_lunar_eclipse_calc_method(LunarEclipseCalcMethod method);
+LunarEclipseCalcMethod get_lunar_eclipse_calc_method();
+bool parse_lunar_eclipse_calc_method(const std::string&value,
+									 LunarEclipseCalcMethod*out);
+const char*lunar_eclipse_calc_method_name(LunarEclipseCalcMethod method);
+
 bool calc_lunar_eclipse(EphRead&eph,double jd_tdb_near_full_moon,
 						LunarEclipse*out);
 

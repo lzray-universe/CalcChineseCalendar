@@ -1827,6 +1827,7 @@ void use_search(){
 void use_eclipse(){
 	std::cout
 		<<"Usage:\n"
+		<<"  lunar [--eclipse-method modern|legacy] eclipse <bsp> --near <YYYY-MM-DD>\n"
 		<<"  lunar eclipse <bsp> --near <YYYY-MM-DD>\n"
 		<<"    [--stage any|umb|total] [--sample-min <minutes>]\n"
 		<<"    [--point-lat <deg> --point-lon <deg> [--point-height <m>]] "

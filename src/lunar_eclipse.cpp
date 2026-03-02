@@ -30,6 +30,7 @@ constexpr double kRadPerDeg=PI/180.0;
 constexpr double kRe0A=kReKm/AU_KM;
 constexpr double kRp0A=kRpKm/AU_KM;
 constexpr double kDanjonA=kDanjonKm/AU_KM;
+constexpr double kReLegacyA=(kReKm+kDanjonKm)/AU_KM;
 constexpr double kRsA=kRsKm/AU_KM;
 constexpr double kRmA=kRmKm/AU_KM;
 
@@ -57,6 +58,13 @@ double norm_deg360(double angle_deg){
 		v+=360.0;
 	}
 	return v;
+}
+
+std::string to_low(std::string s){
+	for(char&c : s){
+		c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+	}
+	return s;
 }
 
 double clamp_unit(double v){
@@ -243,6 +251,8 @@ struct ShadowGeom{
 	double ru2=0.0;
 	double rp=0.0;
 	double ru=0.0;
+	double rp_dot=0.0;
+	double ru_dot=0.0;
 	Vec3 e1_eq;
 	Vec3 e2_eq;
 	double p1=0.0;
@@ -272,6 +282,16 @@ Bracket mk_bracket(double t1,double f1,double t2,double f2){
 
 bool finite_vec(const Vec3&v){
 	return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z);
+}
+
+int&eclipse_method_storage(){
+	static int method=static_cast<int>(LunarEclipseCalcMethod::Modern);
+	return method;
+}
+
+bool use_legacy_calc_method(){
+	return eclipse_method_storage()==
+		   static_cast<int>(LunarEclipseCalcMethod::Legacy);
 }
 
 Vec3 cross_vec(const Vec3&a,const Vec3&b){
@@ -493,6 +513,34 @@ bool eval_shadow(EphRead&eph,double jd_tdb,ShadowGeom&g){
 	Mat3 eq=eq_true_mat(jd_tdb);
 	Vec3 axis_eq=eq*g.axis;
 	Vec3 dvec_eq=eq*g.dvec;
+	if(use_legacy_calc_method()){
+		double tan_pen=0.0;
+		double tan_pen_dot=0.0;
+		double tan_umb=0.0;
+		double tan_umb_dot=0.0;
+		if(!cone_slope(kRsA+kReLegacyA,g.D,g.D_dot,tan_pen,tan_pen_dot)){
+			return false;
+		}
+		if(!cone_slope(kRsA-kReLegacyA,g.D,g.D_dot,tan_umb,tan_umb_dot)){
+			return false;
+		}
+		g.re1=kReLegacyA;
+		g.re2=kReLegacyA;
+		g.rp=kReLegacyA+g.x*tan_pen;
+		g.ru=kReLegacyA-g.x*tan_umb;
+		g.rp_dot=g.x_dot*tan_pen+g.x*tan_pen_dot;
+		g.ru_dot=-(g.x_dot*tan_umb+g.x*tan_umb_dot);
+		g.rp1=g.rp;
+		g.rp2=g.rp;
+		g.ru1=g.ru;
+		g.ru2=g.ru;
+		g.p1=g.d;
+		g.p2=0.0;
+		return std::isfinite(g.x)&&std::isfinite(g.x_dot)&&std::isfinite(g.d)&&
+			   std::isfinite(g.d_dot)&&std::isfinite(g.rp)&&std::isfinite(g.ru)&&
+			   std::isfinite(g.rp_dot)&&std::isfinite(g.ru_dot);
+	}
+
 	if(!build_shadow_plane_basis(axis_eq,g.e1_eq,g.e2_eq)){
 		return false;
 	}
@@ -599,6 +647,16 @@ bool fill_point_meta(EphRead&eph,double jd_tdb,bool inner_touch,
 		   std::isfinite(axis_deg);
 }
 
+double contact_radius_legacy(const ShadowGeom&g,ContactMode mode){
+	if(mode==ContactMode::PenOuter){
+		return g.rp+kRmA;
+	}
+	if(mode==ContactMode::UmbOuter){
+		return g.ru+kRmA;
+	}
+	return g.ru-kRmA;
+}
+
 double contact_radius_eff(const ShadowGeom&g,ContactMode mode){
 	if(mode==ContactMode::PenOuter){
 		return std::max(g.rp1,g.rp2)+kRmA;
@@ -610,6 +668,10 @@ double contact_radius_eff(const ShadowGeom&g,ContactMode mode){
 }
 
 double contact_value(const ShadowGeom&g,ContactMode mode){
+	if(use_legacy_calc_method()){
+		return g.d-contact_radius_legacy(g,mode);
+	}
+
 	double a=0.0;
 	double b=0.0;
 	if(mode==ContactMode::PenOuter){
@@ -627,6 +689,13 @@ double contact_value(const ShadowGeom&g,ContactMode mode){
 		return sd+kRmA;
 	}
 	return sd-kRmA;
+}
+
+double contact_derivative_legacy(const ShadowGeom&g,ContactMode mode){
+	if(mode==ContactMode::PenOuter){
+		return g.d_dot-g.rp_dot;
+	}
+	return g.d_dot-g.ru_dot;
 }
 
 double g_value(EphRead&eph,double jd_tdb){
@@ -821,7 +890,9 @@ bool solve_contact_pair(EphRead&eph,double jd_max,const ShadowGeom&g_max,
 	if(!(v>0.0)){
 		v=1e-6;
 	}
-	double radius=contact_radius_eff(g_max,mode);
+	bool legacy_mode=use_legacy_calc_method();
+	double radius=legacy_mode ? contact_radius_legacy(g_max,mode)
+							  : contact_radius_eff(g_max,mode);
 	if(!(radius>0.0)){
 		return false;
 	}
@@ -850,6 +921,13 @@ bool solve_contact_pair(EphRead&eph,double jd_max,const ShadowGeom&g_max,
 		return contact_value(g,mode);
 	};
 	auto dfn=[&](double jd) -> double{
+		if(legacy_mode){
+			ShadowGeom g;
+			if(!eval_shadow(eph,jd,g)){
+				return std::numeric_limits<double>::quiet_NaN();
+			}
+			return contact_derivative_legacy(g,mode);
+		}
 		constexpr double h=1e-5;
 		double f1=fn(jd+h);
 		double f2=fn(jd-h);
@@ -956,6 +1034,48 @@ double signed_gamma_re(const ShadowGeom&g,double jd_tdb){
 	return gamma_abs;
 }
 
+}
+
+void set_lunar_eclipse_calc_method(LunarEclipseCalcMethod method){
+	switch(method){
+		case LunarEclipseCalcMethod::Modern:
+		case LunarEclipseCalcMethod::Legacy:
+			eclipse_method_storage()=static_cast<int>(method);
+			return;
+	}
+	throw std::invalid_argument("invalid lunar eclipse calculation method");
+}
+
+LunarEclipseCalcMethod get_lunar_eclipse_calc_method(){
+	if(eclipse_method_storage()==
+	   static_cast<int>(LunarEclipseCalcMethod::Legacy)){
+		return LunarEclipseCalcMethod::Legacy;
+	}
+	return LunarEclipseCalcMethod::Modern;
+}
+
+bool parse_lunar_eclipse_calc_method(const std::string&value,
+									 LunarEclipseCalcMethod*out){
+	if(out==nullptr){
+		return false;
+	}
+	std::string v=to_low(value);
+	if(v=="modern"||v=="current"||v=="new"){
+		*out=LunarEclipseCalcMethod::Modern;
+		return true;
+	}
+	if(v=="legacy"||v=="old"){
+		*out=LunarEclipseCalcMethod::Legacy;
+		return true;
+	}
+	return false;
+}
+
+const char*lunar_eclipse_calc_method_name(LunarEclipseCalcMethod method){
+	if(method==LunarEclipseCalcMethod::Legacy){
+		return "legacy";
+	}
+	return "modern";
 }
 
 bool calc_lunar_eclipse(EphRead&eph,double jd_tdb_near_full_moon,
@@ -1102,13 +1222,6 @@ bool calc_lunar_eclipse(EphRead&eph,double jd_tdb_near_full_moon,
 }
 
 namespace{
-
-std::string to_low(std::string s){
-	for(char&c : s){
-		c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-	}
-	return s;
-}
 
 bool stage_norm(const std::string&in,std::string&out){
 	std::string v=to_low(in);

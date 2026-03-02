@@ -1691,6 +1691,7 @@ void use_main(){
 	std::cout<<"Usage:\n"
 			 <<"  lunar --help\n"
 			 <<"  lunar --version\n"
+			 <<"  lunar [--eclipse-method modern|legacy] <command> ...\n"
 			 <<"  lunar months   ...\n"
 			 <<"  lunar calendar ...\n"
 			 <<"  lunar year     ...\n"
@@ -1734,4 +1735,6 @@ void use_main(){
 			 <<"  lunar config --help\n"
 			 <<"  lunar completion --help\n"
 			 <<"  lunar download --help\n";
+	std::cout<<"Global option:\n"
+			 <<"  --eclipse-method modern|legacy  (default: modern)\n";
 }
