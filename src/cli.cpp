@@ -1479,15 +1479,20 @@ int cmd_event(const std::vector<std::string>&args){
 	}
 	if(args.size()>=2){
 		std::string cat=to_low(args[1]);
-		if(cat=="lunar-eclipse"||cat=="lunar_eclipse"){
+		if(cat=="lunar-eclipse"||cat=="lunar_eclipse"||
+		   cat=="solar-eclipse"||cat=="solar_eclipse"){
+			bool solar=(cat=="solar-eclipse"||cat=="solar_eclipse");
 			std::vector<std::string> eargs;
 			eargs.push_back(args[0]);
+			eargs.push_back("--kind");
+			eargs.push_back(solar?"solar":"lunar");
 			for(std::size_t i=2;i<args.size();++i){
 				if(args[i]=="--eclipse"){
 					bool on=parse_bool01(req_val(args,i,"--eclipse"),"--eclipse");
 					if(!on){
 						throw std::invalid_argument(
-							"lunar-eclipse category does not support --eclipse 0");
+							(solar?"solar-eclipse":"lunar-eclipse")+
+							std::string(" category does not support --eclipse 0"));
 					}
 					continue;
 				}
@@ -1663,6 +1668,9 @@ void use_event(){
 			 <<"  lunar event <bsp> lunar-eclipse --near <YYYY-MM-DD>\n"
 			 <<"    [--stage any|umb|total] [--point-lat ... --point-lon ...] "
 			   "[--global-vis 0|1]\n"
+			 <<"  lunar event <bsp> solar-eclipse --near <YYYY-MM-DD>\n"
+			 <<"    [--stage any|central] [--point-lat ... --point-lon ...] "
+			   "[--global-vis 0|1]\n"
 			 <<"    [--format json|txt|geojson] [--out <path>] [--tz ...] "
 			   "[--pretty 0|1] [--quiet]\n"
 			 <<"Examples:\n"
@@ -1671,6 +1679,8 @@ void use_event(){
 			   "2025-09-07\n"
 			 <<"  lunar event D:\\de442.bsp lunar-eclipse --near 2025-09-07 "
 			   "--global-vis 1 --global-format geojson --format json\n"
+			 <<"  lunar event D:\\de442.bsp solar-eclipse --near 2026-08-12 "
+			   "--point-lat 40.7 --point-lon -74.0 --format json\n"
 			 <<"  lunar event D:\\de442.bsp solar-term J1 2025 --format ics "
 			   "--out event.ics\n"
 			 <<"Notes:\n"

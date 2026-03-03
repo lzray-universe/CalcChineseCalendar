@@ -22,6 +22,7 @@ set(LUNAR_CORE_SOURCES
     src/rt_solver.cpp
     src/calendar.cpp
     src/lunar_eclipse.cpp
+    src/solar_eclipse.cpp
     src/json.cpp
     src/js_writer.cpp
     src/ics.cpp
