@@ -32,6 +32,7 @@
 #include "lunar/lunar_eclipse.hpp"
 #include "lunar/solar_eclipse.hpp"
 #include "lunar/math.hpp"
+#include "lunar/star.hpp"
 #include "lunar/time_scale.hpp"
 
 namespace{
@@ -96,6 +97,14 @@ using cli_util::parse_bool01;
 using cli_util::parse_int;
 using cli_util::req_val;
 using cli_util::to_low;
+using lunar::AstroEvt;
+using lunar::MoonXg;
+using lunar::StarMode;
+using lunar::StarPick;
+using lunar::calc_astro_evt;
+using lunar::calc_moon_xg;
+using lunar::make_star_pick;
+using lunar::parse_star_mode;
 
 using OptHandler=
 	std::function<void(const std::vector<std::string>&,std::size_t&,
@@ -528,6 +537,34 @@ double parse_double(const std::string&text,const std::string&name){
 	}
 }
 
+std::string join_pipe(const std::vector<std::string>&items){
+	std::string out;
+	for(std::size_t i=0;i<items.size();++i){
+		if(i!=0){
+			out+="|";
+		}
+		out+=items[i];
+	}
+	return out;
+}
+
+EventRec mk_astro_rec(const AstroEvt&src,int tz_off){
+	EventRec out;
+	out.kind=src.kind;
+	out.code=src.code;
+	out.name=src.name;
+	int y=0;
+	int m=0;
+	int d=0;
+	utc2cst(src.jd_utc,y,m,d);
+	out.year=y;
+	out.jd_utc=src.jd_utc;
+	out.jd_tdb=TimeScale::utc_to_tdb(src.jd_utc);
+	out.utc_iso=fmt_iso(src.jd_utc,0,true);
+	out.loc_iso=fmt_iso(src.jd_utc,tz_off,true);
+	return out;
+}
+
 struct AtData{
 	std::string time_raw;
 	std::string tz_in;
@@ -553,6 +590,7 @@ struct AtData{
 	NearEvents near_ev;
 	bool has_eot=false;
 	EoTData eot;
+	MoonXg moon_xg;
 };
 
 struct BatchLine{
@@ -709,6 +747,7 @@ AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 	out.waxing=(out.lam_m_dot-out.lam_s_dot)>0.0;
 	out.phase_name=phase_elo(out.elong);
 	out.lunar_date=res_lun(eph,jd_utc,cache);
+	out.moon_xg=calc_moon_xg(eph,jd_utc);
 	out.inc_ev=inc_ev;
 	if(inc_ev){
 		out.near_ev=comp_near(eph,jd_utc,tz_disp,cache);
@@ -1344,6 +1383,17 @@ void wr_adjs(JsonWriter&w,const AtData&d,EphRead&eph){
 	w.value(d.waxing);
 	w.key("phase_name");
 	w.value(d.phase_name);
+	w.key("moon_xg");
+	w.obj_begin();
+	w.key("region");
+	w.value(d.moon_xg.region);
+	w.key("star_id");
+	w.value(d.moon_xg.star_id);
+	w.key("star_name");
+	w.value(d.moon_xg.star_name);
+	w.key("sep_deg");
+	wr_num_or_null(w,d.moon_xg.sep_deg);
+	w.obj_end();
 	w.key("lunar_date");
 	wr_ljson(w,d.lunar_date);
 	w.key("eot");
@@ -1443,6 +1493,10 @@ void wr_atxt(std::ostream&os,const AtData&d,bool hdr_on){
 	os<<"data.ill_pct="<<format_num(d.ill_pct)<<"\n";
 	os<<"data.waxing="<<(d.waxing?"1":"0")<<"\n";
 	os<<"data.phase_name="<<d.phase_name<<"\n";
+	os<<"data.moon_xg.region="<<d.moon_xg.region<<"\n";
+	os<<"data.moon_xg.star_id="<<d.moon_xg.star_id<<"\n";
+	os<<"data.moon_xg.star_name="<<d.moon_xg.star_name<<"\n";
+	os<<"data.moon_xg.sep_deg="<<format_num(d.moon_xg.sep_deg)<<"\n";
 	os<<"data.lunar_year="<<d.lunar_date.lunar_year<<"\n";
 	os<<"data.lun_mno="<<d.lunar_date.lun_mno<<"\n";
 	os<<"data.lun_leap="<<(d.lunar_date.is_leap?"1":"0")<<"\n";
@@ -2018,7 +2072,8 @@ void use_day(){
 		<<"  lunar day <bsp> <YYYY-MM-DD>\n"
 		<<"    [--tz ...] [--format json|txt|csv|jsonl] [--out ...] [--pretty "
 		  "0|1] [--quiet]\n"
-		<<"    [--at HH:MM[:SS]] [--events 0|1]\n"
+		<<"    [--at HH:MM[:SS]] [--events 0|1] [--astro 0|1]\n"
+		<<"    [--astro-mode less|all|pick] [--astro-pick id,en,zh,...]\n"
 		<<"Examples:\n"
 		<<"  lunar day D:\\de442.bsp 2025-06-01\n"
 		<<"  lunar day D:\\de442.bsp 2025-06-01 --format json --out day.json\n";
@@ -2028,7 +2083,8 @@ void use_mview(){
 	std::cout<<"Usage:\n"
 			 <<"  lunar monthview <bsp> <YYYY-MM>\n"
 			 <<"    [--tz ...] [--format json|txt|csv] [--out ...] [--pretty "
-			   "0|1] [--quiet]\n"
+			   "0|1] [--quiet] [--astro 0|1]\n"
+			 <<"    [--astro-mode less|all|pick] [--astro-pick id,en,zh,...]\n"
 			 <<"Examples:\n"
 			 <<"  lunar monthview D:\\de442.bsp 2025-09 --format txt\n"
 			 <<"  lunar monthview D:\\de442.bsp 2025-09 --format csv --out "
@@ -3483,6 +3539,9 @@ int cmd_day(const std::vector<std::string>&args){
 	bool quiet=false;
 	std::string at_time="12:00:00";
 	bool inc_ev=true;
+	bool inc_astro=false;
+	std::string astro_mode_text="less";
+	std::string astro_pick_csv;
 	const OptMap handlers={
 		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
 					const std::string&opt){ tz=req_val(src,idx,opt); }},
@@ -3504,6 +3563,18 @@ int cmd_day(const std::vector<std::string>&args){
 						const std::string&opt){
 			 inc_ev=parse_bool01(req_val(src,idx,opt),"--events");
 		 }},
+		{"--astro",[&](const std::vector<std::string>&src,std::size_t&idx,
+					   const std::string&opt){
+			 inc_astro=parse_bool01(req_val(src,idx,opt),"--astro");
+		 }},
+		{"--astro-mode",[&](const std::vector<std::string>&src,std::size_t&idx,
+							const std::string&opt){
+			 astro_mode_text=req_val(src,idx,opt);
+		 }},
+		{"--astro-pick",[&](const std::vector<std::string>&src,std::size_t&idx,
+							const std::string&opt){
+			 astro_pick_csv=req_val(src,idx,opt);
+		 }},
 	};
 
 	for(std::size_t i=2;i<args.size();++i){
@@ -3523,6 +3594,11 @@ int cmd_day(const std::vector<std::string>&args){
 	double smp_jdutc=greg2jd(y,m,d,hh,mm,ss)-UTC8DAY;
 	double day_sutc=cst_midjd(y,m,d);
 	double day_eutc=day_sutc+1.0;
+	StarPick astro_pick;
+	if(inc_astro){
+		StarMode mode=parse_star_mode(astro_mode_text);
+		astro_pick=make_star_pick(mode,astro_pick_csv);
+	}
 
 	EphRead eph(ephem);
 	QueryCache cache(eph);
@@ -3544,6 +3620,14 @@ int cmd_day(const std::vector<std::string>&args){
 			day_events.begin(),day_events.end(),
 			[](const EventRec&a,const EventRec&b){ return a.jd_utc<b.jd_utc; });
 	}
+	std::vector<EventRec> astro_events;
+	if(inc_astro){
+		std::vector<AstroEvt> raw=calc_astro_evt(eph,day_sutc,day_eutc,astro_pick);
+		astro_events.reserve(raw.size());
+		for(const auto&ev : raw){
+			astro_events.push_back(mk_astro_rec(ev,tz_off));
+		}
+	}
 
 	OutTgt out=open_out(out_path);
 	auto write_json=[&](bool json_pretty){
@@ -3558,6 +3642,20 @@ int cmd_day(const std::vector<std::string>&args){
 		w.value(at_time);
 		w.key("smp_jdutc");
 		w.value(smp_jdutc);
+		w.key("astro");
+		w.value(inc_astro);
+		w.key("astro_mode");
+		if(inc_astro){
+			w.value(astro_mode_text);
+		}else{
+			w.null_val();
+		}
+		w.key("astro_pick");
+		if(inc_astro&&astro_pick.mode==StarMode::Pick){
+			w.value(astro_pick_csv);
+		}else{
+			w.null_val();
+		}
 		w.obj_end();
 		w.key("data");
 		w.obj_begin();
@@ -3567,6 +3665,17 @@ int cmd_day(const std::vector<std::string>&args){
 		w.value(atd.ill_pct);
 		w.key("phase_name");
 		w.value(atd.phase_name);
+		w.key("moon_xg");
+		w.obj_begin();
+		w.key("region");
+		w.value(atd.moon_xg.region);
+		w.key("star_id");
+		w.value(atd.moon_xg.star_id);
+		w.key("star_name");
+		w.value(atd.moon_xg.star_name);
+		w.key("sep_deg");
+		w.value(atd.moon_xg.sep_deg);
+		w.obj_end();
 		w.key("smp_uiso");
 		w.value(atd.utc_iso);
 		w.key("smp_liso");
@@ -3574,6 +3683,12 @@ int cmd_day(const std::vector<std::string>&args){
 		w.key("events");
 		w.arr_begin();
 		for(const auto&ev : day_events){
+			wr_ejson(w,ev,eph);
+		}
+		w.arr_end();
+		w.key("astro_events");
+		w.arr_begin();
+		for(const auto&ev : astro_events){
 			wr_ejson(w,ev,eph);
 		}
 		w.arr_end();
@@ -3585,36 +3700,58 @@ int cmd_day(const std::vector<std::string>&args){
 		{"json",[&](){ write_json(pretty); }},
 		{"jsonl",[&](){ write_json(false); }},
 		{"csv",[&](){
-			 std::string summary;
-			 for(std::size_t i=0;i<day_events.size();++i){
-				 if(i!=0){
-					 summary+="|";
-				 }
-				 summary+=day_events[i].name;
+			 std::vector<std::string> ev_names;
+			 ev_names.reserve(day_events.size());
+			 for(const auto&ev : day_events){
+				 ev_names.push_back(ev.name);
 			 }
+			 std::vector<std::string> astro_names;
+			 astro_names.reserve(astro_events.size());
+			 for(const auto&ev : astro_events){
+				 astro_names.push_back(ev.name);
+			 }
+			 std::string summary=join_pipe(ev_names);
+			 std::string astro_summary=join_pipe(astro_names);
 			 *out.stream<<"date,lun_label,lun_mlab,is_leap,lunar_"
-						  "day,ill_pct,phase_name,smp_tloc"
-						  "iso,ev_sum\n";
+						  "day,ill_pct,phase_name,moon_xg_region,moon_xg_star,"
+						  "moon_xg_sep_deg,smp_tlociso,ev_sum,astro_ev_sum\n";
 			 *out.stream<<csv_quote(date_text)<<","
 						<<csv_quote(atd.lunar_date.lun_label)<<","
 						<<csv_quote(atd.lunar_date.lun_mlab)<<","
 						<<(atd.lunar_date.is_leap?"1":"0")<<","
 						<<atd.lunar_date.lunar_day<<","<<format_num(atd.ill_pct)
 						<<","<<csv_quote(atd.phase_name)<<","
-						<<csv_quote(atd.local_iso)<<","<<csv_quote(summary)<<"\n";
+						<<csv_quote(atd.moon_xg.region)<<","
+						<<csv_quote(atd.moon_xg.star_name)<<","
+						<<format_num(atd.moon_xg.sep_deg)<<","
+						<<csv_quote(atd.local_iso)<<","<<csv_quote(summary)<<","
+						<<csv_quote(astro_summary)<<"\n";
 		 }},
 		{"txt",[&](){
 			 std::ostream&os=*out.stream;
 			 os<<"tool=lunar format=txt type=day tz_display="<<tz<<"\n";
 			 os<<"input.date="<<date_text<<"\n";
 			 os<<"input.smp_time="<<at_time<<"\n";
+			 os<<"input.astro="<<(inc_astro?"1":"0")<<"\n";
+			 os<<"input.astro_mode="<<astro_mode_text<<"\n";
+			 os<<"input.astro_pick="<<astro_pick_csv<<"\n";
 			 os<<"data.lun_label="<<atd.lunar_date.lun_label<<"\n";
 			 os<<"data.ill_pct="<<format_num(atd.ill_pct)<<"\n";
 			 os<<"data.phase_name="<<atd.phase_name<<"\n";
+			 os<<"data.moon_xg.region="<<atd.moon_xg.region<<"\n";
+			 os<<"data.moon_xg.star_id="<<atd.moon_xg.star_id<<"\n";
+			 os<<"data.moon_xg.star_name="<<atd.moon_xg.star_name<<"\n";
+			 os<<"data.moon_xg.sep_deg="<<format_num(atd.moon_xg.sep_deg)<<"\n";
 			 os<<"data.smp_liso="<<atd.local_iso<<"\n";
 			 os<<"[events]\n";
 			 os<<"kind\tcode\tname\tjd_utc\ttm_liso\n";
 			 for(const auto&ev : day_events){
+				 os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"
+				   <<format_num(ev.jd_utc)<<"\t"<<ev.loc_iso<<"\n";
+			 }
+			 os<<"[astro_events]\n";
+			 os<<"kind\tcode\tname\tjd_utc\ttm_liso\n";
+			 for(const auto&ev : astro_events){
 				 os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"
 				   <<format_num(ev.jd_utc)<<"\t"<<ev.loc_iso<<"\n";
 			 }
@@ -3645,6 +3782,9 @@ int cmd_mview(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=cfg.def_prety;
 	bool quiet=false;
+	bool inc_astro=false;
+	std::string astro_mode_text="less";
+	std::string astro_pick_csv;
 	const OptMap handlers={
 		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
 					const std::string&opt){ tz=req_val(src,idx,opt); }},
@@ -3660,6 +3800,18 @@ int cmd_mview(const std::vector<std::string>&args){
 		 }},
 		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
 					   const std::string&){ quiet=true; }},
+		{"--astro",[&](const std::vector<std::string>&src,std::size_t&idx,
+					   const std::string&opt){
+			 inc_astro=parse_bool01(req_val(src,idx,opt),"--astro");
+		 }},
+		{"--astro-mode",[&](const std::vector<std::string>&src,std::size_t&idx,
+							const std::string&opt){
+			 astro_mode_text=req_val(src,idx,opt);
+		 }},
+		{"--astro-pick",[&](const std::vector<std::string>&src,std::size_t&idx,
+							const std::string&opt){
+			 astro_pick_csv=req_val(src,idx,opt);
+		 }},
 	};
 
 	for(std::size_t i=2;i<args.size();++i){
@@ -3673,6 +3825,11 @@ int cmd_mview(const std::vector<std::string>&args){
 
 	int tz_off=parse_tz(tz);
 	int n_days=days_gm(year,month);
+	StarPick astro_pick;
+	if(inc_astro){
+		StarMode mode=parse_star_mode(astro_mode_text);
+		astro_pick=make_star_pick(mode,astro_pick_csv);
+	}
 	EphRead eph(ephem);
 	QueryCache cache(eph);
 
@@ -3687,6 +3844,28 @@ int cmd_mview(const std::vector<std::string>&args){
 			day2ev[ed].push_back(ev.name);
 		}
 	}
+	std::map<int,std::vector<std::string>> day2astro;
+	if(inc_astro){
+		int n_year=year;
+		int n_month=month+1;
+		if(n_month>12){
+			n_month=1;
+			++n_year;
+		}
+		double month_sutc=cst_midjd(year,month,1);
+		double month_eutc=cst_midjd(n_year,n_month,1);
+		std::vector<AstroEvt> astro=
+			calc_astro_evt(eph,month_sutc,month_eutc,astro_pick);
+		for(const auto&ev : astro){
+			int ey=0;
+			int em=0;
+			int ed=0;
+			utc2cst(ev.jd_utc,ey,em,ed);
+			if(ey==year&&em==month){
+				day2astro[ed].push_back(ev.name);
+			}
+		}
+	}
 
 	struct Row{
 		std::string greg_date;
@@ -3694,7 +3873,11 @@ int cmd_mview(const std::vector<std::string>&args){
 		bool is_leap=false;
 		std::string lun_mlab;
 		double ill_pct=0.0;
+		std::string moon_xg_region;
+		std::string moon_xg_star;
+		double moon_xg_sep_deg=std::numeric_limits<double>::quiet_NaN();
 		std::string ev_sum;
+		std::string astro_ev_sum;
 	};
 	std::vector<Row> rows;
 	rows.reserve(static_cast<std::size_t>(n_days));
@@ -3702,19 +3885,21 @@ int cmd_mview(const std::vector<std::string>&args){
 		double smp_jdutc=greg2jd(year,month,d,12,0,0.0)-UTC8DAY;
 		AtData atd=at_fromjd(eph,smp_jdutc,tz_off,tz,ymd_str(year,month,d),
 							 "+08:00",false,false,0.0,&cache);
-		std::string summary;
+		std::vector<std::string> ev_names;
 		auto it=day2ev.find(d);
 		if(it!=day2ev.end()){
-			for(std::size_t i=0;i<it->second.size();++i){
-				if(i!=0){
-					summary+="|";
-				}
-				summary+=it->second[i];
-			}
+			ev_names=it->second;
+		}
+		std::vector<std::string> astro_names;
+		auto ita=day2astro.find(d);
+		if(ita!=day2astro.end()){
+			astro_names=ita->second;
 		}
 		rows.push_back(Row{ymd_str(year,month,d),atd.lunar_date.lun_label,
 						   atd.lunar_date.is_leap,atd.lunar_date.lun_mlab,
-						   atd.ill_pct,summary});
+						   atd.ill_pct,atd.moon_xg.region,atd.moon_xg.star_name,
+						   atd.moon_xg.sep_deg,join_pipe(ev_names),
+						   join_pipe(astro_names)});
 	}
 
 	OutTgt out=open_out(out_path);
@@ -3727,6 +3912,20 @@ int cmd_mview(const std::vector<std::string>&args){
 			 w.obj_begin();
 			 w.key("month");
 			 w.value(ym);
+			 w.key("astro");
+			 w.value(inc_astro);
+			 w.key("astro_mode");
+			 if(inc_astro){
+				 w.value(astro_mode_text);
+			 }else{
+				 w.null_val();
+			 }
+			 w.key("astro_pick");
+			 if(inc_astro&&astro_pick.mode==StarMode::Pick){
+				 w.value(astro_pick_csv);
+			 }else{
+				 w.null_val();
+			 }
 			 w.obj_end();
 			 w.key("data");
 			 w.arr_begin();
@@ -3742,8 +3941,16 @@ int cmd_mview(const std::vector<std::string>&args){
 				 w.value(row.lun_mlab);
 				 w.key("ill_pct");
 				 w.value(row.ill_pct);
+				 w.key("moon_xg_region");
+				 w.value(row.moon_xg_region);
+				 w.key("moon_xg_star");
+				 w.value(row.moon_xg_star);
+				 w.key("moon_xg_sep_deg");
+				 w.value(row.moon_xg_sep_deg);
 				 w.key("ev_sum");
 				 w.value(row.ev_sum);
+				 w.key("astro_ev_sum");
+				 w.value(row.astro_ev_sum);
 				 w.obj_end();
 			 }
 			 w.arr_end();
@@ -3752,26 +3959,37 @@ int cmd_mview(const std::vector<std::string>&args){
 		 }},
 		{"csv",[&](){
 			 *out.stream<<"greg_date,lun_label,is_leap,lun_m_"
-						  "label,ill_pct,ev_sum\n";
+						  "label,ill_pct,moon_xg_region,moon_xg_star,"
+						  "moon_xg_sep_deg,ev_sum,astro_ev_sum\n";
 			 for(const auto&row : rows){
 				 *out.stream<<csv_quote(row.greg_date)<<","
 						   <<csv_quote(row.lun_label)<<","
 						   <<(row.is_leap?"1":"0")<<","
 						   <<csv_quote(row.lun_mlab)<<","
 						   <<format_num(row.ill_pct)<<","
-						   <<csv_quote(row.ev_sum)<<"\n";
+						   <<csv_quote(row.moon_xg_region)<<","
+						   <<csv_quote(row.moon_xg_star)<<","
+						   <<format_num(row.moon_xg_sep_deg)<<","
+						   <<csv_quote(row.ev_sum)<<","
+						   <<csv_quote(row.astro_ev_sum)<<"\n";
 			 }
 		 }},
 		{"txt",[&](){
 			 std::ostream&os=*out.stream;
 			 os<<"tool=lunar format=txt type=monthview tz_display="<<tz<<"\n";
 			 os<<"input.month="<<ym<<"\n";
+			 os<<"input.astro="<<(inc_astro?"1":"0")<<"\n";
+			 os<<"input.astro_mode="<<astro_mode_text<<"\n";
+			 os<<"input.astro_pick="<<astro_pick_csv<<"\n";
 			 os<<"greg_date\tlunar_date_label\tis_leap\tlunar_month_"
-				 "label\till_pct\tevents_summary\n";
+				 "label\till_pct\tmoon_xg_region\tmoon_xg_star\tmoon_xg_sep_"
+				 "deg\tevents_summary\tastro_events_summary\n";
 			 for(const auto&row : rows){
 				 os<<row.greg_date<<"\t"<<row.lun_label<<"\t"
 				   <<(row.is_leap?"1":"0")<<"\t"<<row.lun_mlab<<"\t"
-				   <<format_num(row.ill_pct)<<"\t"<<row.ev_sum<<"\n";
+				   <<format_num(row.ill_pct)<<"\t"<<row.moon_xg_region<<"\t"
+				   <<row.moon_xg_star<<"\t"<<format_num(row.moon_xg_sep_deg)
+				   <<"\t"<<row.ev_sum<<"\t"<<row.astro_ev_sum<<"\n";
 			 }
 		 }},
 	};
