@@ -933,22 +933,37 @@ void chk_mode(const std::string&mode){
 	}
 }
 
+bool all_digits(const std::string&s){
+	if(s.empty()){
+		return false;
+	}
+	for(char c : s){
+		if(!std::isdigit(static_cast<unsigned char>(c))){
+			return false;
+		}
+	}
+	return true;
+}
+
 std::tuple<int,int,int> parse_ld(const std::string&s){
-	if(s.size()!=10||s[4]!='-'||s[7]!='-'){
-		throw std::invalid_argument("invalid date, expected YYYY-MM-DD: "+s);
+	if(s.empty()){
+		throw std::invalid_argument("invalid date, expected YEAR-MM-DD: "+s);
 	}
-	for(std::size_t i=0;i<s.size();++i){
-		if(i==4||i==7){
-			continue;
-		}
-		if(!std::isdigit(static_cast<unsigned char>(s[i]))){
-			throw std::invalid_argument("invalid date, expected YYYY-MM-DD: "+
-										s);
-		}
+	std::size_t year_sep=s.find('-',((s[0]=='+'||s[0]=='-')?1u:0u));
+	std::size_t month_sep=
+		(year_sep==std::string::npos)?std::string::npos:s.find('-',year_sep+1);
+	if(year_sep==std::string::npos||month_sep==std::string::npos){
+		throw std::invalid_argument("invalid date, expected YEAR-MM-DD: "+s);
 	}
-	int y=parse_int(s.substr(0,4),"year");
-	int m=parse_int(s.substr(5,2),"month");
-	int d=parse_int(s.substr(8,2),"day");
+	std::string ytxt=s.substr(0,year_sep);
+	std::string mtxt=s.substr(year_sep+1,month_sep-year_sep-1);
+	std::string dtxt=s.substr(month_sep+1);
+	if(mtxt.size()!=2||dtxt.size()!=2||!all_digits(mtxt)||!all_digits(dtxt)){
+		throw std::invalid_argument("invalid date, expected YEAR-MM-DD: "+s);
+	}
+	int y=parse_int(ytxt,"year");
+	int m=parse_int(mtxt,"month");
+	int d=parse_int(dtxt,"day");
 	if(m<1||m>12||d<1||d>31){
 		throw std::invalid_argument("invalid date value: "+s);
 	}
@@ -990,7 +1005,7 @@ std::vector<int> parse_year(const std::string&arg){
 	}
 
 	for(const auto&part : parts){
-		auto pos=part.find('-');
+		auto pos=part.find('-',1);
 		if(pos!=std::string::npos){
 			int start=parse_int(part.substr(0,pos),"year");
 			int end=parse_int(part.substr(pos+1),"year");

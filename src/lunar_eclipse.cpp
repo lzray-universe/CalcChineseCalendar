@@ -948,8 +948,12 @@ bool solve_contact_pair(EphRead&eph,double jd_max,const ShadowGeom&g_max,
 
 	double guess1=std::clamp(jd_max-span_est,b_left.left,b_left.right);
 	double guess2=std::clamp(jd_max+span_est,b_right.left,b_right.right);
-	t1=solve_bracketed(fn,dfn,b_left,guess1,1e-10);
-	t2=solve_bracketed(fn,dfn,b_right,guess2,1e-10);
+	try{
+		t1=solve_bracketed(fn,dfn,b_left,guess1,1e-10);
+		t2=solve_bracketed(fn,dfn,b_right,guess2,1e-10);
+	}catch(const std::exception&){
+		return false;
+	}
 	return std::isfinite(t1)&&std::isfinite(t2)&&t1<t2;
 }
 
@@ -1100,7 +1104,12 @@ bool calc_lunar_eclipse(EphRead&eph,double jd_tdb_near_full_moon,
 	}
 
 	double guess=std::clamp(jd_tdb_near_full_moon,g_br.left,g_br.right);
-	double jd_max=solve_bracketed(fn_g,dfn_g,g_br,guess,1e-10);
+	double jd_max=0.0;
+	try{
+		jd_max=solve_bracketed(fn_g,dfn_g,g_br,guess,1e-10);
+	}catch(const std::exception&){
+		return false;
+	}
 	ShadowGeom g_max;
 	if(!eval_shadow(eph,jd_max,g_max)){
 		return false;

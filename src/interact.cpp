@@ -3,6 +3,7 @@
 #include<cctype>
 #include<fstream>
 #include<iostream>
+#include<stdexcept>
 #include<vector>
 
 namespace fs=std::filesystem;
@@ -88,7 +89,12 @@ std::vector<fs::path> find_bsps(const std::vector<fs::path>&dirs){
 std::string ask_line(const std::string&msg){
 	std::cout<<msg;
 	std::string line;
-	std::getline(std::cin,line);
+	if(!std::getline(std::cin,line)){
+		if(std::cin.eof()){
+			throw std::runtime_error("interactive input closed (EOF)");
+		}
+		throw std::runtime_error("failed to read interactive input");
+	}
 	return line;
 }
 

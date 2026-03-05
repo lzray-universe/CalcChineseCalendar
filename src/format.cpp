@@ -3,6 +3,7 @@
 #include<cctype>
 #include<cmath>
 #include<iomanip>
+#include<limits>
 #include<sstream>
 #include<stdexcept>
 
@@ -26,6 +27,67 @@ int parse_fix(const std::string&s,std::size_t pos,std::size_t count,
 		value=value*10+static_cast<int>(c-'0');
 	}
 	return value;
+}
+
+int parse_signed_component(const std::string&s,std::size_t begin,
+						   std::size_t end,const std::string&label){
+	if(begin>=end){
+		throw std::invalid_argument("invalid datetime: missing "+label);
+	}
+	bool neg=false;
+	if(s[begin]=='+'||s[begin]=='-'){
+		neg=(s[begin]=='-');
+		++begin;
+	}
+	if(begin>=end){
+		throw std::invalid_argument("invalid datetime: missing "+label);
+	}
+	long long value=0;
+	const long long max_abs=
+		static_cast<long long>(std::numeric_limits<int>::max())+
+		(neg?1LL:0LL);
+	for(std::size_t i=begin;i<end;++i){
+		char c=s[i];
+		if(!is_digit(c)){
+			throw std::invalid_argument("invalid datetime: bad "+label);
+		}
+		value=value*10+static_cast<long long>(c-'0');
+		if(value>max_abs){
+			throw std::invalid_argument("invalid datetime: "+label+
+										" out of range");
+		}
+	}
+	long long signed_value=neg?-value:value;
+	if(signed_value<std::numeric_limits<int>::min()||
+	   signed_value>std::numeric_limits<int>::max()){
+		throw std::invalid_argument("invalid datetime: "+label+" out of range");
+	}
+	return static_cast<int>(signed_value);
+}
+
+std::size_t parse_date_prefix(const std::string&text,int&year,int&month,int&day){
+	if(text.empty()){
+		throw std::invalid_argument("datetime text is empty");
+	}
+	std::size_t year_sep=
+		text.find('-',((text[0]=='+'||text[0]=='-')?1u:0u));
+	if(year_sep==std::string::npos){
+		throw std::invalid_argument("invalid datetime, expected YEAR-MM-DD");
+	}
+	year=parse_signed_component(text,0,year_sep,"year");
+
+	std::size_t month_start=year_sep+1;
+	if(month_start+2>text.size()){
+		throw std::invalid_argument("invalid datetime: missing month");
+	}
+	month=parse_fix(text,month_start,2,"month");
+	std::size_t month_sep=month_start+2;
+	if(month_sep>=text.size()||text[month_sep]!='-'){
+		throw std::invalid_argument("invalid datetime, expected YEAR-MM-DD");
+	}
+	std::size_t day_start=month_sep+1;
+	day=parse_fix(text,day_start,2,"day");
+	return day_start+2;
 }
 
 int parse_tzs(const std::string&tz){
@@ -70,17 +132,11 @@ std::string fmt_tz(int off_min){
 }
 
 IsoTime parse_iso(const std::string&text,const std::string&default_tz){
-	if(text.empty()){
-		throw std::invalid_argument("datetime text is empty");
-	}
-
 	IsoTime out;
-	int year=parse_fix(text,0,4,"year");
-	if(text.size()<10||text[4]!='-'||text[7]!='-'){
-		throw std::invalid_argument("invalid datetime, expected YYYY-MM-DD");
-	}
-	int month=parse_fix(text,5,2,"month");
-	int day=parse_fix(text,8,2,"day");
+	int year=0;
+	int month=0;
+	int day=0;
+	std::size_t pos=parse_date_prefix(text,year,month,day);
 	if(month<1||month>12||day<1||day>31){
 		throw std::invalid_argument("invalid date value");
 	}
@@ -89,7 +145,6 @@ IsoTime parse_iso(const std::string&text,const std::string&default_tz){
 	int minute=0;
 	double second=0.0;
 
-	std::size_t pos=10;
 	if(pos<text.size()){
 		if(text[pos]=='T'||text[pos]=='t'){
 			++pos;

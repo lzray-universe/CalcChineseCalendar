@@ -550,6 +550,18 @@ std::string join_pipe(const std::vector<std::string>&items){
 	return out;
 }
 
+bool all_digits(const std::string&s){
+	if(s.empty()){
+		return false;
+	}
+	for(char c : s){
+		if(!std::isdigit(static_cast<unsigned char>(c))){
+			return false;
+		}
+	}
+	return true;
+}
+
 EventRec mk_astro_rec(const AstroEvt&src,int tz_off){
 	EventRec out;
 	out.kind=src.kind;
@@ -616,12 +628,24 @@ struct EvtFilt{
 };
 
 std::tuple<int,int,int> parse_ymd(const std::string&s){
-	if(s.size()!=10||s[4]!='-'||s[7]!='-'){
-		throw std::invalid_argument("invalid date, expected YYYY-MM-DD: "+s);
+	if(s.empty()){
+		throw std::invalid_argument("invalid date, expected YEAR-MM-DD: "+s);
 	}
-	int y=parse_int(s.substr(0,4),"year");
-	int m=parse_int(s.substr(5,2),"month");
-	int d=parse_int(s.substr(8,2),"day");
+	std::size_t year_sep=s.find('-',((s[0]=='+'||s[0]=='-')?1u:0u));
+	std::size_t month_sep=
+		(year_sep==std::string::npos)?std::string::npos:s.find('-',year_sep+1);
+	if(year_sep==std::string::npos||month_sep==std::string::npos){
+		throw std::invalid_argument("invalid date, expected YEAR-MM-DD: "+s);
+	}
+	std::string ytxt=s.substr(0,year_sep);
+	std::string mtxt=s.substr(year_sep+1,month_sep-year_sep-1);
+	std::string dtxt=s.substr(month_sep+1);
+	if(mtxt.size()!=2||dtxt.size()!=2||!all_digits(mtxt)||!all_digits(dtxt)){
+		throw std::invalid_argument("invalid date, expected YEAR-MM-DD: "+s);
+	}
+	int y=parse_int(ytxt,"year");
+	int m=parse_int(mtxt,"month");
+	int d=parse_int(dtxt,"day");
 	if(m<1||m>12||d<1||d>31){
 		throw std::invalid_argument("invalid date value: "+s);
 	}
@@ -629,13 +653,22 @@ std::tuple<int,int,int> parse_ymd(const std::string&s){
 }
 
 std::pair<int,int> parse_ym(const std::string&s){
-	if(s.size()!=7||s[4]!='-'){
-		throw std::invalid_argument("invalid year-month, expected YYYY-MM: "+s);
+	if(s.empty()){
+		throw std::invalid_argument("invalid year-month, expected YEAR-MM: "+s);
 	}
-	int y=parse_int(s.substr(0,4),"year");
-	int m=parse_int(s.substr(5,2),"month");
+	std::size_t year_sep=s.find('-',((s[0]=='+'||s[0]=='-')?1u:0u));
+	if(year_sep==std::string::npos){
+		throw std::invalid_argument("invalid year-month, expected YEAR-MM: "+s);
+	}
+	std::string ytxt=s.substr(0,year_sep);
+	std::string mtxt=s.substr(year_sep+1);
+	if(mtxt.size()!=2||!all_digits(mtxt)){
+		throw std::invalid_argument("invalid year-month, expected YEAR-MM: "+s);
+	}
+	int y=parse_int(ytxt,"year");
+	int m=parse_int(mtxt,"month");
 	if(m<1||m>12){
-		throw std::invalid_argument("invalid month in YYYY-MM: "+s);
+		throw std::invalid_argument("invalid month in YEAR-MM: "+s);
 	}
 	return {y,m};
 }
