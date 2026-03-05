@@ -97,6 +97,7 @@ using cli_util::parse_bool01;
 using cli_util::parse_int;
 using cli_util::req_val;
 using cli_util::to_low;
+using lunar::AstroObs;
 using lunar::AstroEvt;
 using lunar::MoonXg;
 using lunar::StarMode;
@@ -2074,9 +2075,13 @@ void use_day(){
 		  "0|1] [--quiet]\n"
 		<<"    [--at HH:MM[:SS]] [--events 0|1] [--astro 0|1]\n"
 		<<"    [--astro-mode less|all|pick] [--astro-pick id,en,zh,...]\n"
+		<<"    [--astro-lat deg --astro-lon deg [--astro-height m]]\n"
 		<<"Examples:\n"
 		<<"  lunar day D:\\de442.bsp 2025-06-01\n"
-		<<"  lunar day D:\\de442.bsp 2025-06-01 --format json --out day.json\n";
+		<<"  lunar day D:\\de442.bsp 2025-06-01 --format json --out day.json\n"
+		<<"Note:\n"
+		<<"  Transit/occultation are topocentric and are emitted only when "
+		  "--astro-lat/--astro-lon are provided.\n";
 }
 
 void use_mview(){
@@ -2085,10 +2090,14 @@ void use_mview(){
 			 <<"    [--tz ...] [--format json|txt|csv] [--out ...] [--pretty "
 			   "0|1] [--quiet] [--astro 0|1]\n"
 			 <<"    [--astro-mode less|all|pick] [--astro-pick id,en,zh,...]\n"
+			 <<"    [--astro-lat deg --astro-lon deg [--astro-height m]]\n"
 			 <<"Examples:\n"
 			 <<"  lunar monthview D:\\de442.bsp 2025-09 --format txt\n"
 			 <<"  lunar monthview D:\\de442.bsp 2025-09 --format csv --out "
-			   "month.csv\n";
+			   "month.csv\n"
+			 <<"Note:\n"
+			 <<"  Transit/occultation are topocentric and are emitted only when "
+			   "--astro-lat/--astro-lon are provided.\n";
 }
 
 void use_next(){
@@ -3542,6 +3551,12 @@ int cmd_day(const std::vector<std::string>&args){
 	bool inc_astro=false;
 	std::string astro_mode_text="less";
 	std::string astro_pick_csv;
+	double astro_lat_deg=0.0;
+	double astro_lon_deg=0.0;
+	double astro_h_m=0.0;
+	bool has_astro_lat=false;
+	bool has_astro_lon=false;
+	bool has_astro_h=false;
 	const OptMap handlers={
 		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
 					const std::string&opt){ tz=req_val(src,idx,opt); }},
@@ -3575,11 +3590,34 @@ int cmd_day(const std::vector<std::string>&args){
 							const std::string&opt){
 			 astro_pick_csv=req_val(src,idx,opt);
 		 }},
+		{"--astro-lat",[&](const std::vector<std::string>&src,std::size_t&idx,
+						   const std::string&opt){
+			 astro_lat_deg=parse_double(req_val(src,idx,opt),opt);
+			 has_astro_lat=true;
+		 }},
+		{"--astro-lon",[&](const std::vector<std::string>&src,std::size_t&idx,
+						   const std::string&opt){
+			 astro_lon_deg=parse_double(req_val(src,idx,opt),opt);
+			 has_astro_lon=true;
+		 }},
+		{"--astro-height",[&](const std::vector<std::string>&src,
+							  std::size_t&idx,const std::string&opt){
+			 astro_h_m=parse_double(req_val(src,idx,opt),opt);
+			 has_astro_h=true;
+		 }},
 	};
 
 	for(std::size_t i=2;i<args.size();++i){
 		const std::string&opt=args[i];
 		apply_opt(handlers,args,i,opt,"day");
+	}
+	if(has_astro_lat!=has_astro_lon){
+		throw std::invalid_argument(
+			"astro site requires both --astro-lat and --astro-lon");
+	}
+	if(has_astro_h&&!has_astro_lat){
+		throw std::invalid_argument(
+			"--astro-height requires --astro-lat and --astro-lon");
 	}
 	chk_fmt(format,{"json","txt","csv","jsonl"},"day");
 
@@ -3598,6 +3636,13 @@ int cmd_day(const std::vector<std::string>&args){
 	if(inc_astro){
 		StarMode mode=parse_star_mode(astro_mode_text);
 		astro_pick=make_star_pick(mode,astro_pick_csv);
+	}
+	AstroObs astro_obs;
+	if(has_astro_lat){
+		astro_obs.has_site=true;
+		astro_obs.lat_deg=astro_lat_deg;
+		astro_obs.lon_deg=astro_lon_deg;
+		astro_obs.h_m=has_astro_h?astro_h_m:0.0;
 	}
 
 	EphRead eph(ephem);
@@ -3622,7 +3667,8 @@ int cmd_day(const std::vector<std::string>&args){
 	}
 	std::vector<EventRec> astro_events;
 	if(inc_astro){
-		std::vector<AstroEvt> raw=calc_astro_evt(eph,day_sutc,day_eutc,astro_pick);
+		std::vector<AstroEvt> raw=
+			calc_astro_evt(eph,day_sutc,day_eutc,astro_pick,astro_obs);
 		astro_events.reserve(raw.size());
 		for(const auto&ev : raw){
 			astro_events.push_back(mk_astro_rec(ev,tz_off));
@@ -3653,6 +3699,26 @@ int cmd_day(const std::vector<std::string>&args){
 		w.key("astro_pick");
 		if(inc_astro&&astro_pick.mode==StarMode::Pick){
 			w.value(astro_pick_csv);
+		}else{
+			w.null_val();
+		}
+		w.key("astro_site");
+		w.value(astro_obs.has_site);
+		w.key("astro_lat_deg");
+		if(astro_obs.has_site){
+			w.value(astro_obs.lat_deg);
+		}else{
+			w.null_val();
+		}
+		w.key("astro_lon_deg");
+		if(astro_obs.has_site){
+			w.value(astro_obs.lon_deg);
+		}else{
+			w.null_val();
+		}
+		w.key("astro_height_m");
+		if(astro_obs.has_site){
+			w.value(astro_obs.h_m);
 		}else{
 			w.null_val();
 		}
@@ -3735,6 +3801,16 @@ int cmd_day(const std::vector<std::string>&args){
 			 os<<"input.astro="<<(inc_astro?"1":"0")<<"\n";
 			 os<<"input.astro_mode="<<astro_mode_text<<"\n";
 			 os<<"input.astro_pick="<<astro_pick_csv<<"\n";
+			 os<<"input.astro_site="<<(astro_obs.has_site?"1":"0")<<"\n";
+			 os<<"input.astro_lat_deg="
+			   <<(astro_obs.has_site?format_num(astro_obs.lat_deg):"null")
+			   <<"\n";
+			 os<<"input.astro_lon_deg="
+			   <<(astro_obs.has_site?format_num(astro_obs.lon_deg):"null")
+			   <<"\n";
+			 os<<"input.astro_height_m="
+			   <<(astro_obs.has_site?format_num(astro_obs.h_m):"null")
+			   <<"\n";
 			 os<<"data.lun_label="<<atd.lunar_date.lun_label<<"\n";
 			 os<<"data.ill_pct="<<format_num(atd.ill_pct)<<"\n";
 			 os<<"data.phase_name="<<atd.phase_name<<"\n";
@@ -3785,6 +3861,12 @@ int cmd_mview(const std::vector<std::string>&args){
 	bool inc_astro=false;
 	std::string astro_mode_text="less";
 	std::string astro_pick_csv;
+	double astro_lat_deg=0.0;
+	double astro_lon_deg=0.0;
+	double astro_h_m=0.0;
+	bool has_astro_lat=false;
+	bool has_astro_lon=false;
+	bool has_astro_h=false;
 	const OptMap handlers={
 		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
 					const std::string&opt){ tz=req_val(src,idx,opt); }},
@@ -3812,11 +3894,34 @@ int cmd_mview(const std::vector<std::string>&args){
 							const std::string&opt){
 			 astro_pick_csv=req_val(src,idx,opt);
 		 }},
+		{"--astro-lat",[&](const std::vector<std::string>&src,std::size_t&idx,
+						   const std::string&opt){
+			 astro_lat_deg=parse_double(req_val(src,idx,opt),opt);
+			 has_astro_lat=true;
+		 }},
+		{"--astro-lon",[&](const std::vector<std::string>&src,std::size_t&idx,
+						   const std::string&opt){
+			 astro_lon_deg=parse_double(req_val(src,idx,opt),opt);
+			 has_astro_lon=true;
+		 }},
+		{"--astro-height",[&](const std::vector<std::string>&src,
+							  std::size_t&idx,const std::string&opt){
+			 astro_h_m=parse_double(req_val(src,idx,opt),opt);
+			 has_astro_h=true;
+		 }},
 	};
 
 	for(std::size_t i=2;i<args.size();++i){
 		const std::string&opt=args[i];
 		apply_opt(handlers,args,i,opt,"monthview");
+	}
+	if(has_astro_lat!=has_astro_lon){
+		throw std::invalid_argument(
+			"astro site requires both --astro-lat and --astro-lon");
+	}
+	if(has_astro_h&&!has_astro_lat){
+		throw std::invalid_argument(
+			"--astro-height requires --astro-lat and --astro-lon");
 	}
 	chk_fmt(format,{"json","txt","csv"},"monthview");
 	int year=0;
@@ -3829,6 +3934,13 @@ int cmd_mview(const std::vector<std::string>&args){
 	if(inc_astro){
 		StarMode mode=parse_star_mode(astro_mode_text);
 		astro_pick=make_star_pick(mode,astro_pick_csv);
+	}
+	AstroObs astro_obs;
+	if(has_astro_lat){
+		astro_obs.has_site=true;
+		astro_obs.lat_deg=astro_lat_deg;
+		astro_obs.lon_deg=astro_lon_deg;
+		astro_obs.h_m=has_astro_h?astro_h_m:0.0;
 	}
 	EphRead eph(ephem);
 	QueryCache cache(eph);
@@ -3855,7 +3967,7 @@ int cmd_mview(const std::vector<std::string>&args){
 		double month_sutc=cst_midjd(year,month,1);
 		double month_eutc=cst_midjd(n_year,n_month,1);
 		std::vector<AstroEvt> astro=
-			calc_astro_evt(eph,month_sutc,month_eutc,astro_pick);
+			calc_astro_evt(eph,month_sutc,month_eutc,astro_pick,astro_obs);
 		for(const auto&ev : astro){
 			int ey=0;
 			int em=0;
@@ -3926,6 +4038,26 @@ int cmd_mview(const std::vector<std::string>&args){
 			 }else{
 				 w.null_val();
 			 }
+			 w.key("astro_site");
+			 w.value(astro_obs.has_site);
+			 w.key("astro_lat_deg");
+			 if(astro_obs.has_site){
+				 w.value(astro_obs.lat_deg);
+			 }else{
+				 w.null_val();
+			 }
+			 w.key("astro_lon_deg");
+			 if(astro_obs.has_site){
+				 w.value(astro_obs.lon_deg);
+			 }else{
+				 w.null_val();
+			 }
+			 w.key("astro_height_m");
+			 if(astro_obs.has_site){
+				 w.value(astro_obs.h_m);
+			 }else{
+				 w.null_val();
+			 }
 			 w.obj_end();
 			 w.key("data");
 			 w.arr_begin();
@@ -3981,6 +4113,16 @@ int cmd_mview(const std::vector<std::string>&args){
 			 os<<"input.astro="<<(inc_astro?"1":"0")<<"\n";
 			 os<<"input.astro_mode="<<astro_mode_text<<"\n";
 			 os<<"input.astro_pick="<<astro_pick_csv<<"\n";
+			 os<<"input.astro_site="<<(astro_obs.has_site?"1":"0")<<"\n";
+			 os<<"input.astro_lat_deg="
+			   <<(astro_obs.has_site?format_num(astro_obs.lat_deg):"null")
+			   <<"\n";
+			 os<<"input.astro_lon_deg="
+			   <<(astro_obs.has_site?format_num(astro_obs.lon_deg):"null")
+			   <<"\n";
+			 os<<"input.astro_height_m="
+			   <<(astro_obs.has_site?format_num(astro_obs.h_m):"null")
+			   <<"\n";
 			 os<<"greg_date\tlunar_date_label\tis_leap\tlunar_month_"
 				 "label\till_pct\tmoon_xg_region\tmoon_xg_star\tmoon_xg_sep_"
 				 "deg\tevents_summary\tastro_events_summary\n";

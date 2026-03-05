@@ -77,6 +77,13 @@ struct AstroEvt{
 	std::string detail;
 };
 
+struct AstroObs{
+	bool has_site=false;
+	double lat_deg=0.0;
+	double lon_deg=0.0;
+	double h_m=0.0;
+};
+
 StarMode parse_star_mode(const std::string&text);
 
 StarPick make_star_pick(StarMode mode,const std::string&pick_csv);
@@ -87,7 +94,7 @@ std::vector<StarApp> calc_star_app(EphRead&eph,double jd_utc,
 MoonXg calc_moon_xg(EphRead&eph,double jd_utc);
 
 std::vector<AstroEvt> calc_astro_evt(EphRead&eph,double jd_utc_start,
-									 double jd_utc_end,const StarPick&pick);
+									 double jd_utc_end,const StarPick&pick,
+									 const AstroObs&obs=AstroObs{});
 
 }
-

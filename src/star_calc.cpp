@@ -12,6 +12,7 @@
 
 #include "lunar/app_long.hpp"
 #include "lunar/frames.hpp"
+#include "lunar/precnut_core.hpp"
 #include "lunar/time_scale.hpp"
 
 namespace lunar{
@@ -26,6 +27,9 @@ constexpr double kSunDeflRad=1.97412574336e-8;
 constexpr double kSunDeflSepMax=5.0*PI/180.0;
 constexpr double kMoonRadiusKm=1737.4;
 constexpr double kSunRadiusKm=695700.0;
+constexpr double kDegPerRad=180.0/PI;
+constexpr double kRadPerDeg=PI/180.0;
+constexpr double kEarthRotationRateRadPerDay=1.00273781191135448*TWO_PI;
 
 double clamp_u(double v){
 	return std::clamp(v,-1.0,1.0);
@@ -197,6 +201,13 @@ struct AppCtx{
 	Vec3 moon_eq_u;
 };
 
+struct ObsSite{
+	bool on=false;
+	Vec3 ecef;
+	Vec3 up_ecef;
+	Vec3 beta_ecef;
+};
+
 AppCtx make_ctx_tdb(EphRead&eph,double jd_tdb){
 	AppCtx ctx;
 	ctx.jd_tdb=jd_tdb;
@@ -296,6 +307,8 @@ double body_radius_km(int id){
 
 std::string body_zh(int id){
 	switch(id){
+		case 10:
+			return "太阳";
 		case 199:
 			return "水星";
 		case 299:
@@ -319,6 +332,8 @@ std::string body_zh(int id){
 
 std::string body_code(int id){
 	switch(id){
+		case 10:
+			return "sun";
 		case 199:
 			return "mercury";
 		case 299:
@@ -340,6 +355,127 @@ std::string body_code(int id){
 	}
 }
 
+bool finite_vec(const Vec3&v){
+	return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z);
+}
+
+Vec3 geodetic_to_ecef(double lat_deg,double lon_deg,double h_m){
+	constexpr double a_m=6378137.0;
+	constexpr double inv_f=298.257223563;
+	const double f=1.0/inv_f;
+	const double e2=f*(2.0-f);
+
+	double lat=lat_deg*kRadPerDeg;
+	double lon=lon_deg*kRadPerDeg;
+	double s_lat=std::sin(lat);
+	double c_lat=std::cos(lat);
+	double s_lon=std::sin(lon);
+	double c_lon=std::cos(lon);
+
+	double n=a_m/std::sqrt(1.0-e2*s_lat*s_lat);
+	double x=(n+h_m)*c_lat*c_lon;
+	double y=(n+h_m)*c_lat*s_lon;
+	double z=(n*(1.0-e2)+h_m)*s_lat;
+
+	double au_m=AU_KM*1000.0;
+	return Vec3(x/au_m,y/au_m,z/au_m);
+}
+
+Vec3 up_ecef_geo(double lat_deg,double lon_deg){
+	double lat=lat_deg*kRadPerDeg;
+	double lon=lon_deg*kRadPerDeg;
+	double c_lat=std::cos(lat);
+	return Vec3(c_lat*std::cos(lon),c_lat*std::sin(lon),std::sin(lat));
+}
+
+Vec3 observer_beta_ecef(const Vec3&obs_ecef){
+	Vec3 vel_au_day(-kEarthRotationRateRadPerDay*obs_ecef.y,
+					kEarthRotationRateRadPerDay*obs_ecef.x,0.0);
+	return vel_au_day/C_AUDAY;
+}
+
+Vec3 apply_diurnal_aberration(const Vec3&dir,const Vec3&obs_beta){
+	double beta2=Vec3::dot(obs_beta,obs_beta);
+	if(!(beta2>0.0)){
+		return dir;
+	}
+	double ginv=std::sqrt(std::max(0.0,1.0-beta2));
+	double nb=Vec3::dot(dir,obs_beta);
+	double den=1.0+nb;
+	if(!(den>0.0)){
+		return dir;
+	}
+	Vec3 d=(ginv*dir)+obs_beta+((nb/(1.0+ginv))*obs_beta);
+	d=d/den;
+	return unit_or(d,dir);
+}
+
+Mat3 ecef_rot(double jd_tdb){
+	double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
+	double uta=std::floor(jd_utc);
+	double utb=jd_utc-uta;
+	double tta=std::floor(jd_tdb);
+	double ttb=jd_tdb-tta;
+	double gast=lunar::precnut::gst06a(uta,utb,tta,ttb);
+	return CoordTf::R3(gast);
+}
+
+ObsSite make_obs_site(const AstroObs&obs){
+	if(!obs.has_site){
+		return ObsSite{};
+	}
+	if(!std::isfinite(obs.lat_deg)||!std::isfinite(obs.lon_deg)||
+	   !std::isfinite(obs.h_m)){
+		throw std::invalid_argument("astro observer coordinates must be finite");
+	}
+	if(obs.lat_deg<-90.0||obs.lat_deg>90.0){
+		throw std::invalid_argument("astro latitude out of range [-90,90]");
+	}
+	if(obs.lon_deg<-180.0||obs.lon_deg>180.0){
+		throw std::invalid_argument("astro longitude out of range [-180,180]");
+	}
+	ObsSite out;
+	out.on=true;
+	out.ecef=geodetic_to_ecef(obs.lat_deg,obs.lon_deg,obs.h_m);
+	out.up_ecef=up_ecef_geo(obs.lat_deg,obs.lon_deg);
+	out.beta_ecef=observer_beta_ecef(out.ecef);
+	return out;
+}
+
+bool topo_body_dir_sd(EphRead&eph,int phys_id,int eph_id,double jd_tdb,
+					  const ObsSite&obs,Vec3&u_ecef,double&sd_rad){
+	Vec3 geo=AberCorr::geo_app(eph,eph_id,jd_tdb,4);
+	if(!finite_vec(geo)){
+		return false;
+	}
+	Vec3 eq=eq_true(jd_tdb)*geo;
+	Vec3 body_ecef=ecef_rot(jd_tdb)*eq;
+	Vec3 topo=body_ecef-obs.ecef;
+	double rn=topo.norm();
+	if(!(rn>0.0)){
+		return false;
+	}
+	u_ecef=unit_or(topo,Vec3(1.0,0.0,0.0));
+	u_ecef=apply_diurnal_aberration(u_ecef,obs.beta_ecef);
+	double r_km=body_radius_km(phys_id);
+	if(r_km>0.0){
+		sd_rad=std::asin(clamp_u(r_km/(rn*AU_KM)));
+	}else{
+		sd_rad=0.0;
+	}
+	return std::isfinite(sd_rad);
+}
+
+bool topo_star_dir(EphRead&eph,const StarRecord&st,double jd_tdb,
+				   const ObsSite&obs,Vec3&u_ecef){
+	AppCtx ctx=make_ctx_tdb(eph,jd_tdb);
+	Vec3 u_eq=star_eq_u(st,ctx);
+	u_ecef=ecef_rot(jd_tdb)*u_eq;
+	u_ecef=unit_or(u_ecef,Vec3(1.0,0.0,0.0));
+	u_ecef=apply_diurnal_aberration(u_ecef,obs.beta_ecef);
+	return finite_vec(u_ecef);
+}
+
 std::unordered_set<int> spk_obj_set(EphRead&eph){
 	std::unordered_set<int> out;
 	for(int id : eph.spk_objects()){
@@ -350,6 +486,43 @@ std::unordered_set<int> spk_obj_set(EphRead&eph){
 
 bool has_spk_obj(const std::unordered_set<int>&ids,int id){
 	return ids.find(id)!=ids.end();
+}
+
+int bary_id(int id){
+	switch(id){
+		case 199:
+			return 1;
+		case 299:
+			return 2;
+		case 399:
+			return 3;
+		case 499:
+			return 4;
+		case 599:
+			return 5;
+		case 699:
+			return 6;
+		case 799:
+			return 7;
+		case 899:
+			return 8;
+		default:
+			return 0;
+	}
+}
+
+int eph_id_or_zero(const std::unordered_set<int>&ids,int id,bool allow_bary){
+	if(has_spk_obj(ids,id)){
+		return id;
+	}
+	if(!allow_bary){
+		return 0;
+	}
+	int bid=bary_id(id);
+	if(bid>0&&has_spk_obj(ids,bid)){
+		return bid;
+	}
+	return 0;
 }
 
 double body_sd_rad(EphRead&eph,int id,double jd_tdb){
@@ -499,7 +672,8 @@ void find_gelong(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 	const double step=0.25;
 	const std::array<int,2> body_ids={199,299};
 	for(int id : body_ids){
-		if(!has_spk_obj(spk_ids,id)){
+		int eph_id=eph_id_or_zero(spk_ids,id,true);
+		if(eph_id==0){
 			continue;
 		}
 		std::vector<double> ts;
@@ -507,7 +681,7 @@ void find_gelong(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 		ts.reserve(static_cast<std::size_t>((t1-t0)/step)+8);
 		fs.reserve(ts.capacity());
 		for(double t=t0;t<=t1+1e-12;t+=step){
-			double ds=norm_pm_pi(body_lam(app,id,t)-app.sun_calc(t).first);
+			double ds=norm_pm_pi(body_lam(app,eph_id,t)-app.sun_calc(t).first);
 			ts.push_back(t);
 			fs.push_back(std::fabs(ds));
 		}
@@ -517,7 +691,7 @@ void find_gelong(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 			}
 			double tp=
 				parabolic_peak(ts[i-1],fs[i-1],ts[i],fs[i],ts[i+1],fs[i+1]);
-			double d=norm_pm_pi(body_lam(app,id,tp)-app.sun_calc(tp).first);
+			double d=norm_pm_pi(body_lam(app,eph_id,tp)-app.sun_calc(tp).first);
 			double f=std::fabs(d);
 			if(!(f>=5.0*PI/180.0)){
 				continue;
@@ -539,6 +713,338 @@ void find_gelong(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 	}
 }
 
+struct GeoBody{
+	int id=0;
+	int eph_id=0;
+	std::string code;
+	std::string zh;
+};
+
+enum class AspType{
+	Conj,
+	Opp,
+	Quad,
+};
+
+struct AspDef{
+	AspType type=AspType::Conj;
+	double target=0.0;
+	bool east=false;
+};
+
+std::string code_token(const std::string&text){
+	std::string low=low_ascii(text);
+	std::string out;
+	out.reserve(low.size());
+	for(char ch : low){
+		unsigned char uc=static_cast<unsigned char>(ch);
+		if(std::isalnum(uc)){
+			out.push_back(ch);
+		}else if(out.empty()||out.back()!='_'){
+			out.push_back('_');
+		}
+	}
+	while(!out.empty()&&out.back()=='_'){
+		out.pop_back();
+	}
+	return out;
+}
+
+double lerp_root(double t0,double f0,double t1,double f1){
+	if(!std::isfinite(t0)||!std::isfinite(t1)||!std::isfinite(f0)||
+	   !std::isfinite(f1)||!(t1>t0)){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	if(f0==f1){
+		return 0.5*(t0+t1);
+	}
+	double t=t0+(-f0)*(t1-t0)/(f1-f0);
+	if(t<t0||t>t1){
+		return 0.5*(t0+t1);
+	}
+	return t;
+}
+
+bool zero_cross(double f0,double f1){
+	return (f0==0.0)||(f1==0.0)||(f0<0.0&&f1>0.0)||(f0>0.0&&f1<0.0);
+}
+
+std::vector<GeoBody> geo_body_list(const std::unordered_set<int>&ids){
+	const std::array<int,9> req={10,301,199,299,499,599,699,799,899};
+	std::vector<GeoBody> out;
+	out.reserve(req.size());
+	for(int id : req){
+		int eph_id=0;
+		if(id==10){
+			eph_id=10;
+		}else if(id==301){
+			eph_id=eph_id_or_zero(ids,id,false);
+		}else{
+			eph_id=eph_id_or_zero(ids,id,true);
+		}
+		if(id!=10&&eph_id==0){
+			continue;
+		}
+		GeoBody b;
+		b.id=id;
+		b.eph_id=eph_id;
+		b.code=body_code(id);
+		b.zh=body_zh(id);
+		out.push_back(std::move(b));
+	}
+	return out;
+}
+
+double geo_body_lam(AppLon&app,const GeoBody&b,double jd_tdb){
+	if(b.id==10){
+		return app.sun_calc(jd_tdb).first;
+	}
+	return body_lam(app,b.eph_id,jd_tdb);
+}
+
+std::pair<std::size_t,std::size_t> orient_pair_idx(const std::vector<GeoBody>&b,
+												   std::size_t i,std::size_t j){
+	const GeoBody&a=b[i];
+	const GeoBody&c=b[j];
+	if(a.id==10){
+		return {j,i};
+	}
+	if(c.id==10){
+		return {i,j};
+	}
+	if(a.id==301&&c.id!=10){
+		return {i,j};
+	}
+	if(c.id==301&&a.id!=10){
+		return {j,i};
+	}
+	if(a.id<=c.id){
+		return {i,j};
+	}
+	return {j,i};
+}
+
+std::string rel_obj_name(const GeoBody&b){
+	return b.id==10?"日":b.zh;
+}
+
+AstroEvt mk_body_aspect_evt(const GeoBody&obj,const GeoBody&ref,const AspDef&asp,
+							double jd_utc){
+	AstroEvt ev;
+	ev.jd_utc=jd_utc;
+	switch(asp.type){
+		case AspType::Conj:
+			ev.kind="conjunction";
+			if(ref.id==10){
+				ev.code=obj.code+"_conjunction";
+				ev.name=obj.zh+"合日";
+			}else{
+				ev.code=obj.code+"_"+ref.code+"_conjunction";
+				ev.name=obj.zh+"合"+ref.zh;
+			}
+			break;
+		case AspType::Opp:
+			ev.kind="opposition";
+			if(ref.id==10){
+				ev.code=obj.code+"_opposition";
+				ev.name=obj.zh+"冲日";
+			}else{
+				ev.code=obj.code+"_"+ref.code+"_opposition";
+				ev.name=obj.zh+"冲"+ref.zh;
+			}
+			break;
+		case AspType::Quad:
+			ev.kind="quadrature";
+			if(ref.id==10){
+				ev.code=obj.code+(asp.east?"_east":"_west");
+				ev.name=obj.zh+(asp.east?"东方照":"西方照");
+			}else{
+				ev.code=obj.code+"_"+ref.code+(asp.east?"_east":"_west");
+				ev.name=obj.zh+(asp.east?"东方照":"西方照")+ref.zh;
+			}
+			break;
+	}
+	return ev;
+}
+
+AstroEvt mk_star_body_aspect_evt(const StarRecord&st,const std::string&tok,
+								 const GeoBody&body,const AspDef&asp,double jd_utc){
+	AstroEvt ev;
+	ev.jd_utc=jd_utc;
+	const std::string nm=star_name(st);
+	const std::string rel=rel_obj_name(body);
+	switch(asp.type){
+		case AspType::Conj:
+			ev.kind="conjunction";
+			ev.code="star_"+tok+"_"+body.code+"_conjunction";
+			ev.name=nm+"合"+rel;
+			break;
+		case AspType::Opp:
+			ev.kind="opposition";
+			ev.code="star_"+tok+"_"+body.code+"_opposition";
+			ev.name=nm+"冲"+rel;
+			break;
+		case AspType::Quad:
+			ev.kind="quadrature";
+			ev.code="star_"+tok+"_"+body.code+(asp.east?"_east":"_west");
+			ev.name=nm+(asp.east?"东方照":"西方照")+rel;
+			break;
+	}
+	return ev;
+}
+
+void find_body_aspect(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
+					  double ed_utc,const std::unordered_set<int>&ids){
+	const std::vector<GeoBody> bodies=geo_body_list(ids);
+	if(bodies.size()<2){
+		return;
+	}
+	const std::array<AspDef,4> aspects={
+		AspDef{AspType::Conj,0.0,false},
+		AspDef{AspType::Opp,PI,false},
+		AspDef{AspType::Quad,0.5*PI,true},
+		AspDef{AspType::Quad,-0.5*PI,false},
+	};
+	double t0=TimeScale::utc_to_tdb(st_utc)-2.0;
+	double t1=TimeScale::utc_to_tdb(ed_utc)+2.0;
+	const double step=0.05;
+	std::vector<double> ts;
+	for(double t=t0;t<=t1+1e-12;t+=step){
+		ts.push_back(t);
+	}
+	if(ts.size()<2){
+		return;
+	}
+	AppLon app(eph);
+	std::vector<std::vector<double>> lam(
+		bodies.size(),std::vector<double>(ts.size(),std::numeric_limits<double>::quiet_NaN()));
+	for(std::size_t b=0;b<bodies.size();++b){
+		for(std::size_t i=0;i<ts.size();++i){
+			lam[b][i]=geo_body_lam(app,bodies[b],ts[i]);
+		}
+	}
+	for(std::size_t i=0;i<bodies.size();++i){
+		for(std::size_t j=i+1;j<bodies.size();++j){
+			auto idx=orient_pair_idx(bodies,i,j);
+			std::size_t oi=idx.first;
+			std::size_t ri=idx.second;
+			for(const auto&asp : aspects){
+				for(std::size_t k=1;k<ts.size();++k){
+					double d0=norm_pm_pi(lam[oi][k-1]-lam[ri][k-1]);
+					double d1=norm_pm_pi(lam[oi][k]-lam[ri][k]);
+					if(!std::isfinite(d0)||!std::isfinite(d1)){
+						continue;
+					}
+					double f0=norm_pm_pi(d0-asp.target);
+					double f1=norm_pm_pi(d1-asp.target);
+					if(!zero_cross(f0,f1)||std::fabs(f0)>1.7||std::fabs(f1)>1.7){
+						continue;
+					}
+					double tr=lerp_root(ts[k-1],f0,ts[k],f1);
+					if(!std::isfinite(tr)){
+						continue;
+					}
+					double ju=TimeScale::tdb_to_utc(tr);
+					if(ju<st_utc||ju>=ed_utc){
+						continue;
+					}
+					out.push_back(mk_body_aspect_evt(bodies[oi],bodies[ri],asp,ju));
+				}
+			}
+		}
+	}
+}
+
+void find_star_body_aspect(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
+						   double ed_utc,const StarPick&pick,
+						   const std::unordered_set<int>&ids){
+	const std::vector<const StarRecord*> stars=select_stars(pick);
+	if(stars.empty()){
+		return;
+	}
+	const std::vector<GeoBody> bodies=geo_body_list(ids);
+	if(bodies.empty()){
+		return;
+	}
+	const std::array<AspDef,4> aspects={
+		AspDef{AspType::Conj,0.0,false},
+		AspDef{AspType::Opp,PI,false},
+		AspDef{AspType::Quad,0.5*PI,true},
+		AspDef{AspType::Quad,-0.5*PI,false},
+	};
+	double t0=TimeScale::utc_to_tdb(st_utc)-2.0;
+	double t1=TimeScale::utc_to_tdb(ed_utc)+2.0;
+	const double step=(pick.mode==StarMode::All)?0.10:0.05;
+	std::vector<double> ts;
+	for(double t=t0;t<=t1+1e-12;t+=step){
+		ts.push_back(t);
+	}
+	if(ts.size()<2){
+		return;
+	}
+	AppLon app(eph);
+	std::vector<AppCtx> ctxs;
+	ctxs.reserve(ts.size());
+	std::vector<Mat3> rots;
+	rots.reserve(ts.size());
+	for(double t : ts){
+		ctxs.push_back(make_ctx_tdb(eph,t));
+		rots.push_back(app.rot_mat(t));
+	}
+	std::vector<std::vector<double>> lam_body(
+		bodies.size(),std::vector<double>(ts.size(),std::numeric_limits<double>::quiet_NaN()));
+	for(std::size_t b=0;b<bodies.size();++b){
+		for(std::size_t i=0;i<ts.size();++i){
+			lam_body[b][i]=geo_body_lam(app,bodies[b],ts[i]);
+		}
+	}
+	for(const StarRecord*sp : stars){
+		const StarRecord&st=*sp;
+		std::string tok=code_token(nz(st.id));
+		if(tok.empty()){
+			tok=code_token(star_name(st));
+		}
+		if(tok.empty()){
+			tok="star";
+		}
+		std::vector<double> lam_star(ts.size(),std::numeric_limits<double>::quiet_NaN());
+		for(std::size_t i=0;i<ts.size();++i){
+			Vec3 su=star_eq_u(st,ctxs[i]);
+			Vec3 xec=rots[i]*su;
+			double lm=std::atan2(xec.y,xec.x);
+			if(lm<0.0){
+				lm+=TWO_PI;
+			}
+			lam_star[i]=lm;
+		}
+		for(std::size_t b=0;b<bodies.size();++b){
+			for(const auto&asp : aspects){
+				for(std::size_t k=1;k<ts.size();++k){
+					double d0=norm_pm_pi(lam_star[k-1]-lam_body[b][k-1]);
+					double d1=norm_pm_pi(lam_star[k]-lam_body[b][k]);
+					if(!std::isfinite(d0)||!std::isfinite(d1)){
+						continue;
+					}
+					double f0=norm_pm_pi(d0-asp.target);
+					double f1=norm_pm_pi(d1-asp.target);
+					if(!zero_cross(f0,f1)||std::fabs(f0)>1.7||std::fabs(f1)>1.7){
+						continue;
+					}
+					double tr=lerp_root(ts[k-1],f0,ts[k],f1);
+					if(!std::isfinite(tr)){
+						continue;
+					}
+					double ju=TimeScale::tdb_to_utc(tr);
+					if(ju<st_utc||ju>=ed_utc){
+						continue;
+					}
+					out.push_back(mk_star_body_aspect_evt(st,tok,bodies[b],asp,ju));
+				}
+			}
+		}
+	}
+}
+
 void find_quadrature(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 					 double ed_utc,const std::unordered_set<int>&ids){
 	struct QDef{
@@ -553,12 +1059,13 @@ void find_quadrature(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 	double t0=TimeScale::utc_to_tdb(st_utc)-2.0;
 	double t1=TimeScale::utc_to_tdb(ed_utc)+2.0;
 	for(const auto&def : defs){
-		if(!has_spk_obj(ids,def.id)){
+		int eph_id=eph_id_or_zero(ids,def.id,def.id!=301);
+		if(eph_id==0){
 			continue;
 		}
 		for(double target : {0.5*PI,-0.5*PI}){
 			auto fn=[&](double t){
-				double d=norm_pm_pi(body_lam(app,def.id,t)-app.sun_calc(t).first);
+				double d=norm_pm_pi(body_lam(app,eph_id,t)-app.sun_calc(t).first);
 				return norm_pm_pi(d-target);
 			};
 			double tp=t0;
@@ -590,100 +1097,324 @@ void find_quadrature(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 	}
 }
 
-template<typename SepFn,typename ThFn,typename MkFn>
-void scan_min_evt(std::vector<AstroEvt>&out,double t0,double t1,double step,
-				  const SepFn&sep_fn,const ThFn&th_fn,const MkFn&mk_evt,
-				  double st_utc,double ed_utc){
-	double t_prev=t0;
-	double f_prev=sep_fn(t_prev);
-	double t_cur=t_prev+step;
-	double f_cur=sep_fn(t_cur);
-	for(double t_next=t_cur+step;t_next<=t1+1e-12;t_next+=step){
-		double f_next=sep_fn(t_next);
-		if(std::isfinite(f_prev)&&std::isfinite(f_cur)&&std::isfinite(f_next)&&
-		   f_cur<=f_prev&&f_cur<f_next){
-			double tp=
-				parabolic_peak(t_prev,f_prev,t_cur,f_cur,t_next,f_next);
-			double fp=sep_fn(tp);
-			double th=th_fn(tp);
-			if(std::isfinite(fp)&&std::isfinite(th)&&fp<=th){
-				double ju=TimeScale::tdb_to_utc(tp);
-				if(ju>=st_utc&&ju<ed_utc){
-					out.push_back(mk_evt(ju,fp));
+void find_opposition(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
+					 double ed_utc,const std::unordered_set<int>&ids){
+	struct ODef{
+		int id=0;
+		double step=0.5;
+	};
+	const std::array<ODef,5> defs={
+		ODef{499,0.25},ODef{599,0.5},ODef{699,0.5},ODef{799,1.0},ODef{899,1.0},
+	};
+	AppLon app(eph);
+	double t0=TimeScale::utc_to_tdb(st_utc)-5.0;
+	double t1=TimeScale::utc_to_tdb(ed_utc)+5.0;
+	for(const auto&def : defs){
+		int eph_id=eph_id_or_zero(ids,def.id,true);
+		if(eph_id==0){
+			continue;
+		}
+		auto fn=[&](double t){
+			double d=norm_pm_pi(body_lam(app,eph_id,t)-app.sun_calc(t).first-PI);
+			return d;
+		};
+		double tp=t0;
+		double fp=fn(tp);
+		for(double tc=t0+def.step;tc<=t1+1e-12;tc+=def.step){
+			double fc=fn(tc);
+			bool cross=(fp==0.0)||(fc==0.0)||(fp<0.0&&fc>0.0)||(fp>0.0&&fc<0.0);
+			if(cross&&std::fabs(fp)<1.6&&std::fabs(fc)<1.6){
+				double tr=bisect_root(fn,tp,tc);
+				if(std::isfinite(tr)){
+					double ju=TimeScale::tdb_to_utc(tr);
+					if(ju>=st_utc&&ju<ed_utc){
+						AstroEvt ev;
+						ev.kind="opposition";
+						ev.code=body_code(def.id)+"_opposition";
+						ev.name=body_zh(def.id)+"冲日";
+						ev.jd_utc=ju;
+						out.push_back(std::move(ev));
+					}
 				}
 			}
+			tp=tc;
+			fp=fc;
 		}
-		t_prev=t_cur;
-		f_prev=f_cur;
-		t_cur=t_next;
-		f_cur=f_next;
 	}
 }
 
+template<typename GapFn>
+double find_contact_root_back(const GapFn&gap_fn,double t_center,double t_floor,
+							  double step){
+	if(!(step>0.0)){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	double t_hi=t_center;
+	double g_hi=gap_fn(t_hi);
+	if(!std::isfinite(g_hi)||g_hi>0.0){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	for(double t=t_center-step;t>=t_floor-1e-12;t-=step){
+		double g=gap_fn(t);
+		if(!std::isfinite(g)){
+			continue;
+		}
+		if(g==0.0){
+			return t;
+		}
+		if(g>0.0&&g_hi<=0.0){
+			return bisect_root(gap_fn,t,t_hi);
+		}
+		t_hi=t;
+		g_hi=g;
+	}
+	return std::numeric_limits<double>::quiet_NaN();
+}
+
+template<typename GapFn>
+double find_contact_root_fwd(const GapFn&gap_fn,double t_center,double t_ceiling,
+							 double step){
+	if(!(step>0.0)){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	double t_lo=t_center;
+	double g_lo=gap_fn(t_lo);
+	if(!std::isfinite(g_lo)||g_lo>0.0){
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	for(double t=t_center+step;t<=t_ceiling+1e-12;t+=step){
+		double g=gap_fn(t);
+		if(!std::isfinite(g)){
+			continue;
+		}
+		if(g==0.0){
+			return t;
+		}
+		if(g_lo<=0.0&&g>0.0){
+			return bisect_root(gap_fn,t_lo,t);
+		}
+		t_lo=t;
+		g_lo=g;
+	}
+	return std::numeric_limits<double>::quiet_NaN();
+}
+
+void push_contact_evt(std::vector<AstroEvt>&out,const std::string&kind,
+					  const std::string&base_code,const std::string&base_name,
+					  const char*phase_code,const char*phase_zh,double jd_utc,
+					  double sep_rad,double st_utc,double ed_utc){
+	if(!std::isfinite(jd_utc)||jd_utc<st_utc||jd_utc>=ed_utc){
+		return;
+	}
+	AstroEvt ev;
+	ev.kind=kind;
+	ev.code=base_code+"_"+phase_code;
+	ev.name=base_name+phase_zh;
+	ev.jd_utc=jd_utc;
+	if(std::isfinite(sep_rad)){
+		ev.detail=deg_note("sep_deg",sep_rad*kDegPerRad);
+	}
+	out.push_back(std::move(ev));
+}
+
 void find_transit(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
-				  double ed_utc,const std::unordered_set<int>&ids){
-	if(!has_spk_obj(ids,eph.SUN)){
+				  double ed_utc,const std::unordered_set<int>&ids,
+				  const ObsSite&obs){
+	if(!obs.on){
+		return;
+	}
+	int sun_eph_id=eph_id_or_zero(ids,eph.SUN,false);
+	if(sun_eph_id==0){
 		return;
 	}
 	double t0=TimeScale::utc_to_tdb(st_utc)-3.0;
 	double t1=TimeScale::utc_to_tdb(ed_utc)+3.0;
-	const double step=0.05;
+	const double step=0.02;
+	const double root_step=0.004;
 	for(int id : {199,299}){
-		if(!has_spk_obj(ids,id)){
+		int eph_id=eph_id_or_zero(ids,id,true);
+		if(eph_id==0){
 			continue;
 		}
-		auto sep_fn=[&](double t){ return sep_sun_body(eph,id,t); };
-		auto th_fn=[&](double t){
-			return body_sd_rad(eph,eph.SUN,t)+body_sd_rad(eph,id,t);
+		auto geom=[&](double t,double&sep,double&gap){
+			Vec3 sun_u;
+			Vec3 body_u;
+			double sun_sd=0.0;
+			double body_sd=0.0;
+			if(!topo_body_dir_sd(eph,eph.SUN,sun_eph_id,t,obs,sun_u,sun_sd)||
+			   !topo_body_dir_sd(eph,id,eph_id,t,obs,body_u,body_sd)){
+				return false;
+			}
+			sep=ang_sep(sun_u,body_u);
+			double lim=sun_sd+body_sd;
+			gap=sep-lim;
+			return std::isfinite(sep)&&std::isfinite(gap);
 		};
-		auto mk_evt=[&](double ju,double sep){
-			AstroEvt ev;
-			ev.kind="transit";
-			ev.code=(id==199)?"mercury_transit":"venus_transit";
-			ev.name=body_zh(id)+"凌日";
-			ev.jd_utc=ju;
-			ev.detail=deg_note("sep_deg",sep*180.0/PI);
-			return ev;
+		auto sep_fn=[&](double t){
+			double sep=0.0;
+			double gap=0.0;
+			if(!geom(t,sep,gap)){
+				return std::numeric_limits<double>::quiet_NaN();
+			}
+			return sep;
 		};
-		scan_min_evt(out,t0,t1,step,sep_fn,th_fn,mk_evt,st_utc,ed_utc);
+		auto gap_fn=[&](double t){
+			double sep=0.0;
+			double gap=0.0;
+			if(!geom(t,sep,gap)){
+				return std::numeric_limits<double>::quiet_NaN();
+			}
+			return gap;
+		};
+		double t_prev=t0;
+		double f_prev=sep_fn(t_prev);
+		double t_cur=t_prev+step;
+		double f_cur=sep_fn(t_cur);
+		double last_tmax=std::numeric_limits<double>::quiet_NaN();
+		for(double t_next=t_cur+step;t_next<=t1+1e-12;t_next+=step){
+			double f_next=sep_fn(t_next);
+			if(std::isfinite(f_prev)&&std::isfinite(f_cur)&&std::isfinite(f_next)&&
+			   f_cur<=f_prev&&f_cur<f_next){
+				double t_max=
+					parabolic_peak(t_prev,f_prev,t_cur,f_cur,t_next,f_next);
+				double sep_max=sep_fn(t_max);
+				double gap_max=gap_fn(t_max);
+				if(std::isfinite(sep_max)&&std::isfinite(gap_max)&&gap_max<=0.0){
+					if(std::isfinite(last_tmax)&&
+					   std::fabs(last_tmax-t_max)<(1.5*step)){
+						t_prev=t_cur;
+						f_prev=f_cur;
+						t_cur=t_next;
+						f_cur=f_next;
+						continue;
+					}
+					last_tmax=t_max;
+					double t_in=find_contact_root_back(gap_fn,t_max,t0,root_step);
+					double t_out=find_contact_root_fwd(gap_fn,t_max,t1,root_step);
+					const std::string base_code=
+						(id==199)?"mercury_transit":"venus_transit";
+					const std::string base_name=body_zh(id)+"凌日";
+					push_contact_evt(out,"transit",base_code,base_name,"ingress",
+									 "入",TimeScale::tdb_to_utc(t_in),sep_fn(t_in),
+									 st_utc,ed_utc);
+					push_contact_evt(out,"transit",base_code,base_name,"max","最大",
+									 TimeScale::tdb_to_utc(t_max),sep_max,st_utc,
+									 ed_utc);
+					push_contact_evt(out,"transit",base_code,base_name,"egress",
+									 "出",TimeScale::tdb_to_utc(t_out),
+									 sep_fn(t_out),st_utc,ed_utc);
+				}
+			}
+			t_prev=t_cur;
+			f_prev=f_cur;
+			t_cur=t_next;
+			f_cur=f_next;
+		}
 	}
 }
 
 void find_occult(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 				 double ed_utc,const StarPick&pick,
-				 const std::unordered_set<int>&ids){
-	if(!has_spk_obj(ids,eph.MOON)){
+				 const std::unordered_set<int>&ids,const ObsSite&obs){
+	if(!obs.on){
+		return;
+	}
+	int moon_eph_id=eph_id_or_zero(ids,eph.MOON,false);
+	if(moon_eph_id==0){
 		return;
 	}
 	double t0=TimeScale::utc_to_tdb(st_utc)-1.0;
 	double t1=TimeScale::utc_to_tdb(ed_utc)+1.0;
-	const double step_planet=0.05;
+	const double step_planet=0.02;
+	const double root_step_planet=0.004;
 	for(int id : {199,299,499,599,699,799,899}){
-		if(!has_spk_obj(ids,id)){
+		int eph_id=eph_id_or_zero(ids,id,true);
+		if(eph_id==0){
 			continue;
 		}
-		auto sep_fn=[&](double t){ return sep_moon_body(eph,id,t); };
-		auto th_fn=[&](double t){
-			return body_sd_rad(eph,eph.MOON,t)+body_sd_rad(eph,id,t);
+		auto geom=[&](double t,double&sep,double&gap){
+			Vec3 moon_u;
+			Vec3 body_u;
+			double moon_sd=0.0;
+			double body_sd=0.0;
+			if(!topo_body_dir_sd(eph,eph.MOON,moon_eph_id,t,obs,moon_u,moon_sd)||
+			   !topo_body_dir_sd(eph,id,eph_id,t,obs,body_u,body_sd)){
+				return false;
+			}
+			sep=ang_sep(moon_u,body_u);
+			double lim=moon_sd+body_sd;
+			gap=sep-lim;
+			return std::isfinite(sep)&&std::isfinite(gap);
 		};
-		auto mk_evt=[&](double ju,double sep){
-			AstroEvt ev;
-			ev.kind="occultation";
-			ev.code="moon_occult_"+body_code(id);
-			ev.name="月掩"+body_zh(id);
-			ev.jd_utc=ju;
-			ev.detail=deg_note("sep_deg",sep*180.0/PI);
-			return ev;
+		auto sep_fn=[&](double t){
+			double sep=0.0;
+			double gap=0.0;
+			if(!geom(t,sep,gap)){
+				return std::numeric_limits<double>::quiet_NaN();
+			}
+			return sep;
 		};
-		scan_min_evt(out,t0,t1,step_planet,sep_fn,th_fn,mk_evt,st_utc,ed_utc);
+		auto gap_fn=[&](double t){
+			double sep=0.0;
+			double gap=0.0;
+			if(!geom(t,sep,gap)){
+				return std::numeric_limits<double>::quiet_NaN();
+			}
+			return gap;
+		};
+		double t_prev=t0;
+		double f_prev=sep_fn(t_prev);
+		double t_cur=t_prev+step_planet;
+		double f_cur=sep_fn(t_cur);
+		double last_tmax=std::numeric_limits<double>::quiet_NaN();
+		for(double t_next=t_cur+step_planet;t_next<=t1+1e-12;t_next+=step_planet){
+			double f_next=sep_fn(t_next);
+			if(std::isfinite(f_prev)&&std::isfinite(f_cur)&&std::isfinite(f_next)&&
+			   f_cur<=f_prev&&f_cur<f_next){
+				double t_max=
+					parabolic_peak(t_prev,f_prev,t_cur,f_cur,t_next,f_next);
+				double sep_max=sep_fn(t_max);
+				double gap_max=gap_fn(t_max);
+				if(std::isfinite(sep_max)&&std::isfinite(gap_max)&&gap_max<=0.0){
+					if(std::isfinite(last_tmax)&&
+					   std::fabs(last_tmax-t_max)<(1.5*step_planet)){
+						t_prev=t_cur;
+						f_prev=f_cur;
+						t_cur=t_next;
+						f_cur=f_next;
+						continue;
+					}
+					last_tmax=t_max;
+					double t_in=
+						find_contact_root_back(gap_fn,t_max,t0,root_step_planet);
+					double t_out=
+						find_contact_root_fwd(gap_fn,t_max,t1,root_step_planet);
+					const std::string base_code="moon_occult_"+body_code(id);
+					const std::string base_name="月掩"+body_zh(id);
+					push_contact_evt(out,"occultation",base_code,base_name,
+									 "ingress","入",TimeScale::tdb_to_utc(t_in),
+									 sep_fn(t_in),st_utc,ed_utc);
+					push_contact_evt(out,"occultation",base_code,base_name,"max",
+									 "最大",TimeScale::tdb_to_utc(t_max),sep_max,
+									 st_utc,ed_utc);
+					push_contact_evt(out,"occultation",base_code,base_name,
+									 "egress","出",TimeScale::tdb_to_utc(t_out),
+									 sep_fn(t_out),st_utc,ed_utc);
+				}
+			}
+			t_prev=t_cur;
+			f_prev=f_cur;
+			t_cur=t_next;
+			f_cur=f_next;
+		}
 	}
 
 	const std::vector<const StarRecord*> stars=occult_star_set(pick);
-	const double step_star=0.08;
 	if(stars.empty()){
 		return;
 	}
-
+	const double step_star=0.03;
+	const double root_step_star=0.0025;
 	std::vector<double> ts;
 	for(double t=t0;t<=t1+1e-12;t+=step_star){
 		ts.push_back(t);
@@ -691,19 +1422,67 @@ void find_occult(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 	if(ts.size()<3){
 		return;
 	}
-
-	std::vector<AppCtx> ctxs;
+	struct TopoStarCtx{
+		AppCtx app;
+		Mat3 ecef_m;
+		Vec3 moon_u;
+		double moon_sd=std::numeric_limits<double>::quiet_NaN();
+		bool ok=false;
+	};
+	std::vector<TopoStarCtx> ctxs;
 	ctxs.reserve(ts.size());
 	for(double t : ts){
-		ctxs.push_back(make_ctx_tdb(eph,t));
+		TopoStarCtx c;
+		c.app=make_ctx_tdb(eph,t);
+		c.ecef_m=ecef_rot(t);
+		c.ok=topo_body_dir_sd(eph,eph.MOON,moon_eph_id,t,obs,c.moon_u,c.moon_sd);
+		ctxs.push_back(c);
 	}
-
+	auto star_sep_idx=[&](const StarRecord&st,std::size_t idx){
+		const TopoStarCtx&c=ctxs[idx];
+		if(!c.ok){
+			return std::numeric_limits<double>::quiet_NaN();
+		}
+		Vec3 u_eq=star_eq_u(st,c.app);
+		Vec3 u_ecef=c.ecef_m*u_eq;
+		u_ecef=unit_or(u_ecef,Vec3(1.0,0.0,0.0));
+		u_ecef=apply_diurnal_aberration(u_ecef,obs.beta_ecef);
+		return ang_sep(c.moon_u,u_ecef);
+	};
 	for(const StarRecord*sp : stars){
 		const StarRecord&st=*sp;
 		std::vector<double> seps(ts.size(),std::numeric_limits<double>::quiet_NaN());
 		for(std::size_t i=0;i<ts.size();++i){
-			seps[i]=sep_moon_star_ctx(st,ctxs[i]);
+			seps[i]=star_sep_idx(st,i);
 		}
+		auto sep_fn=[&](double t){
+			TopoStarCtx c;
+			c.app=make_ctx_tdb(eph,t);
+			c.ecef_m=ecef_rot(t);
+			if(!topo_body_dir_sd(eph,eph.MOON,moon_eph_id,t,obs,c.moon_u,c.moon_sd)){
+				return std::numeric_limits<double>::quiet_NaN();
+			}
+			Vec3 u_eq=star_eq_u(st,c.app);
+			Vec3 u_ecef=c.ecef_m*u_eq;
+			u_ecef=unit_or(u_ecef,Vec3(1.0,0.0,0.0));
+			u_ecef=apply_diurnal_aberration(u_ecef,obs.beta_ecef);
+			return ang_sep(c.moon_u,u_ecef);
+		};
+		auto gap_fn=[&](double t){
+			TopoStarCtx c;
+			c.app=make_ctx_tdb(eph,t);
+			c.ecef_m=ecef_rot(t);
+			if(!topo_body_dir_sd(eph,eph.MOON,moon_eph_id,t,obs,c.moon_u,c.moon_sd)){
+				return std::numeric_limits<double>::quiet_NaN();
+			}
+			Vec3 u_eq=star_eq_u(st,c.app);
+			Vec3 u_ecef=c.ecef_m*u_eq;
+			u_ecef=unit_or(u_ecef,Vec3(1.0,0.0,0.0));
+			u_ecef=apply_diurnal_aberration(u_ecef,obs.beta_ecef);
+			double sep=ang_sep(c.moon_u,u_ecef);
+			return sep-c.moon_sd;
+		};
+		double last_tmax=std::numeric_limits<double>::quiet_NaN();
 		for(std::size_t i=1;i+1<ts.size();++i){
 			double f_prev=seps[i-1];
 			double f_cur=seps[i];
@@ -714,24 +1493,28 @@ void find_occult(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 			if(!(f_cur<=f_prev&&f_cur<f_next)){
 				continue;
 			}
-			double tp=parabolic_peak(ts[i-1],f_prev,ts[i],f_cur,ts[i+1],f_next);
-			AppCtx ctx_peak=make_ctx_tdb(eph,tp);
-			double sep=sep_moon_star_ctx(st,ctx_peak);
-			double th=body_sd_rad(eph,eph.MOON,tp);
-			if(!std::isfinite(sep)||!std::isfinite(th)||sep>th){
+			double t_max=parabolic_peak(ts[i-1],f_prev,ts[i],f_cur,ts[i+1],f_next);
+			double sep_max=sep_fn(t_max);
+			double gap_max=gap_fn(t_max);
+			if(!std::isfinite(sep_max)||!std::isfinite(gap_max)||gap_max>0.0){
 				continue;
 			}
-			double ju=TimeScale::tdb_to_utc(tp);
-			if(ju<st_utc||ju>=ed_utc){
+			if(std::isfinite(last_tmax)&&std::fabs(last_tmax-t_max)<(1.5*step_star)){
 				continue;
 			}
-			AstroEvt ev;
-			ev.kind="occultation";
-			ev.code="moon_occult_"+std::string(nz(st.id));
-			ev.name="月掩"+star_name(st);
-			ev.jd_utc=ju;
-			ev.detail=deg_note("sep_deg",sep*180.0/PI);
-			out.push_back(std::move(ev));
+			last_tmax=t_max;
+			double t_in=find_contact_root_back(gap_fn,t_max,t0,root_step_star);
+			double t_out=find_contact_root_fwd(gap_fn,t_max,t1,root_step_star);
+			const std::string base_code="moon_occult_"+std::string(nz(st.id));
+			const std::string base_name="月掩"+star_name(st);
+			push_contact_evt(out,"occultation",base_code,base_name,"ingress","入",
+							 TimeScale::tdb_to_utc(t_in),sep_fn(t_in),st_utc,
+							 ed_utc);
+			push_contact_evt(out,"occultation",base_code,base_name,"max","最大",
+							 TimeScale::tdb_to_utc(t_max),sep_max,st_utc,ed_utc);
+			push_contact_evt(out,"occultation",base_code,base_name,"egress","出",
+							 TimeScale::tdb_to_utc(t_out),sep_fn(t_out),st_utc,
+							 ed_utc);
 		}
 	}
 }
@@ -744,12 +1527,13 @@ void find_station(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 	const double step=1.0;
 	const double h=0.2;
 	for(int id : {199,299,499,599,699,799,899}){
-		if(!has_spk_obj(ids,id)){
+		int eph_id=eph_id_or_zero(ids,id,true);
+		if(eph_id==0){
 			continue;
 		}
 		auto vel=[&](double t){
-			double l1=body_lam(app,id,t-h);
-			double l2=body_lam(app,id,t+h);
+			double l1=body_lam(app,eph_id,t-h);
+			double l2=body_lam(app,eph_id,t+h);
 			return norm_pm_pi(l2-l1)/(2.0*h);
 		};
 		double tp=t0;
@@ -877,17 +1661,22 @@ MoonXg calc_moon_xg(EphRead&eph,double jd_utc){
 }
 
 std::vector<AstroEvt> calc_astro_evt(EphRead&eph,double jd_utc_start,
-									 double jd_utc_end,const StarPick&pick){
+									 double jd_utc_end,const StarPick&pick,
+									 const AstroObs&obs){
 	std::vector<AstroEvt> out;
 	if(!std::isfinite(jd_utc_start)||!std::isfinite(jd_utc_end)||
 	   !(jd_utc_end>jd_utc_start)){
 		return out;
 	}
 	const std::unordered_set<int> ids=spk_obj_set(eph);
+	const ObsSite site=make_obs_site(obs);
 	find_gelong(out,eph,jd_utc_start,jd_utc_end,ids);
-	find_quadrature(out,eph,jd_utc_start,jd_utc_end,ids);
-	find_transit(out,eph,jd_utc_start,jd_utc_end,ids);
-	find_occult(out,eph,jd_utc_start,jd_utc_end,pick,ids);
+	find_body_aspect(out,eph,jd_utc_start,jd_utc_end,ids);
+	find_star_body_aspect(out,eph,jd_utc_start,jd_utc_end,pick,ids);
+	if(site.on){
+		find_transit(out,eph,jd_utc_start,jd_utc_end,ids,site);
+		find_occult(out,eph,jd_utc_start,jd_utc_end,pick,ids,site);
+	}
 	find_station(out,eph,jd_utc_start,jd_utc_end,ids);
 	sort_uniq(out);
 	return out;
