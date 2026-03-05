@@ -1045,104 +1045,6 @@ void find_star_body_aspect(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 	}
 }
 
-void find_quadrature(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
-					 double ed_utc,const std::unordered_set<int>&ids){
-	struct QDef{
-		int id=0;
-		double step=0.25;
-	};
-	const std::array<QDef,6> defs={
-		QDef{301,0.08},QDef{499,0.25},QDef{599,0.25},
-		QDef{699,0.25},QDef{799,0.25},QDef{899,0.25},
-	};
-	AppLon app(eph);
-	double t0=TimeScale::utc_to_tdb(st_utc)-2.0;
-	double t1=TimeScale::utc_to_tdb(ed_utc)+2.0;
-	for(const auto&def : defs){
-		int eph_id=eph_id_or_zero(ids,def.id,def.id!=301);
-		if(eph_id==0){
-			continue;
-		}
-		for(double target : {0.5*PI,-0.5*PI}){
-			auto fn=[&](double t){
-				double d=norm_pm_pi(body_lam(app,eph_id,t)-app.sun_calc(t).first);
-				return norm_pm_pi(d-target);
-			};
-			double tp=t0;
-			double fp=fn(tp);
-			for(double tc=t0+def.step;tc<=t1+1e-12;tc+=def.step){
-				double fc=fn(tc);
-				bool cross=(fp==0.0)||(fc==0.0)||(fp<0.0&&fc>0.0)||
-						   (fp>0.0&&fc<0.0);
-				if(cross&&std::fabs(fp)<1.5&&std::fabs(fc)<1.5){
-					double tr=bisect_root(fn,tp,tc);
-					if(std::isfinite(tr)){
-						double ju=TimeScale::tdb_to_utc(tr);
-						if(ju>=st_utc&&ju<ed_utc){
-							bool east=target>0.0;
-							AstroEvt ev;
-							ev.kind="quadrature";
-							ev.code=body_code(def.id);
-							ev.code+=east?"_east":"_west";
-							ev.name=body_zh(def.id)+(east?"东方照":"西方照");
-							ev.jd_utc=ju;
-							out.push_back(std::move(ev));
-						}
-					}
-				}
-				tp=tc;
-				fp=fc;
-			}
-		}
-	}
-}
-
-void find_opposition(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
-					 double ed_utc,const std::unordered_set<int>&ids){
-	struct ODef{
-		int id=0;
-		double step=0.5;
-	};
-	const std::array<ODef,5> defs={
-		ODef{499,0.25},ODef{599,0.5},ODef{699,0.5},ODef{799,1.0},ODef{899,1.0},
-	};
-	AppLon app(eph);
-	double t0=TimeScale::utc_to_tdb(st_utc)-5.0;
-	double t1=TimeScale::utc_to_tdb(ed_utc)+5.0;
-	for(const auto&def : defs){
-		int eph_id=eph_id_or_zero(ids,def.id,true);
-		if(eph_id==0){
-			continue;
-		}
-		auto fn=[&](double t){
-			double d=norm_pm_pi(body_lam(app,eph_id,t)-app.sun_calc(t).first-PI);
-			return d;
-		};
-		double tp=t0;
-		double fp=fn(tp);
-		for(double tc=t0+def.step;tc<=t1+1e-12;tc+=def.step){
-			double fc=fn(tc);
-			bool cross=(fp==0.0)||(fc==0.0)||(fp<0.0&&fc>0.0)||(fp>0.0&&fc<0.0);
-			if(cross&&std::fabs(fp)<1.6&&std::fabs(fc)<1.6){
-				double tr=bisect_root(fn,tp,tc);
-				if(std::isfinite(tr)){
-					double ju=TimeScale::tdb_to_utc(tr);
-					if(ju>=st_utc&&ju<ed_utc){
-						AstroEvt ev;
-						ev.kind="opposition";
-						ev.code=body_code(def.id)+"_opposition";
-						ev.name=body_zh(def.id)+"冲日";
-						ev.jd_utc=ju;
-						out.push_back(std::move(ev));
-					}
-				}
-			}
-			tp=tc;
-			fp=fc;
-		}
-	}
-}
-
 template<typename GapFn>
 double find_contact_root_back(const GapFn&gap_fn,double t_center,double t_floor,
 							  double step){
@@ -1241,8 +1143,20 @@ void find_transit(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 			Vec3 body_u;
 			double sun_sd=0.0;
 			double body_sd=0.0;
+			// Guard against false "transit" near superior conjunction:
+			// only accept when the inner planet is truly in front of the Sun.
 			if(!topo_body_dir_sd(eph,eph.SUN,sun_eph_id,t,obs,sun_u,sun_sd)||
 			   !topo_body_dir_sd(eph,id,eph_id,t,obs,body_u,body_sd)){
+				return false;
+			}
+			Vec3 sun_geo=eph.get_pos(sun_eph_id,eph.EARTH,t);
+			Vec3 body_geo=eph.get_pos(eph_id,eph.EARTH,t);
+			double sun_range=sun_geo.norm();
+			double body_range=body_geo.norm();
+			if(!std::isfinite(sun_range)||!std::isfinite(body_range)){
+				return false;
+			}
+			if(!(body_range<sun_range)){
 				return false;
 			}
 			sep=ang_sep(sun_u,body_u);

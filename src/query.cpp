@@ -23,6 +23,7 @@
 #include<vector>
 
 #include "lunar/app_long.hpp"
+#include "lunar/almanac.hpp"
 #include "lunar/calendar.hpp"
 #include "lunar/events.hpp"
 #include "lunar/format.hpp"
@@ -592,6 +593,7 @@ struct AtData{
 	bool has_eot=false;
 	EoTData eot;
 	MoonXg moon_xg;
+	HliData hli;
 };
 
 struct BatchLine{
@@ -724,7 +726,8 @@ std::vector<BatchLine> read_bat(bool from_stdin,const std::string&input_file){
 AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 				 const std::string&display_tz,const std::string&time_raw,
 				 const std::string&tz_in,bool inc_ev,bool calc_eot,
-				 double eot_lon_deg,QueryCache*cache=nullptr){
+				 double eot_lon_deg,double hli_lon_deg,
+				 QueryCache*cache=nullptr){
 	AtData out;
 	out.time_raw=time_raw;
 	out.tz_in=tz_in;
@@ -749,6 +752,38 @@ AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 	out.phase_name=phase_elo(out.elong);
 	out.lunar_date=res_lun(eph,jd_utc,cache);
 	out.moon_xg=calc_moon_xg(eph,jd_utc);
+
+	double lon_use=std::isfinite(hli_lon_deg)
+					   ?hli_lon_deg
+					   :static_cast<double>(tz_disp)/60.0*15.0;
+	int ly=0;
+	int lm=0;
+	int ld=0;
+	int lhh=0;
+	int lmm=0;
+	double lss=0.0;
+	jd2greg(jd_utc+static_cast<double>(tz_disp)/1440.0,ly,lm,ld,lhh,lmm,lss);
+	LunCal6 local_calc_hli(eph);
+	LunCal6&lc_hli=cache?cache->calc:local_calc_hli;
+	SolLunCal local_solver_hli(eph);
+	SolLunCal&solver_hli=cache?cache->solver:local_solver_hli;
+	HliInput hli_in;
+	hli_in.jd_utc=jd_utc;
+	hli_in.gy=ly;
+	hli_in.gm=lm;
+	hli_in.gd=ld;
+	hli_in.hh=lhh;
+	hli_in.mm=lmm;
+	hli_in.ss=lss;
+	hli_in.tz_off=tz_disp;
+	hli_in.lon_deg=lon_use;
+	hli_in.lun_year=out.lunar_date.lunar_year;
+	hli_in.lun_month=out.lunar_date.lun_mno;
+	hli_in.lun_day=out.lunar_date.lunar_day;
+	hli_in.lun_leap=out.lunar_date.is_leap;
+	hli_in.phase_name=out.phase_name;
+	hli_in.moon_xg=out.moon_xg;
+	out.hli=calc_hli(eph,lc_hli,solver_hli,app,hli_in);
 	out.inc_ev=inc_ev;
 	if(inc_ev){
 		out.near_ev=comp_near(eph,jd_utc,tz_disp,cache);
@@ -766,13 +801,13 @@ AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 AtData at_ftxt(EphRead&eph,const std::string&time_raw,
 			   const std::string&input_tz,int tz_disp,
 			   const std::string&display_tz,bool inc_ev,bool calc_eot,
-			   double eot_lon_deg,
+			   double eot_lon_deg,double hli_lon_deg,
 			   QueryCache*cache=nullptr){
 	IsoTime parsed=parse_iso(time_raw,input_tz);
 	std::string tz_in=
 		parsed.has_tz?fmt_tz(parsed.tz_off):fmt_tz(parse_tz(input_tz));
 	return at_fromjd(eph,parsed.jd_utc,tz_disp,display_tz,time_raw,tz_in,
-					 inc_ev,calc_eot,eot_lon_deg,cache);
+					 inc_ev,calc_eot,eot_lon_deg,hli_lon_deg,cache);
 }
 
 bool is_full_moon_ev(const EventRec&ev){
@@ -1366,6 +1401,127 @@ void wr_nslot(JsonWriter&w,const NearEvt&ev,EphRead&eph){
 	wr_ejson(w,ev.event,eph);
 }
 
+void wr_gz_json(JsonWriter&w,const GzNode&g){
+	w.obj_begin();
+	w.key("text");
+	w.value(g.text);
+	w.key("stem");
+	w.value(g.stem);
+	w.key("branch");
+	w.value(g.branch);
+	w.obj_end();
+}
+
+void wr_hli_json(JsonWriter&w,const HliData&h){
+	w.obj_begin();
+	w.key("year_lunar");
+	wr_gz_json(w,h.y_lun);
+	w.key("year_lchun");
+	wr_gz_json(w,h.y_lchun);
+	w.key("month");
+	wr_gz_json(w,h.m_gz);
+	w.key("day");
+	wr_gz_json(w,h.d_gz);
+	w.key("hour_clock");
+	wr_gz_json(w,h.h_gz);
+	w.key("hour_true_solar");
+	wr_gz_json(w,h.h_gz_true);
+	w.key("bazi_clock");
+	w.value(h.bazi_clock);
+	w.key("bazi_true");
+	w.value(h.bazi_true);
+
+	w.key("jianchu");
+	w.value(h.jianchu);
+	w.key("duty_god");
+	w.value(h.duty_god);
+	w.key("duty_tag");
+	w.value(h.duty_tag);
+	w.key("clash");
+	w.value(h.clash);
+	w.key("chong_sha");
+	w.value(h.chong_sha);
+	w.key("zodiac_day");
+	w.value(h.zodiac_day);
+	w.key("six_he");
+	w.value(h.six_he);
+	w.key("three_he");
+	w.value(h.three_he);
+	w.key("pengzu");
+	w.value(h.pengzu);
+	w.key("nayin");
+	w.value(h.nayin);
+	w.key("wuxing_day");
+	w.value(h.wx_day);
+	w.key("fetal_god");
+	w.value(h.fetal_god);
+	w.key("meridian");
+	w.value(h.meridian);
+	w.key("lucky_dir");
+	w.value(h.lucky_dir);
+	w.key("wealth_dir");
+	w.value(h.wealth_dir);
+	w.key("mascot_dir");
+	w.value(h.mascot_dir);
+	w.key("sun_noble_dir");
+	w.value(h.sun_noble_dir);
+	w.key("moon_noble_dir");
+	w.value(h.moon_noble_dir);
+	w.key("xiu28");
+	w.value(h.xiu28);
+	w.key("xiu_star");
+	w.value(h.xiu_id);
+
+	w.key("good_gods");
+	w.arr_begin();
+	for(const auto&s : h.good_gods){
+		w.value(s);
+	}
+	w.arr_end();
+	w.key("bad_gods");
+	w.arr_begin();
+	for(const auto&s : h.bad_gods){
+		w.value(s);
+	}
+	w.arr_end();
+	w.key("yi");
+	w.arr_begin();
+	for(const auto&s : h.yi){
+		w.value(s);
+	}
+	w.arr_end();
+	w.key("ji");
+	w.arr_begin();
+	for(const auto&s : h.ji){
+		w.value(s);
+	}
+	w.arr_end();
+	w.key("yi_ji_level");
+	w.value(h.yi_ji_level);
+	w.key("yi_ji_rule");
+	w.value(h.yi_ji_rule);
+	w.key("lon_deg");
+	w.value(h.lon_deg);
+	w.key("eot_minutes");
+	w.value(h.eot_min);
+	w.key("true_solar_minutes");
+	w.value(h.tst_min);
+	w.key("hour_jx");
+	w.arr_begin();
+	for(const auto&x : h.hour_jx){
+		w.obj_begin();
+		w.key("slot");
+		w.value(x.slot);
+		w.key("gz");
+		w.value(x.gz);
+		w.key("luck");
+		w.value(x.luck);
+		w.obj_end();
+	}
+	w.arr_end();
+	w.obj_end();
+}
+
 void wr_adjs(JsonWriter&w,const AtData&d,EphRead&eph){
 	w.obj_begin();
 	w.key("sun_lam");
@@ -1397,6 +1553,8 @@ void wr_adjs(JsonWriter&w,const AtData&d,EphRead&eph){
 	w.obj_end();
 	w.key("lunar_date");
 	wr_ljson(w,d.lunar_date);
+	w.key("huangli");
+	wr_hli_json(w,d.hli);
 	w.key("eot");
 	if(!d.has_eot){
 		w.null_val();
@@ -1458,6 +1616,8 @@ void wr_aijs(JsonWriter&w,const AtData&d){
 	}else{
 		w.null_val();
 	}
+	w.key("hli_lon_deg");
+	w.value(d.hli.lon_deg);
 	w.obj_end();
 }
 
@@ -1504,6 +1664,43 @@ void wr_atxt(std::ostream&os,const AtData&d,bool hdr_on){
 	os<<"data.lun_mlab="<<d.lunar_date.lun_mlab<<"\n";
 	os<<"data.lunar_day="<<d.lunar_date.lunar_day<<"\n";
 	os<<"data.lun_label="<<d.lunar_date.lun_label<<"\n";
+	os<<"data.hli.y_lun="<<d.hli.y_lun.text<<"\n";
+	os<<"data.hli.y_lchun="<<d.hli.y_lchun.text<<"\n";
+	os<<"data.hli.month="<<d.hli.m_gz.text<<"\n";
+	os<<"data.hli.day="<<d.hli.d_gz.text<<"\n";
+	os<<"data.hli.hour_clock="<<d.hli.h_gz.text<<"\n";
+	os<<"data.hli.hour_true="<<d.hli.h_gz_true.text<<"\n";
+	os<<"data.hli.bazi_clock="<<d.hli.bazi_clock<<"\n";
+	os<<"data.hli.bazi_true="<<d.hli.bazi_true<<"\n";
+	os<<"data.hli.jianchu="<<d.hli.jianchu<<"\n";
+	os<<"data.hli.duty_god="<<d.hli.duty_god<<"\n";
+	os<<"data.hli.duty_tag="<<d.hli.duty_tag<<"\n";
+	os<<"data.hli.clash="<<d.hli.clash<<"\n";
+	os<<"data.hli.chong_sha="<<d.hli.chong_sha<<"\n";
+	os<<"data.hli.zodiac_day="<<d.hli.zodiac_day<<"\n";
+	os<<"data.hli.six_he="<<d.hli.six_he<<"\n";
+	os<<"data.hli.three_he="<<d.hli.three_he<<"\n";
+	os<<"data.hli.pengzu="<<d.hli.pengzu<<"\n";
+	os<<"data.hli.nayin="<<d.hli.nayin<<"\n";
+	os<<"data.hli.wuxing_day="<<d.hli.wx_day<<"\n";
+	os<<"data.hli.fetal_god="<<d.hli.fetal_god<<"\n";
+	os<<"data.hli.meridian="<<d.hli.meridian<<"\n";
+	os<<"data.hli.lucky_dir="<<d.hli.lucky_dir<<"\n";
+	os<<"data.hli.wealth_dir="<<d.hli.wealth_dir<<"\n";
+	os<<"data.hli.mascot_dir="<<d.hli.mascot_dir<<"\n";
+	os<<"data.hli.sun_noble_dir="<<d.hli.sun_noble_dir<<"\n";
+	os<<"data.hli.moon_noble_dir="<<d.hli.moon_noble_dir<<"\n";
+	os<<"data.hli.xiu28="<<d.hli.xiu28<<"\n";
+	os<<"data.hli.xiu_star="<<d.hli.xiu_id<<"\n";
+	os<<"data.hli.yi_ji_level="<<d.hli.yi_ji_level<<"\n";
+	os<<"data.hli.yi_ji_rule="<<d.hli.yi_ji_rule<<"\n";
+	os<<"data.hli.yi="<<join_pipe(d.hli.yi)<<"\n";
+	os<<"data.hli.ji="<<join_pipe(d.hli.ji)<<"\n";
+	os<<"data.hli.good_gods="<<join_pipe(d.hli.good_gods)<<"\n";
+	os<<"data.hli.bad_gods="<<join_pipe(d.hli.bad_gods)<<"\n";
+	os<<"data.hli.lon_deg="<<format_num(d.hli.lon_deg)<<"\n";
+	os<<"data.hli.eot_min="<<format_num(d.hli.eot_min)<<"\n";
+	os<<"data.hli.tst_min="<<format_num(d.hli.tst_min)<<"\n";
 	if(d.has_eot){
 		os<<"data.eot.longitude_deg="<<format_num(d.eot.lon_deg)<<"\n";
 		os<<"data.eot.longitude_rad="<<format_num(d.eot.lon_rad)<<"\n";
@@ -1522,6 +1719,11 @@ void wr_atxt(std::ostream&os,const AtData&d,bool hdr_on){
 		wr_etln(os,"st_next",d.near_ev.solar_next);
 		wr_etln(os,"lp_prev",d.near_ev.phase_prev);
 		wr_etln(os,"lp_next",d.near_ev.phase_next);
+	}
+	os<<"[hour_jx]\n";
+	os<<"slot\tgz\tluck\n";
+	for(const auto&x : d.hli.hour_jx){
+		os<<x.slot<<"\t"<<x.gz<<"\t"<<x.luck<<"\n";
 	}
 }
 
@@ -1799,7 +2001,7 @@ int cmd_test(const std::vector<std::string>&args){
 		c1.id="at_illum";
 		try{
 			AtData atd=at_ftxt(eph,"2025-06-01T00:00:00+08:00","+08:00",480,
-							   "+08:00",true,false,0.0,&cache);
+							   "+08:00",true,false,0.0,120.0,&cache);
 			c1.pass=(atd.ill_pct>=0.0&&atd.ill_pct<=100.0);
 			c1.message=c1.pass?"ok":"illumination out of [0,100]";
 		}catch(const std::exception&ex){
@@ -2073,7 +2275,7 @@ void use_day(){
 		<<"  lunar day <bsp> <YYYY-MM-DD>\n"
 		<<"    [--tz ...] [--format json|txt|csv|jsonl] [--out ...] [--pretty "
 		  "0|1] [--quiet]\n"
-		<<"    [--at HH:MM[:SS]] [--events 0|1] [--astro 0|1]\n"
+		<<"    [--at HH:MM[:SS]] [--events 0|1] [--lon <deg>] [--astro 0|1]\n"
 		<<"    [--astro-mode less|all|pick] [--astro-pick id,en,zh,...]\n"
 		<<"    [--astro-lat deg --astro-lon deg [--astro-height m]]\n"
 		<<"Examples:\n"
@@ -2175,7 +2377,7 @@ void use_alm(){
 	std::cout<<"Usage:\n"
 			 <<"  lunar almanac <bsp> <YYYY-MM-DD>\n"
 			 <<"    [--tz ...] [--format json|txt|csv] [--out ...] [--pretty "
-			   "0|1] [--quiet]\n"
+			   "0|1] [--quiet] [--lon <deg>]\n"
 			 <<"Examples:\n"
 			 <<"  lunar almanac D:\\de442.bsp 2025-09-17\n"
 			 <<"  lunar almanac D:\\de442.bsp 2025-09-17 --format json --out "
@@ -2229,9 +2431,12 @@ void cli_at(const AtArgs&args){
 	int tz_disp=parse_tz(args.tz);
 	EphRead eph(args.ephem);
 	QueryCache cache(eph);
+	double hli_lon=args.calc_eot
+					   ?args.eot_lon_deg
+					   :static_cast<double>(tz_disp)/60.0*15.0;
 	AtData result=
 		at_ftxt(eph,args.time_raw,args.input_tz,tz_disp,args.tz,args.events,
-				args.calc_eot,args.eot_lon_deg,&cache);
+				args.calc_eot,args.eot_lon_deg,hli_lon,&cache);
 
 	OutTgt out=open_out(args.out);
 	const FmtMap fmt_handlers={
@@ -2453,9 +2658,12 @@ int run_abcli(const AtArgs&args){
 		row.line_no=line.line_no;
 		row.raw=line.raw;
 		try{
-			row.data=
-				at_ftxt(eph,line.raw,args.input_tz,tz_disp,args.tz,args.events,
-						args.calc_eot,args.eot_lon_deg,&cache);
+			double hli_lon=args.calc_eot
+							   ?args.eot_lon_deg
+							   :static_cast<double>(tz_disp)/60.0*15.0;
+			row.data=at_ftxt(eph,line.raw,args.input_tz,tz_disp,args.tz,
+							 args.events,args.calc_eot,args.eot_lon_deg,
+							 hli_lon,&cache);
 			row.ok=true;
 		}catch(const std::exception&ex){
 			row.ok=false;
@@ -2538,7 +2746,9 @@ int run_abcli(const AtArgs&args){
 			 std::ostream&os=*out.stream;
 			 os<<"tool=lunar format=txt type=at-batch tz_display="<<args.tz
 			   <<"\n";
-			 os<<"line_no\tstatus\traw\till_pct\tphase_name\tlunar_date";
+			 os<<"line_no\tstatus\traw\till_pct\tphase_name\tlunar_date\t"
+			   "y_lun_gz\ty_lchun_gz\tm_gz\td_gz\th_gz\th_true_gz\tjianchu\t"
+			   "chong_sha\tyi\tji";
 			 if(args.calc_eot){
 				 os<<"\teot_minutes";
 			 }
@@ -2548,13 +2758,24 @@ int run_abcli(const AtArgs&args){
 				 if(row.ok){
 					 os<<"ok\t"<<row.raw<<"\t"<<format_num(row.data.ill_pct)
 					   <<"\t"<<row.data.phase_name<<"\t"
-					   <<row.data.lunar_date.lun_label;
+					   <<row.data.lunar_date.lun_label<<"\t"
+					   <<row.data.hli.y_lun.text<<"\t"
+					   <<row.data.hli.y_lchun.text<<"\t"
+					   <<row.data.hli.m_gz.text<<"\t"
+					   <<row.data.hli.d_gz.text<<"\t"
+					   <<row.data.hli.h_gz.text<<"\t"
+					   <<row.data.hli.h_gz_true.text<<"\t"
+					   <<row.data.hli.jianchu<<"\t"
+					   <<row.data.hli.chong_sha<<"\t"
+					   <<join_pipe(row.data.hli.yi)<<"\t"
+					   <<join_pipe(row.data.hli.ji);
 					 if(args.calc_eot){
 						 os<<"\t"<<format_num(row.data.eot.eot_minutes);
 					 }
 					 os<<"\t\n";
 				 }else{
-					 os<<"error\t"<<row.raw<<"\t\t\t";
+					 os<<"error\t"<<row.raw
+					   <<"\t\t\t\t\t\t\t\t\t\t\t\t\t";
 					 if(args.calc_eot){
 						 os<<"\t";
 					 }
@@ -3557,6 +3778,7 @@ int cmd_day(const std::vector<std::string>&args){
 	bool has_astro_lat=false;
 	bool has_astro_lon=false;
 	bool has_astro_h=false;
+	double hli_lon_deg=120.0;
 	const OptMap handlers={
 		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
 					const std::string&opt){ tz=req_val(src,idx,opt); }},
@@ -3577,6 +3799,10 @@ int cmd_day(const std::vector<std::string>&args){
 		{"--events",[&](const std::vector<std::string>&src,std::size_t&idx,
 						const std::string&opt){
 			 inc_ev=parse_bool01(req_val(src,idx,opt),"--events");
+		 }},
+		{"--lon",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){
+			 hli_lon_deg=parse_double(req_val(src,idx,opt),opt);
 		 }},
 		{"--astro",[&](const std::vector<std::string>&src,std::size_t&idx,
 					   const std::string&opt){
@@ -3649,7 +3875,7 @@ int cmd_day(const std::vector<std::string>&args){
 	QueryCache cache(eph);
 	AtData atd=
 		at_fromjd(eph,smp_jdutc,tz_off,tz,date_text+"T"+at_time,"+08:00",false,
-				  false,0.0,&cache);
+				  false,0.0,hli_lon_deg,&cache);
 
 	std::vector<EventRec> day_events;
 	if(inc_ev){
@@ -3688,6 +3914,8 @@ int cmd_day(const std::vector<std::string>&args){
 		w.value(at_time);
 		w.key("smp_jdutc");
 		w.value(smp_jdutc);
+		w.key("lon_deg");
+		w.value(hli_lon_deg);
 		w.key("astro");
 		w.value(inc_astro);
 		w.key("astro_mode");
@@ -3727,6 +3955,8 @@ int cmd_day(const std::vector<std::string>&args){
 		w.obj_begin();
 		w.key("lunar_date");
 		wr_ljson(w,atd.lunar_date);
+		w.key("huangli");
+		wr_hli_json(w,atd.hli);
 		w.key("ill_pct");
 		w.value(atd.ill_pct);
 		w.key("phase_name");
@@ -3780,7 +4010,14 @@ int cmd_day(const std::vector<std::string>&args){
 			 std::string astro_summary=join_pipe(astro_names);
 			 *out.stream<<"date,lun_label,lun_mlab,is_leap,lunar_"
 						  "day,ill_pct,phase_name,moon_xg_region,moon_xg_star,"
-						  "moon_xg_sep_deg,smp_tlociso,ev_sum,astro_ev_sum\n";
+						  "moon_xg_sep_deg,smp_tlociso,ev_sum,astro_ev_sum,"
+						  "y_lun_gz,y_lchun_gz,m_gz,d_gz,h_gz,h_true_gz,jianchu,"
+						  "bazi_clock,bazi_true,duty_god,duty_tag,clash,"
+						  "chong_sha,zodiac_day,six_he,"
+						  "three_he,pengzu,nayin,wuxing_day,fetal_god,meridian,"
+						  "lucky_dir,wealth_dir,mascot_dir,sun_noble_dir,"
+						  "moon_noble_dir,xiu28,xiu_star,yi_ji_level,yi_ji_rule,"
+						  "good_gods,bad_gods,yi,ji\n";
 			 *out.stream<<csv_quote(date_text)<<","
 						<<csv_quote(atd.lunar_date.lun_label)<<","
 						<<csv_quote(atd.lunar_date.lun_mlab)<<","
@@ -3791,13 +4028,48 @@ int cmd_day(const std::vector<std::string>&args){
 						<<csv_quote(atd.moon_xg.star_name)<<","
 						<<format_num(atd.moon_xg.sep_deg)<<","
 						<<csv_quote(atd.local_iso)<<","<<csv_quote(summary)<<","
-						<<csv_quote(astro_summary)<<"\n";
+						<<csv_quote(astro_summary)<<","
+						<<csv_quote(atd.hli.y_lun.text)<<","
+						<<csv_quote(atd.hli.y_lchun.text)<<","
+						<<csv_quote(atd.hli.m_gz.text)<<","
+						<<csv_quote(atd.hli.d_gz.text)<<","
+						<<csv_quote(atd.hli.h_gz.text)<<","
+						<<csv_quote(atd.hli.h_gz_true.text)<<","
+						<<csv_quote(atd.hli.jianchu)<<","
+						<<csv_quote(atd.hli.bazi_clock)<<","
+						<<csv_quote(atd.hli.bazi_true)<<","
+						<<csv_quote(atd.hli.duty_god)<<","
+						<<csv_quote(atd.hli.duty_tag)<<","
+						<<csv_quote(atd.hli.clash)<<","
+						<<csv_quote(atd.hli.chong_sha)<<","
+						<<csv_quote(atd.hli.zodiac_day)<<","
+						<<csv_quote(atd.hli.six_he)<<","
+						<<csv_quote(atd.hli.three_he)<<","
+						<<csv_quote(atd.hli.pengzu)<<","
+						<<csv_quote(atd.hli.nayin)<<","
+						<<csv_quote(atd.hli.wx_day)<<","
+						<<csv_quote(atd.hli.fetal_god)<<","
+						<<csv_quote(atd.hli.meridian)<<","
+						<<csv_quote(atd.hli.lucky_dir)<<","
+						<<csv_quote(atd.hli.wealth_dir)<<","
+						<<csv_quote(atd.hli.mascot_dir)<<","
+						<<csv_quote(atd.hli.sun_noble_dir)<<","
+						<<csv_quote(atd.hli.moon_noble_dir)<<","
+						<<csv_quote(atd.hli.xiu28)<<","
+						<<csv_quote(atd.hli.xiu_id)<<","
+						<<atd.hli.yi_ji_level<<","
+						<<csv_quote(atd.hli.yi_ji_rule)<<","
+						<<csv_quote(join_pipe(atd.hli.good_gods))<<","
+						<<csv_quote(join_pipe(atd.hli.bad_gods))<<","
+						<<csv_quote(join_pipe(atd.hli.yi))<<","
+						<<csv_quote(join_pipe(atd.hli.ji))<<"\n";
 		 }},
 		{"txt",[&](){
 			 std::ostream&os=*out.stream;
 			 os<<"tool=lunar format=txt type=day tz_display="<<tz<<"\n";
 			 os<<"input.date="<<date_text<<"\n";
 			 os<<"input.smp_time="<<at_time<<"\n";
+			 os<<"input.lon_deg="<<format_num(hli_lon_deg)<<"\n";
 			 os<<"input.astro="<<(inc_astro?"1":"0")<<"\n";
 			 os<<"input.astro_mode="<<astro_mode_text<<"\n";
 			 os<<"input.astro_pick="<<astro_pick_csv<<"\n";
@@ -3818,6 +4090,40 @@ int cmd_day(const std::vector<std::string>&args){
 			 os<<"data.moon_xg.star_id="<<atd.moon_xg.star_id<<"\n";
 			 os<<"data.moon_xg.star_name="<<atd.moon_xg.star_name<<"\n";
 			 os<<"data.moon_xg.sep_deg="<<format_num(atd.moon_xg.sep_deg)<<"\n";
+			 os<<"data.hli.y_lun="<<atd.hli.y_lun.text<<"\n";
+			 os<<"data.hli.y_lchun="<<atd.hli.y_lchun.text<<"\n";
+			 os<<"data.hli.month="<<atd.hli.m_gz.text<<"\n";
+			 os<<"data.hli.day="<<atd.hli.d_gz.text<<"\n";
+			 os<<"data.hli.hour="<<atd.hli.h_gz.text<<"\n";
+			 os<<"data.hli.hour_true="<<atd.hli.h_gz_true.text<<"\n";
+			 os<<"data.hli.bazi_clock="<<atd.hli.bazi_clock<<"\n";
+			 os<<"data.hli.bazi_true="<<atd.hli.bazi_true<<"\n";
+			 os<<"data.hli.jianchu="<<atd.hli.jianchu<<"\n";
+			 os<<"data.hli.duty_god="<<atd.hli.duty_god<<"\n";
+			 os<<"data.hli.duty_tag="<<atd.hli.duty_tag<<"\n";
+			 os<<"data.hli.clash="<<atd.hli.clash<<"\n";
+			 os<<"data.hli.chong_sha="<<atd.hli.chong_sha<<"\n";
+			 os<<"data.hli.zodiac_day="<<atd.hli.zodiac_day<<"\n";
+			 os<<"data.hli.six_he="<<atd.hli.six_he<<"\n";
+			 os<<"data.hli.three_he="<<atd.hli.three_he<<"\n";
+			 os<<"data.hli.pengzu="<<atd.hli.pengzu<<"\n";
+			 os<<"data.hli.nayin="<<atd.hli.nayin<<"\n";
+			 os<<"data.hli.wuxing_day="<<atd.hli.wx_day<<"\n";
+			 os<<"data.hli.fetal_god="<<atd.hli.fetal_god<<"\n";
+			 os<<"data.hli.meridian="<<atd.hli.meridian<<"\n";
+			 os<<"data.hli.lucky_dir="<<atd.hli.lucky_dir<<"\n";
+			 os<<"data.hli.wealth_dir="<<atd.hli.wealth_dir<<"\n";
+			 os<<"data.hli.mascot_dir="<<atd.hli.mascot_dir<<"\n";
+			 os<<"data.hli.sun_noble_dir="<<atd.hli.sun_noble_dir<<"\n";
+			 os<<"data.hli.moon_noble_dir="<<atd.hli.moon_noble_dir<<"\n";
+			 os<<"data.hli.xiu28="<<atd.hli.xiu28<<"\n";
+			 os<<"data.hli.xiu_star="<<atd.hli.xiu_id<<"\n";
+			 os<<"data.hli.yi_ji_level="<<atd.hli.yi_ji_level<<"\n";
+			 os<<"data.hli.yi_ji_rule="<<atd.hli.yi_ji_rule<<"\n";
+			 os<<"data.hli.good_gods="<<join_pipe(atd.hli.good_gods)<<"\n";
+			 os<<"data.hli.bad_gods="<<join_pipe(atd.hli.bad_gods)<<"\n";
+			 os<<"data.hli.yi="<<join_pipe(atd.hli.yi)<<"\n";
+			 os<<"data.hli.ji="<<join_pipe(atd.hli.ji)<<"\n";
 			 os<<"data.smp_liso="<<atd.local_iso<<"\n";
 			 os<<"[events]\n";
 			 os<<"kind\tcode\tname\tjd_utc\ttm_liso\n";
@@ -3830,6 +4136,11 @@ int cmd_day(const std::vector<std::string>&args){
 			 for(const auto&ev : astro_events){
 				 os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"
 				   <<format_num(ev.jd_utc)<<"\t"<<ev.loc_iso<<"\n";
+			 }
+			 os<<"[hour_jx]\n";
+			 os<<"slot\tgz\tluck\n";
+			 for(const auto&x : atd.hli.hour_jx){
+				 os<<x.slot<<"\t"<<x.gz<<"\t"<<x.luck<<"\n";
 			 }
 		 }},
 	};
@@ -3996,7 +4307,7 @@ int cmd_mview(const std::vector<std::string>&args){
 	for(int d=1;d<=n_days;++d){
 		double smp_jdutc=greg2jd(year,month,d,12,0,0.0)-UTC8DAY;
 		AtData atd=at_fromjd(eph,smp_jdutc,tz_off,tz,ymd_str(year,month,d),
-							 "+08:00",false,false,0.0,&cache);
+							 "+08:00",false,false,0.0,120.0,&cache);
 		std::vector<std::string> ev_names;
 		auto it=day2ev.find(d);
 		if(it!=day2ev.end()){
@@ -5167,6 +5478,7 @@ int cmd_alm(const std::vector<std::string>&args){
 	std::string out_path;
 	bool pretty=cfg.def_prety;
 	bool quiet=false;
+	double hli_lon_deg=120.0;
 	const OptMap handlers={
 		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
 					const std::string&opt){ tz=req_val(src,idx,opt); }},
@@ -5182,6 +5494,10 @@ int cmd_alm(const std::vector<std::string>&args){
 		 }},
 		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
 					   const std::string&){ quiet=true; }},
+		{"--lon",[&](const std::vector<std::string>&src,std::size_t&idx,
+					 const std::string&opt){
+			 hli_lon_deg=parse_double(req_val(src,idx,opt),opt);
+		 }},
 	};
 
 	for(std::size_t i=2;i<args.size();++i){
@@ -5201,7 +5517,7 @@ int cmd_alm(const std::vector<std::string>&args){
 	QueryCache cache(eph);
 	AtData atd=
 		at_fromjd(eph,smp_jdutc,tz_off,tz,date_text+"T12:00:00","+08:00",false,
-				  false,0.0,&cache);
+				  false,0.0,hli_lon_deg,&cache);
 	std::set<int> years={y-1,y,y+1};
 	std::vector<EventRec> all_events=
 		col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr);
@@ -5230,11 +5546,15 @@ int cmd_alm(const std::vector<std::string>&args){
 			 w.obj_begin();
 			 w.key("date");
 			 w.value(date_text);
+			 w.key("lon_deg");
+			 w.value(hli_lon_deg);
 			 w.obj_end();
 			 w.key("data");
 			 w.obj_begin();
 			 w.key("lunar_date");
 			 wr_ljson(w,atd.lunar_date);
+			 w.key("huangli");
+			 wr_hli_json(w,atd.hli);
 			 w.key("ill_pct");
 			 w.value(atd.ill_pct);
 			 w.key("phase_name");
@@ -5271,18 +5591,94 @@ int cmd_alm(const std::vector<std::string>&args){
 				 fest_sum+=day_fest[i].name;
 			 }
 			 *out.stream<<"date,lun_label,ill_pct,phase_name,"
-						  "events,festivals\n";
+						  "events,festivals,y_lun_gz,y_lchun_gz,m_gz,d_gz,"
+						  "h_gz,h_true_gz,jianchu,bazi_clock,bazi_true,duty_god,"
+						  "duty_tag,clash,"
+						  "chong_sha,zodiac_day,six_he,three_he,pengzu,nayin,"
+						  "wuxing_day,fetal_god,meridian,lucky_dir,wealth_dir,"
+						  "mascot_dir,sun_noble_dir,moon_noble_dir,xiu28,"
+						  "xiu_star,yi_ji_level,yi_ji_rule,good_gods,bad_gods,"
+						  "yi,ji\n";
 			 *out.stream<<csv_quote(date_text)<<","
 						<<csv_quote(atd.lunar_date.lun_label)<<","
 						<<format_num(atd.ill_pct)<<","
 						<<csv_quote(atd.phase_name)<<","
-						<<csv_quote(ev_sum2)<<","<<csv_quote(fest_sum)<<"\n";
+						<<csv_quote(ev_sum2)<<","<<csv_quote(fest_sum)<<","
+						<<csv_quote(atd.hli.y_lun.text)<<","
+						<<csv_quote(atd.hli.y_lchun.text)<<","
+						<<csv_quote(atd.hli.m_gz.text)<<","
+						<<csv_quote(atd.hli.d_gz.text)<<","
+						<<csv_quote(atd.hli.h_gz.text)<<","
+						<<csv_quote(atd.hli.h_gz_true.text)<<","
+						<<csv_quote(atd.hli.jianchu)<<","
+						<<csv_quote(atd.hli.bazi_clock)<<","
+						<<csv_quote(atd.hli.bazi_true)<<","
+						<<csv_quote(atd.hli.duty_god)<<","
+						<<csv_quote(atd.hli.duty_tag)<<","
+						<<csv_quote(atd.hli.clash)<<","
+						<<csv_quote(atd.hli.chong_sha)<<","
+						<<csv_quote(atd.hli.zodiac_day)<<","
+						<<csv_quote(atd.hli.six_he)<<","
+						<<csv_quote(atd.hli.three_he)<<","
+						<<csv_quote(atd.hli.pengzu)<<","
+						<<csv_quote(atd.hli.nayin)<<","
+						<<csv_quote(atd.hli.wx_day)<<","
+						<<csv_quote(atd.hli.fetal_god)<<","
+						<<csv_quote(atd.hli.meridian)<<","
+						<<csv_quote(atd.hli.lucky_dir)<<","
+						<<csv_quote(atd.hli.wealth_dir)<<","
+						<<csv_quote(atd.hli.mascot_dir)<<","
+						<<csv_quote(atd.hli.sun_noble_dir)<<","
+						<<csv_quote(atd.hli.moon_noble_dir)<<","
+						<<csv_quote(atd.hli.xiu28)<<","
+						<<csv_quote(atd.hli.xiu_id)<<","
+						<<atd.hli.yi_ji_level<<","
+						<<csv_quote(atd.hli.yi_ji_rule)<<","
+						<<csv_quote(join_pipe(atd.hli.good_gods))<<","
+						<<csv_quote(join_pipe(atd.hli.bad_gods))<<","
+						<<csv_quote(join_pipe(atd.hli.yi))<<","
+						<<csv_quote(join_pipe(atd.hli.ji))<<"\n";
 		 }},
 		{"txt",[&](){
 			 std::ostream&os=*out.stream;
 			 os<<"tool=lunar format=txt type=almanac tz_display="<<tz<<"\n";
 			 os<<"input.date="<<date_text<<"\n";
+			 os<<"input.lon_deg="<<format_num(hli_lon_deg)<<"\n";
 			 os<<"data.lun_label="<<atd.lunar_date.lun_label<<"\n";
+			 os<<"data.hli.y_lun="<<atd.hli.y_lun.text<<"\n";
+			 os<<"data.hli.y_lchun="<<atd.hli.y_lchun.text<<"\n";
+			 os<<"data.hli.month="<<atd.hli.m_gz.text<<"\n";
+			 os<<"data.hli.day="<<atd.hli.d_gz.text<<"\n";
+			 os<<"data.hli.hour="<<atd.hli.h_gz.text<<"\n";
+			 os<<"data.hli.hour_true="<<atd.hli.h_gz_true.text<<"\n";
+			 os<<"data.hli.bazi_clock="<<atd.hli.bazi_clock<<"\n";
+			 os<<"data.hli.bazi_true="<<atd.hli.bazi_true<<"\n";
+			 os<<"data.hli.jianchu="<<atd.hli.jianchu<<"\n";
+			 os<<"data.hli.duty_god="<<atd.hli.duty_god<<"\n";
+			 os<<"data.hli.duty_tag="<<atd.hli.duty_tag<<"\n";
+			 os<<"data.hli.clash="<<atd.hli.clash<<"\n";
+			 os<<"data.hli.chong_sha="<<atd.hli.chong_sha<<"\n";
+			 os<<"data.hli.zodiac_day="<<atd.hli.zodiac_day<<"\n";
+			 os<<"data.hli.six_he="<<atd.hli.six_he<<"\n";
+			 os<<"data.hli.three_he="<<atd.hli.three_he<<"\n";
+			 os<<"data.hli.pengzu="<<atd.hli.pengzu<<"\n";
+			 os<<"data.hli.nayin="<<atd.hli.nayin<<"\n";
+			 os<<"data.hli.wuxing_day="<<atd.hli.wx_day<<"\n";
+			 os<<"data.hli.fetal_god="<<atd.hli.fetal_god<<"\n";
+			 os<<"data.hli.meridian="<<atd.hli.meridian<<"\n";
+			 os<<"data.hli.lucky_dir="<<atd.hli.lucky_dir<<"\n";
+			 os<<"data.hli.wealth_dir="<<atd.hli.wealth_dir<<"\n";
+			 os<<"data.hli.mascot_dir="<<atd.hli.mascot_dir<<"\n";
+			 os<<"data.hli.sun_noble_dir="<<atd.hli.sun_noble_dir<<"\n";
+			 os<<"data.hli.moon_noble_dir="<<atd.hli.moon_noble_dir<<"\n";
+			 os<<"data.hli.xiu28="<<atd.hli.xiu28<<"\n";
+			 os<<"data.hli.xiu_star="<<atd.hli.xiu_id<<"\n";
+			 os<<"data.hli.yi_ji_level="<<atd.hli.yi_ji_level<<"\n";
+			 os<<"data.hli.yi_ji_rule="<<atd.hli.yi_ji_rule<<"\n";
+			 os<<"data.hli.good_gods="<<join_pipe(atd.hli.good_gods)<<"\n";
+			 os<<"data.hli.bad_gods="<<join_pipe(atd.hli.bad_gods)<<"\n";
+			 os<<"data.hli.yi="<<join_pipe(atd.hli.yi)<<"\n";
+			 os<<"data.hli.ji="<<join_pipe(atd.hli.ji)<<"\n";
 			 os<<"data.ill_pct="<<format_num(atd.ill_pct)<<"\n";
 			 os<<"data.phase_name="<<atd.phase_name<<"\n";
 			 os<<"[events]\n";
@@ -5293,6 +5689,11 @@ int cmd_alm(const std::vector<std::string>&args){
 			 os<<"[festivals]\n";
 			 for(const auto&ev : day_fest){
 				 os<<ev.name<<"\t"<<ev.loc_iso<<"\n";
+			 }
+			 os<<"[hour_jx]\n";
+			 os<<"slot\tgz\tluck\n";
+			 for(const auto&x : atd.hli.hour_jx){
+				 os<<x.slot<<"\t"<<x.gz<<"\t"<<x.luck<<"\n";
 			 }
 		 }},
 	};
