@@ -1,5 +1,6 @@
 #include "lunar/c_api.h"
 
+#include<cstdio>
 #include<exception>
 #include<stdexcept>
 #include<string>
@@ -8,6 +9,7 @@
 #include "lunar/app_long.hpp"
 #include "lunar/calendar.hpp"
 #include "lunar/cli.hpp"
+#include "lunar/core.hpp"
 #include "lunar/entry.hpp"
 
 namespace{
@@ -131,6 +133,32 @@ int LUNAR_CALL lunar_calc_eot(const char*ephem,double jd_utc,double lon_deg,
 		out->eot_rad=data.eot_rad;
 		out->eot_minutes=data.eot_minutes;
 		out->eot_seconds=data.eot_seconds;
+		return 0;
+	});
+}
+
+int LUNAR_CALL lunar_core_day(const char*ephem,const char*date,const char*tz,
+							  lunar_day_summary*out){
+	return guard([&](){
+		if(ephem==nullptr||date==nullptr||out==nullptr){
+			throw std::invalid_argument("ephem/date/out must not be null");
+		}
+		lunar::core::DayComputeOptions opt;
+		opt.ephem=ephem;
+		opt.date_text=date;
+		opt.tz=(tz==nullptr||std::string(tz).empty())?"+08:00":std::string(tz);
+		opt.include_events=false;
+		opt.include_astro=false;
+		DayResult day=lunar::core::compute_day(opt);
+		out->lunar_year=day.at_data.lunar_date.lunar_year;
+		out->lun_mno=day.at_data.lunar_date.lun_mno;
+		out->lunar_day=day.at_data.lunar_date.lunar_day;
+		out->is_leap=day.at_data.lunar_date.is_leap?1:0;
+		out->ill_pct=day.at_data.ill_pct;
+		std::snprintf(out->phase_name,sizeof(out->phase_name),"%s",
+					  day.at_data.phase_name.c_str());
+		std::snprintf(out->lun_label,sizeof(out->lun_label),"%s",
+					  day.at_data.lunar_date.lun_label.c_str());
 		return 0;
 	});
 }

@@ -10,6 +10,7 @@
 struct InterCfg{
 	std::string bsp_dir;
 	std::string def_bsp;
+	std::vector<std::string> bsp_list;
 	std::string default_tz="+08:00";
 	std::string def_fmt="txt";
 	bool def_prety=true;

@@ -10,6 +10,53 @@ namespace fs=std::filesystem;
 
 const std::string CFG_FILE="lun_cfg.txt";
 
+std::vector<std::string> split_bsp_list(const std::string&text){
+	std::vector<std::string> out;
+	std::string token;
+	auto flush=[&](){
+		std::string t=trim(token);
+		if(!t.empty()){
+			out.push_back(t);
+		}
+		token.clear();
+	};
+	for(char ch : text){
+		if(ch==','||ch==';'){
+			flush();
+		}else{
+			token.push_back(ch);
+		}
+	}
+	flush();
+	return out;
+}
+
+std::string join_bsp_list(const std::vector<std::string>&items){
+	std::string out;
+	for(std::size_t i=0;i<items.size();++i){
+		if(i!=0){
+			out.push_back(';');
+		}
+		out+=items[i];
+	}
+	return out;
+}
+
+void add_bsp_if_missing(InterCfg&cfg,const std::string&path){
+	if(path.empty()){
+		return;
+	}
+	if(path==cfg.def_bsp){
+		return;
+	}
+	for(const auto&item : cfg.bsp_list){
+		if(item==path){
+			return;
+		}
+	}
+	cfg.bsp_list.push_back(path);
+}
+
 std::string trim(const std::string&s){
 	std::size_t start=0;
 	while(start<s.size()&&std::isspace(static_cast<unsigned char>(s[start]))){
@@ -39,6 +86,8 @@ bool load_cfg(InterCfg&cfg){
 			cfg.bsp_dir=value;
 		}else if(key=="def_bsp"){
 			cfg.def_bsp=value;
+		}else if(key=="bsp_list"){
+			cfg.bsp_list=split_bsp_list(value);
 		}else if(key=="default_tz"){
 			cfg.default_tz=value;
 		}else if(key=="def_fmt"){
@@ -57,6 +106,7 @@ bool save_cfg(const InterCfg&cfg){
 	}
 	ofs<<"bsp_dir="<<cfg.bsp_dir<<"\n";
 	ofs<<"def_bsp="<<cfg.def_bsp<<"\n";
+	ofs<<"bsp_list="<<join_bsp_list(cfg.bsp_list)<<"\n";
 	ofs<<"default_tz="<<cfg.default_tz<<"\n";
 	ofs<<"def_fmt="<<cfg.def_fmt<<"\n";
 	ofs<<"def_prety="<<(cfg.def_prety?"1":"0")<<"\n";
@@ -169,6 +219,7 @@ std::string pick_bsp(InterCfg&cfg){
 	std::cout<<"下载完成："<<target<<std::endl;
 	cfg.bsp_dir=target_dir.string();
 	cfg.def_bsp=target.string();
+	add_bsp_if_missing(cfg,cfg.def_bsp);
 	save_cfg(cfg);
 	return cfg.def_bsp;
 }
@@ -220,6 +271,7 @@ std::string init_bsp(InterCfg&cfg){
 				}
 			}else if(idx>=1&&static_cast<std::size_t>(idx)<=bsp_files.size()){
 				cfg.def_bsp=bsp_files[idx-1].string();
+				add_bsp_if_missing(cfg,cfg.def_bsp);
 				if(cfg.bsp_dir.empty()){
 					cfg.bsp_dir=bsp_files[idx-1].parent_path().string();
 				}

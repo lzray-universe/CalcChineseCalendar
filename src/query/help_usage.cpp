@@ -138,7 +138,7 @@ void use_cfg(){
 			   "0|1] [--quiet]\n"
 			 <<"  lunar config set <key> <value>\n"
 			 <<"Keys:\n"
-			 <<"  def_bsp | bsp_dir | default_tz | def_fmt | "
+			 <<"  def_bsp | bsp_dir | bsp_list | default_tz | def_fmt | "
 			   "def_prety\n"
 			 <<"Examples:\n"
 			 <<"  lunar config show\n"

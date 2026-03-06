@@ -7,6 +7,7 @@
 
 #include "lunar/calendar.hpp"
 #include "lunar/cli.hpp"
+#include "lunar/global_context.hpp"
 #include "lunar/interact.hpp"
 #include "lunar/lunar_eclipse.hpp"
 
@@ -81,64 +82,69 @@ int run_cli_args(const std::vector<std::string>&args){
 		return 0;
 	}
 
+	GlobalContext gctx=load_global_ctx();
+	auto tail_for=[&](const std::string&cmd){
+		return prep_cmd_args(
+			cmd,std::vector<std::string>(parsed.begin()+1,parsed.end()),gctx);
+	};
+
 	if(first=="months"){
-		return cmd_month(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_month(tail_for(first));
 	}
 	if(first=="calendar"){
-		return cmd_cal(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_cal(tail_for(first));
 	}
 	if(first=="year"){
-		return cmd_year(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_year(tail_for(first));
 	}
 	if(first=="event"){
-		return cmd_event(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_event(tail_for(first));
 	}
 	if(first=="download"){
-		return cmd_dl(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_dl(tail_for(first));
 	}
 	if(first=="at"){
-		return cmd_at(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_at(tail_for(first));
 	}
 	if(first=="convert"){
-		return cmd_conv(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_conv(tail_for(first));
 	}
 	if(first=="day"){
-		return cmd_day(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_day(tail_for(first));
 	}
 	if(first=="monthview"){
-		return cmd_mview(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_mview(tail_for(first));
 	}
 	if(first=="next"){
-		return cmd_next(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_next(tail_for(first));
 	}
 	if(first=="range"){
-		return cmd_range(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_range(tail_for(first));
 	}
 	if(first=="search"){
-		return cmd_search(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_search(tail_for(first));
 	}
 	if(first=="eclipse"){
-		return cmd_eclipse(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_eclipse(tail_for(first));
 	}
 	if(first=="festival"){
-		return cmd_fest(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_fest(tail_for(first));
 	}
 	if(first=="almanac"){
-		return cmd_alm(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_alm(tail_for(first));
 	}
 	if(first=="info"){
-		return cmd_info(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_info(tail_for(first));
 	}
 	if(first=="selftest"){
-		return cmd_test(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_test(tail_for(first));
 	}
 	if(first=="config"){
-		return cmd_cfg(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_cfg(tail_for(first));
 	}
 	if(first=="completion"){
-		return cmd_comp(std::vector<std::string>(parsed.begin()+1,parsed.end()));
+		return cmd_comp(tail_for(first));
 	}
 
-	return cmd_month(parsed);
+	return cmd_month(prep_cmd_args("months",parsed,gctx));
 }
-

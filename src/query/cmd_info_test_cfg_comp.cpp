@@ -296,6 +296,16 @@ int cmd_cfg(const std::vector<std::string>&args){
 	if(action=="show"){
 		parse_opt(1);
 		chk_fmt(format,{"json","txt"},"config show");
+		auto join_sc=[](const std::vector<std::string>&items){
+			std::string out;
+			for(std::size_t i=0;i<items.size();++i){
+				if(i!=0){
+					out.push_back(';');
+				}
+				out+=items[i];
+			}
+			return out;
+		};
 		OutTgt out=open_out(out_path);
 		const FmtMap fmt_handlers={
 			{"json",[&](){
@@ -314,6 +324,8 @@ int cmd_cfg(const std::vector<std::string>&args){
 				 w.value(cfg.def_bsp);
 				 w.key("bsp_dir");
 				 w.value(cfg.bsp_dir);
+				 w.key("bsp_list");
+				 w.value(join_sc(cfg.bsp_list));
 				 w.key("default_tz");
 				 w.value(cfg.default_tz);
 				 w.key("def_fmt");
@@ -328,6 +340,7 @@ int cmd_cfg(const std::vector<std::string>&args){
 				 *out.stream<<"tool=lunar format=txt type=config\n";
 				 *out.stream<<"def_bsp="<<cfg.def_bsp<<"\n";
 				 *out.stream<<"bsp_dir="<<cfg.bsp_dir<<"\n";
+				 *out.stream<<"bsp_list="<<join_sc(cfg.bsp_list)<<"\n";
 				 *out.stream<<"default_tz="<<cfg.default_tz<<"\n";
 				 *out.stream<<"def_fmt="<<cfg.def_fmt<<"\n";
 				 *out.stream<<"def_prety="<<(cfg.def_prety?"1":"0")<<"\n";
@@ -345,9 +358,42 @@ int cmd_cfg(const std::vector<std::string>&args){
 		std::string key=to_low(args[1]);
 		std::string value=args[2];
 		parse_opt(3);
+		auto parse_sc=[](const std::string&text){
+			std::vector<std::string> out;
+			std::string token;
+			auto flush=[&](){
+				std::string t=trim(token);
+				if(!t.empty()){
+					out.push_back(t);
+				}
+				token.clear();
+			};
+			for(char ch : text){
+				if(ch==','||ch==';'){
+					flush();
+				}else{
+					token.push_back(ch);
+				}
+			}
+			flush();
+			return out;
+		};
 		const std::unordered_map<std::string,std::function<void()>> key_handlers={
-			{"def_bsp",[&](){ cfg.def_bsp=value; }},
+			{"def_bsp",[&](){
+				 cfg.def_bsp=value;
+				 bool exists=false;
+				 for(const auto&item : cfg.bsp_list){
+					 if(item==value){
+						 exists=true;
+						 break;
+					 }
+				 }
+				 if(!exists&&!value.empty()){
+					 cfg.bsp_list.push_back(value);
+				 }
+			 }},
 			{"bsp_dir",[&](){ cfg.bsp_dir=value; }},
+			{"bsp_list",[&](){ cfg.bsp_list=parse_sc(value); }},
 			{"default_tz",[&](){
 				 parse_tz(value);
 				 cfg.default_tz=value;

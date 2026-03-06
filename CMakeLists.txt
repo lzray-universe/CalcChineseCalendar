@@ -33,6 +33,7 @@ set(LUNAR_CORE_SOURCES
     src/cli_common.cpp
     src/query.cpp
     src/interact.cpp
+    src/global_context.cpp
     src/download.cpp
     src/entry.cpp
 )

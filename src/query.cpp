@@ -6,6 +6,8 @@
 #include "query/cli_at_conv.cpp"
 #include "query/cmd_at_conv.cpp"
 #include "query/events_core.cpp"
+#include "query/day_core.cpp"
+#include "query/day_formatter.cpp"
 #include "query/cmd_day_mview.cpp"
 #include "query/cmd_next_range_search.cpp"
 #include "query/cmd_eclipse.cpp"

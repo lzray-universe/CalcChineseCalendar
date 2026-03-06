@@ -42,6 +42,19 @@ typedef struct lunar_eot_result{
 LUNAR_API int LUNAR_CALL lunar_calc_eot(const char*ephem,double jd_utc,
 										double lon_deg,lunar_eot_result*out);
 
+typedef struct lunar_day_summary{
+	int lunar_year;
+	int lun_mno;
+	int lunar_day;
+	int is_leap;
+	double ill_pct;
+	char phase_name[32];
+	char lun_label[96];
+} lunar_day_summary;
+
+LUNAR_API int LUNAR_CALL lunar_core_day(const char*ephem,const char*date,
+										const char*tz,lunar_day_summary*out);
+
 LUNAR_API int LUNAR_CALL lunar_cmd_month(int argc,const char*const*argv);
 LUNAR_API int LUNAR_CALL lunar_cmd_cal(int argc,const char*const*argv);
 LUNAR_API int LUNAR_CALL lunar_cmd_year(int argc,const char*const*argv);

@@ -26,6 +26,7 @@
 
 #include "lunar/app_long.hpp"
 #include "lunar/almanac.hpp"
+#include "lunar/arg_parser.hpp"
 #include "lunar/calendar.hpp"
 #include "lunar/events.hpp"
 #include "lunar/format.hpp"
@@ -33,8 +34,11 @@
 #include "lunar/interact.hpp"
 #include "lunar/js_writer.hpp"
 #include "lunar/lunar_eclipse.hpp"
+#include "lunar/models.hpp"
 #include "lunar/solar_eclipse.hpp"
 #include "lunar/math.hpp"
 #include "lunar/star.hpp"
 #include "lunar/time_scale.hpp"
+#include "lunar/core.hpp"
+#include "lunar/day_formatter.hpp"
 

@@ -1,38 +1,5 @@
 namespace{
 
-struct LunDate{
-	int lunar_year=0;
-	int lun_mno=0;
-	bool is_leap=false;
-	std::string lun_mlab;
-	int lunar_day=0;
-	std::string lun_label;
-
-	int cst_year=0;
-	int cst_month=0;
-	int cst_day=0;
-	double cstday_jd=0.0;
-};
-
-struct GregDate{
-	int year=0;
-	int month=0;
-	int day=0;
-	double cstday_jd=0.0;
-};
-
-struct NearEvt{
-	bool has=false;
-	EventRec event;
-};
-
-struct NearEvents{
-	NearEvt solar_prev;
-	NearEvt solar_next;
-	NearEvt phase_prev;
-	NearEvt phase_next;
-};
-
 struct YearEventsCache{
 	std::vector<EventRec> solar;
 	std::vector<EventRec> phase;
@@ -539,35 +506,6 @@ EventRec mk_astro_rec(const AstroEvt&src,int tz_off){
 	out.loc_iso=fmt_iso(src.jd_utc,tz_off,true);
 	return out;
 }
-
-struct AtData{
-	std::string time_raw;
-	std::string tz_in;
-	std::string display_tz;
-	double jd_utc=0.0;
-	double jd_tdb=0.0;
-	std::string utc_iso;
-	std::string local_iso;
-
-	double lam_s=0.0;
-	double lam_s_dot=0.0;
-	double lam_m=0.0;
-	double lam_m_dot=0.0;
-	double elong=0.0;
-	double elong_deg=0.0;
-	double ill_frac=0.0;
-	double ill_pct=0.0;
-	bool waxing=false;
-	std::string phase_name;
-
-	LunDate lunar_date;
-	bool inc_ev=false;
-	NearEvents near_ev;
-	bool has_eot=false;
-	EoTData eot;
-	MoonXg moon_xg;
-	HliData hli;
-};
 
 struct BatchLine{
 	int line_no=0;
@@ -1826,4 +1764,3 @@ void wr_elics(std::ostream&os,const std::string&ephem,
 bool parse_spk(const std::string&ephem,double&jd_start,double&jd_end);
 
 }
-
