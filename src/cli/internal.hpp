@@ -31,5 +31,5 @@
 #include "lunar/lunar_eclipse.hpp"
 #include "lunar/time_scale.hpp"
 
-#include "cli/common.hpp"
+#include "common.hpp"
 
