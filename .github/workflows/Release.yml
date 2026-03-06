@@ -112,6 +112,8 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p package
+          cp README.md package/
+          cp LICENSE package/
 
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp build/Release/lunar.exe package/
