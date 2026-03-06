@@ -420,7 +420,7 @@ std::vector<EventRec> bld_fest(EphRead&eph,int lunar_year,int tz_off,
 		EventRec ev;
 		ev.kind="festival";
 		ev.code=std::to_string(def.m)+"-"+std::to_string(def.d);
-		ev.name=def.name;
+		ev.name=lunar::i18n::tr_event_name("festival",ev.code,def.name);
 		ev.year=lunar_year;
 		ev.jd_utc=g.cstday_jd;
 		ev.utc_iso=fmt_iso(ev.jd_utc,0,true);
@@ -432,7 +432,7 @@ std::vector<EventRec> bld_fest(EphRead&eph,int lunar_year,int tz_off,
 	EventRec eve;
 	eve.kind="festival";
 	eve.code="12-last";
-	eve.name="除夕";
+	eve.name=lunar::i18n::tr_event_name("festival",eve.code,"除夕");
 	eve.year=lunar_year;
 	eve.jd_utc=cny_next.cstday_jd-1.0;
 	eve.utc_iso=fmt_iso(eve.jd_utc,0,true);

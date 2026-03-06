@@ -8,18 +8,22 @@
 #include "lunar/calendar.hpp"
 #include "lunar/cli.hpp"
 #include "lunar/global_context.hpp"
+#include "lunar/i18n.hpp"
 #include "lunar/interact.hpp"
 #include "lunar/lunar_eclipse.hpp"
 
 namespace{
 
-std::vector<std::string> parse_global_eclipse_method_args(
-	const std::vector<std::string>&args){
+std::vector<std::string> parse_global_opts(const std::vector<std::string>&args,
+										   const std::string&default_lang){
 	LunarEclipseCalcMethod method=LunarEclipseCalcMethod::Modern;
+	lunar::i18n::Lang lang=lunar::i18n::Lang::Zh;
+	(void)lunar::i18n::try_parse_lang(default_lang,&lang);
 	std::vector<std::string> out;
 	out.reserve(args.size());
 
 	const std::string prefix="--eclipse-method=";
+	const std::string lang_prefix="--lang=";
 	for(std::size_t i=0;i<args.size();++i){
 		const std::string&arg=args[i];
 		if(arg=="--eclipse-method"){
@@ -48,17 +52,40 @@ std::vector<std::string> parse_global_eclipse_method_args(
 			method=parsed;
 			continue;
 		}
+		if(arg=="--lang"){
+			if(i+1>=args.size()){
+				throw std::invalid_argument("--lang requires: zh|en|ja|ko");
+			}
+			const std::string&value=args[++i];
+			if(!lunar::i18n::try_parse_lang(value,&lang)){
+				throw std::invalid_argument(
+					"invalid --lang: "+value+" (expected zh|en|ja|ko)");
+			}
+			continue;
+		}
+		if(arg.rfind(lang_prefix,0)==0){
+			std::string value=arg.substr(lang_prefix.size());
+			if(!lunar::i18n::try_parse_lang(value,&lang)){
+				throw std::invalid_argument(
+					"invalid --lang: "+value+" (expected zh|en|ja|ko)");
+			}
+			continue;
+		}
 		out.push_back(arg);
 	}
 
 	set_lunar_eclipse_calc_method(method);
+	lunar::i18n::set_lang(lang);
 	return out;
 }
 
 }
 
 int run_cli_args(const std::vector<std::string>&args){
-	std::vector<std::string> parsed=parse_global_eclipse_method_args(args);
+	InterCfg cfg;
+	load_cfg(cfg);
+	std::string default_lang=cfg.default_lang.empty()?"zh":cfg.default_lang;
+	std::vector<std::string> parsed=parse_global_opts(args,default_lang);
 	if(parsed.empty()){
 		int_mode();
 		return 0;

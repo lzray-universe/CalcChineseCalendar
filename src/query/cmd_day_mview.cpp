@@ -295,7 +295,7 @@ int cmd_mview(const std::vector<std::string>&args){
 		{"json",[&](){
 			 JsonWriter w(*out.stream,pretty);
 			 w.obj_begin();
-			 write_meta(w,ephem,tz,{"type=monthview","农历判日固定UTC+8"});
+			 write_meta(w,ephem,tz,{"type=monthview",lunar::i18n::day_rule_note()});
 			 w.key("input");
 			 w.obj_begin();
 			 w.key("month");

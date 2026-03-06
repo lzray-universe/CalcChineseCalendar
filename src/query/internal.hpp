@@ -31,6 +31,7 @@
 #include "lunar/events.hpp"
 #include "lunar/format.hpp"
 #include "lunar/ics.hpp"
+#include "lunar/i18n.hpp"
 #include "lunar/interact.hpp"
 #include "lunar/js_writer.hpp"
 #include "lunar/lunar_eclipse.hpp"

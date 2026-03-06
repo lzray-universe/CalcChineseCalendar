@@ -11,9 +11,10 @@ void cli_month_impl(const MonthsArgs&args,bool inc_eclipse){
 
 	std::vector<MonYrData> data;
 	data.reserve(years.size());
+	const bool show_progress=(!args.quiet&&years.size()>1);
 	for(int y : years){
-		if(!args.quiet){
-			std::cerr<<"computing months for year "<<y<<" ..."<<std::endl;
+		if(show_progress){
+			log_year_progress(&std::cerr,y);
 		}
 		std::vector<LunarMonth> months=
 			(mode=="lunar")?enum_lyr(calc,y):enum_gyr(calc,y);
@@ -23,7 +24,7 @@ void cli_month_impl(const MonthsArgs&args,bool inc_eclipse){
 		row.months=bld_mrec(months,tz_off);
 		row.inc_eclipse=inc_eclipse;
 		if(inc_eclipse){
-			YearResult yr=solver.compute_year(y,args.quiet?nullptr:&std::cerr);
+			YearResult yr=solver.compute_year(y,nullptr);
 			row.eclipses=bld_eclipses(eph,yr);
 		}
 		data.push_back(std::move(row));
@@ -68,8 +69,12 @@ void cli_cal_impl(const CalArgs&args,bool inc_eclipse){
 
 	std::vector<CalYrData> out_data;
 	out_data.reserve(years.size());
+	const bool show_progress=(!args.quiet&&years.size()>1);
 	for(int y : years){
-		YearResult yr=solver.compute_year(y,args.quiet?nullptr:&std::cerr);
+		if(show_progress){
+			log_year_progress(&std::cerr,y);
+		}
+		YearResult yr=solver.compute_year(y,nullptr);
 		CalYrData item;
 		item.year=y;
 		item.mode="lunar";
@@ -133,7 +138,7 @@ void cli_year(const YearArgs&args){
 	SolLunCal solver(eph);
 	LunCal6 calc(eph);
 
-	YearResult yr=solver.compute_year(args.year,args.quiet?nullptr:&std::cerr);
+	YearResult yr=solver.compute_year(args.year,nullptr);
 	CalYrData data;
 	data.year=args.year;
 	data.mode=mode;

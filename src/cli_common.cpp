@@ -8,6 +8,7 @@
 #include<stdexcept>
 
 #include "lunar/format.hpp"
+#include "lunar/i18n.hpp"
 
 namespace cli_util{
 
@@ -69,8 +70,18 @@ OutTgt open_out(const std::string&path){
 
 void note_out(const std::string&path,bool quiet){
 	if(!path.empty()&&!quiet){
-		std::cerr<<"written: "<<path<<std::endl;
+		std::cerr<<lunar::i18n::pick("已写入: ","written: ","出力先: ","저장됨: ")
+				 <<path<<std::endl;
 	}
+}
+
+void log_year_progress(std::ostream*log,int year){
+	if(log==nullptr){
+		return;
+	}
+	(*log)<<lunar::i18n::pick("进度: 正在计算年份 ","progress: computing year ",
+							  "進行中: 計算年 ","진행: 계산 연도 ")
+		  <<year<<std::endl;
 }
 
 void chk_fmt(const std::string&format,const std::set<std::string>&allowed,
@@ -86,7 +97,7 @@ EventRec mk_erec(const std::string&kind,const std::string&code,
 	EventRec rec;
 	rec.kind=kind;
 	rec.code=code;
-	rec.name=name;
+	rec.name=lunar::i18n::tr_event_name(kind,code,name);
 	rec.year=year;
 	rec.jd_tdb=jd_tdb;
 	rec.jd_utc=jd_utc;

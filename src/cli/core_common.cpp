@@ -24,6 +24,7 @@ using cli_util::bld_lpev;
 using cli_util::bld_stev;
 using cli_util::chk_fmt;
 using cli_util::is_opt;
+using cli_util::log_year_progress;
 using cli_util::mk_erec;
 using cli_util::note_out;
 using cli_util::open_out;
@@ -60,7 +61,7 @@ void run_fmt(const FmtMap&handlers,const std::string&format,
 
 MonthRec mk_mrec(const LunarMonth&m,int tz_off){
 	MonthRec rec;
-	rec.label=m.label;
+	rec.label=lunar::i18n::tr_lunar_month(m.month_no,m.is_leap,m.label);
 	rec.month_no=m.month_no;
 	rec.is_leap=m.is_leap;
 	rec.st_jdutc=m.start_dt.toUtcJD();
@@ -98,7 +99,7 @@ void write_meta(JsonWriter&w,const std::string&ephem,
 	w.value(tz_display);
 	w.key("notes");
 	w.arr_begin();
-	w.value(cli_shared::kTzOnlyNote);
+	w.value(lunar::i18n::tz_note());
 	w.arr_end();
 	w.obj_end();
 }

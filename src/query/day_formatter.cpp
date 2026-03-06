@@ -8,7 +8,8 @@ void format_day_output(std::ostream&os,const DayResult&result,
 	auto write_json=[&](bool json_pretty){
 		JsonWriter w(os,json_pretty);
 		w.obj_begin();
-		write_meta(w,result.ephem,result.tz,{"type=day","农历判日固定UTC+8"});
+		write_meta(w,result.ephem,result.tz,
+				   {"type=day",lunar::i18n::day_rule_note()});
 		w.key("input");
 		w.obj_begin();
 		w.key("date");

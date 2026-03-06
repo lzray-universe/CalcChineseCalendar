@@ -233,7 +233,7 @@ void wr_mtxt(std::ostream&os,const std::vector<MonYrData>&data,
 			 const std::string&tz_display){
 	int tz_off=parse_tz(tz_display);
 	os<<"tool=lunar format=txt type=months tz_display="<<tz_display<<"\n";
-	os<<"note=--tz仅影响显示，不改变计算\n";
+	os<<"note="<<lunar::i18n::tz_note()<<"\n";
 	for(const auto&bundle : data){
 		os<<"\n[year="<<bundle.year<<" mode="<<bundle.mode<<"]\n";
 		os<<"label\tmonth_no\tis_leap\tst_jd\ted_jd\tst_utc"
@@ -285,7 +285,7 @@ void wr_caltx(std::ostream&os,const std::vector<CalYrData>&years,
 			  const std::string&tz_display){
 	int tz_off=parse_tz(tz_display);
 	os<<"tool=lunar format=txt type=calendar tz_display="<<tz_display<<"\n";
-	os<<"note=--tz仅影响显示，不改变计算\n";
+	os<<"note="<<lunar::i18n::tz_note()<<"\n";
 	for(const auto&item : years){
 		os<<"\n[year="<<item.year<<"]\n";
 		os<<"## sol_terms\n";
@@ -314,7 +314,7 @@ void wr_ytxt(std::ostream&os,const CalYrData&item,const std::string&tz_display){
 	int tz_off=parse_tz(tz_display);
 	os<<"tool=lunar format=txt type=year mode="<<item.mode
 	  <<" tz_display="<<tz_display<<"\n";
-	os<<"note=--tz仅影响显示，不改变计算\n";
+	os<<"note="<<lunar::i18n::tz_note()<<"\n";
 	os<<"\n[year="<<item.year<<" mode="<<item.mode<<"]\n";
 	os<<"## sol_terms\n";
 	wr_etxt(os,item.sol_terms);
@@ -503,4 +503,3 @@ void run_mout(const MonthsArgs&args,const std::vector<MonYrData>&data,
 }
 
 }
-

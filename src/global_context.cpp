@@ -16,6 +16,7 @@
 #include "lunar/arg_parser.hpp"
 #include "lunar/cli.hpp"
 #include "lunar/format.hpp"
+#include "lunar/i18n.hpp"
 #include "lunar/interact.hpp"
 #include "lunar/math.hpp"
 #include "lunar/spc_ephem.hpp"
@@ -518,8 +519,11 @@ std::vector<std::string> prep_cmd_args(const std::string&command,
 		chosen=choose_bsp(ctx.bsp_candidates,interval);
 	}
 	if(chosen.empty()){
-		throw std::invalid_argument(
-			"no bsp found. use --bsp <path> or `lunar config set def_bsp <path>`");
+		throw std::invalid_argument(lunar::i18n::pick(
+			"未找到可用 BSP。请使用 --bsp <path> 或 `lunar config set def_bsp <path>`",
+			"no bsp found. use --bsp <path> or `lunar config set def_bsp <path>`",
+			"BSP が見つかりません。--bsp <path> または `lunar config set def_bsp <path>` を使用してください",
+			"사용 가능한 BSP 를 찾지 못했습니다. --bsp <path> 또는 `lunar config set def_bsp <path>` 를 사용하세요"));
 	}
 
 	std::vector<std::string> out;

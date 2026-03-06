@@ -31,6 +31,8 @@ OutTgt open_out(const std::string&path);
 
 void note_out(const std::string&path,bool quiet);
 
+void log_year_progress(std::ostream*log,int year);
+
 void chk_fmt(const std::string&format,const std::set<std::string>&allowed,
 			 const std::string&ctx);
 

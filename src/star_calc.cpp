@@ -12,6 +12,7 @@
 
 #include "lunar/app_long.hpp"
 #include "lunar/frames.hpp"
+#include "lunar/i18n.hpp"
 #include "lunar/precnut_core.hpp"
 #include "lunar/time_scale.hpp"
 
@@ -111,13 +112,7 @@ const char*nz(const char*s){
 }
 
 std::string star_name(const StarRecord&st){
-	if(*nz(st.zh)!='\0'){
-		return st.zh;
-	}
-	if(*nz(st.en)!='\0'){
-		return st.en;
-	}
-	return nz(st.id);
+	return i18n::tr_star_name(st);
 }
 
 bool eq_low(const char*field,const std::string&target_low){
@@ -306,28 +301,7 @@ double body_radius_km(int id){
 }
 
 std::string body_zh(int id){
-	switch(id){
-		case 10:
-			return "太阳";
-		case 199:
-			return "水星";
-		case 299:
-			return "金星";
-		case 301:
-			return "月球";
-		case 499:
-			return "火星";
-		case 599:
-			return "木星";
-		case 699:
-			return "土星";
-		case 799:
-			return "天王星";
-		case 899:
-			return "海王星";
-		default:
-			return "天体";
-	}
+	return i18n::tr_body_name(id);
 }
 
 std::string body_code(int id){

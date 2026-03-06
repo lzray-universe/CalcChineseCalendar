@@ -29,6 +29,10 @@ set(LUNAR_CORE_SOURCES
     src/json.cpp
     src/js_writer.cpp
     src/ics.cpp
+    src/i18n/lang.cpp
+    src/i18n/catalog_event.cpp
+    src/i18n/catalog_astro.cpp
+    src/i18n/catalog_interact.cpp
     src/cli.cpp
     src/cli_common.cpp
     src/query.cpp

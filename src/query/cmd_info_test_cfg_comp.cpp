@@ -200,7 +200,7 @@ int cmd_test(const std::vector<std::string>&args){
 		c3.id="y25_cnt";
 		try{
 			SolLunCal solver(eph);
-			YearResult yr=solver.compute_year(2025,quiet?nullptr:&std::cerr);
+			YearResult yr=solver.compute_year(2025,nullptr);
 			std::size_t solar_n=yr.sol_terms.size();
 			std::size_t phase_n=yr.lun_phase.size()*4;
 			c3.pass=(solar_n==24&&phase_n>=48);
@@ -328,6 +328,8 @@ int cmd_cfg(const std::vector<std::string>&args){
 				 w.value(join_sc(cfg.bsp_list));
 				 w.key("default_tz");
 				 w.value(cfg.default_tz);
+				 w.key("default_lang");
+				 w.value(cfg.default_lang);
 				 w.key("def_fmt");
 				 w.value(cfg.def_fmt);
 				 w.key("def_prety");
@@ -342,6 +344,7 @@ int cmd_cfg(const std::vector<std::string>&args){
 				 *out.stream<<"bsp_dir="<<cfg.bsp_dir<<"\n";
 				 *out.stream<<"bsp_list="<<join_sc(cfg.bsp_list)<<"\n";
 				 *out.stream<<"default_tz="<<cfg.default_tz<<"\n";
+				 *out.stream<<"default_lang="<<cfg.default_lang<<"\n";
 				 *out.stream<<"def_fmt="<<cfg.def_fmt<<"\n";
 				 *out.stream<<"def_prety="<<(cfg.def_prety?"1":"0")<<"\n";
 			 }},
@@ -398,6 +401,15 @@ int cmd_cfg(const std::vector<std::string>&args){
 				 parse_tz(value);
 				 cfg.default_tz=value;
 			 }},
+			{"default_lang",[&](){
+				 lunar::i18n::Lang parsed=lunar::i18n::Lang::Zh;
+				 if(!lunar::i18n::try_parse_lang(value,&parsed)){
+					 throw std::invalid_argument(
+						 "invalid default_lang: "+value+
+						 " (expected zh|en|ja|ko)");
+				 }
+				 cfg.default_lang=lunar::i18n::lang_code(parsed);
+			 }},
 			{"def_fmt",[&](){
 				 std::string v=to_low(value);
 				 chk_fmt(v,{"txt","json","csv","jsonl","ics"},"config def_fmt");
@@ -414,7 +426,8 @@ int cmd_cfg(const std::vector<std::string>&args){
 			throw std::runtime_error("failed to save config: "+CFG_FILE);
 		}
 		if(!quiet){
-			std::cerr<<"written: "<<CFG_FILE<<"\n";
+			std::cerr<<lunar::i18n::pick("已写入: ","written: ","出力先: ","저장됨: ")
+					 <<CFG_FILE<<"\n";
 		}
 		return 0;
 	}
@@ -444,7 +457,8 @@ int cmd_comp(const std::vector<std::string>&args){
 				   "--stdin --file --jobs --meta-once --from --to --count "
 				   "--kinds --kind --eot-lon --near --stage --sample-min --point-lat "
 				   "--point-lon --point-height --point-refine --global-vis "
-				   "--global --global-format --grid-lat-step --grid-lon-step\"\n"
+				   "--global --global-format --grid-lat-step --grid-lon-step "
+				   "--lang\"\n"
 				 <<"  COMPREPLY=( $(compgen -W \"${opts}\" -- \"${cur}\") )\n"
 				 <<"}\n"
 				 <<"complete -F _lunar_complete lunar\n";

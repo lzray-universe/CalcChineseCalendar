@@ -2,6 +2,7 @@
 #include "lunar/app_long.hpp"
 #include "lunar/format.hpp"
 #include "lunar/frames.hpp"
+#include "lunar/i18n.hpp"
 #include "lunar/precnut_core.hpp"
 #include "lunar/time_scale.hpp"
 
@@ -1260,13 +1261,15 @@ std::string ecl_code(const std::string&type){
 }
 
 std::string ecl_name(const std::string&type){
+	std::string fallback;
 	if(type=="T"){
-		return "月全食";
+		fallback="月全食";
+	}else if(type=="U"){
+		fallback="月偏食";
+	}else{
+		fallback="半影月食";
 	}
-	if(type=="U"){
-		return "月偏食";
-	}
-	return "半影月食";
+	return lunar::i18n::tr_event_name("lunar_eclipse",ecl_code(type),fallback);
 }
 
 Vec3 geodetic_to_ecef(double lat_deg,double lon_deg,double h_m){

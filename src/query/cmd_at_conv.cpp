@@ -262,7 +262,11 @@ int run_cbcli(const ConvArgs&args){
 	}
 
 	OutTgt out=open_out(args.out);
-	const std::string note="农历判日固定按UTC+8民用日执行；--tz仅影响显示";
+	const std::string note=lunar::i18n::pick(
+		"农历判日固定按UTC+8民用日执行；--tz仅影响显示",
+		"Lunar day boundaries are fixed to civil day UTC+8; --tz affects display only.",
+		"旧暦の日付判定は UTC+8 の民用日で固定；--tz は表示のみ影響します。",
+		"음력 날짜 판정은 UTC+8 민간 날짜 기준으로 고정되며, --tz 는 표시만 바꿉니다.");
 	const FmtMap fmt_handlers={
 		{"jsonl",[&](){
 			 if(args.meta_once){

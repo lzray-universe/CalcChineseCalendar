@@ -20,6 +20,7 @@ using cli_util::bld_lpev;
 using cli_util::bld_stev;
 using cli_util::chk_fmt;
 using cli_util::is_opt;
+using cli_util::log_year_progress;
 using cli_util::mk_erec;
 using cli_util::note_out;
 using cli_util::open_out;
@@ -88,24 +89,7 @@ void utc2cst(double jd_utc,int&y,int&m,int&d){
 }
 
 std::string lun_dlab(int day){
-	static const std::array<const char*,10> units={
-		"一","二","三","四","五","六","七","八","九","十"};
-	if(day<1||day>30){
-		return std::to_string(day);
-	}
-	if(day<=10){
-		return std::string("初")+units[day-1];
-	}
-	if(day<20){
-		return std::string("十")+units[day-11];
-	}
-	if(day==20){
-		return "二十";
-	}
-	if(day<30){
-		return std::string("廿")+units[day-21];
-	}
-	return "三十";
+	return lunar::i18n::tr_lunar_day(day,std::to_string(day));
 }
 
 std::string phase_elo(double elong){
@@ -258,16 +242,16 @@ LunDate res_lun(EphRead&eph,double jd_utc,QueryCache*cache=nullptr){
 	info.lunar_year=lunar_year;
 	info.lun_mno=selected.month_no;
 	info.is_leap=selected.is_leap;
-	info.lun_mlab=selected.label;
+	info.lun_mlab=
+		lunar::i18n::tr_lunar_month(selected.month_no,selected.is_leap,selected.label);
 	info.lunar_day=lunar_day;
 	info.cst_year=cst_year;
 	info.cst_month=cst_month;
 	info.cst_day=cst_day;
 	info.cstday_jd=qry_dutc;
 
-	std::ostringstream label;
-	label<<"农历"<<lunar_year<<"年"<<selected.label<<lun_dlab(lunar_day);
-	info.lun_label=label.str();
+	info.lun_label=lunar::i18n::tr_lunar_label(
+		lunar_year,selected.month_no,selected.is_leap,lunar_day);
 	return info;
 }
 
@@ -357,7 +341,7 @@ void write_meta(JsonWriter&w,const std::string&ephem,
 	w.value(tz_display);
 	w.key("notes");
 	w.arr_begin();
-	w.value("--tz仅影响显示，不改变算法或规则");
+	w.value(lunar::i18n::tz_note());
 	for(const auto&n : x_notes){
 		w.value(n);
 	}
@@ -616,6 +600,9 @@ InterCfg load_def(){
 	load_cfg(cfg);
 	if(cfg.default_tz.empty()){
 		cfg.default_tz="+08:00";
+	}
+	if(cfg.default_lang.empty()){
+		cfg.default_lang="zh";
 	}
 	if(cfg.def_fmt.empty()){
 		cfg.def_fmt="txt";
@@ -1663,8 +1650,12 @@ std::vector<EventRec> col_eyrs(EphRead&eph,const std::set<int>&years,int tz_off,
 							   std::ostream*log,bool inc_eclipse=false){
 	SolLunCal solver(eph);
 	std::vector<EventRec> events;
+	const bool show_progress=(log!=nullptr&&years.size()>1);
 	for(int y : years){
-		YearResult yr=solver.compute_year(y,log);
+		if(show_progress){
+			log_year_progress(log,y);
+		}
+		YearResult yr=solver.compute_year(y,nullptr);
 		std::vector<EventRec> solar=bld_stev(yr,tz_off);
 		std::vector<EventRec> phase=bld_lpev(yr,tz_off);
 		events.insert(events.end(),solar.begin(),solar.end());
@@ -1758,7 +1749,7 @@ void wr_elics(std::ostream&os,const std::string&ephem,
 		out.push_back(toic_evt(ev));
 	}
 	write_ics(os,"lunar-cli//"+tool_ver(),cal_name,out,
-			  {"schema=lunar.v1","ephem="+ephem,"--tz仅影响显示"});
+			  {"schema=lunar.v1","ephem="+ephem,lunar::i18n::tz_note()});
 }
 
 bool parse_spk(const std::string&ephem,double&jd_start,double&jd_end);
