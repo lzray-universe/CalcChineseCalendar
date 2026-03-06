@@ -1,0 +1,40 @@
+#pragma once
+
+#include "lunar/cli.hpp"
+#include "lunar/cli_common.hpp"
+
+#include<algorithm>
+#include<array>
+#include<cctype>
+#include<cmath>
+#include<cstdio>
+#include<filesystem>
+#include<fstream>
+#include<functional>
+#include<iomanip>
+#include<iostream>
+#include<limits>
+#include<map>
+#include<set>
+#include<sstream>
+#include<stdexcept>
+#include<string>
+#include<tuple>
+#include<unordered_map>
+#include<utility>
+#include<vector>
+
+#include "lunar/app_long.hpp"
+#include "lunar/almanac.hpp"
+#include "lunar/calendar.hpp"
+#include "lunar/events.hpp"
+#include "lunar/format.hpp"
+#include "lunar/ics.hpp"
+#include "lunar/interact.hpp"
+#include "lunar/js_writer.hpp"
+#include "lunar/lunar_eclipse.hpp"
+#include "lunar/solar_eclipse.hpp"
+#include "lunar/math.hpp"
+#include "lunar/star.hpp"
+#include "lunar/time_scale.hpp"
+
