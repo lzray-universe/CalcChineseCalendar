@@ -92,11 +92,12 @@ lunar <command> [args...]
 ### 4.2 全局参数
 
 - `--eclipse-method modern|legacy`
-- `--lang zh|en|ja|ko`
+- `--lang zh|zht|en|ja|ko`
 
 `--lang` 也接受常见别名：
 
 - `zh-cn`/`cn`/`zh-hans`
+- `zh-tw`/`zh-hk`/`zh-hant`/`tw`/`hk`/`hant`
 - `en-us`/`us`
 - `ja-jp`/`jp`
 - `ko-kr`/`kr`
@@ -173,7 +174,7 @@ lunar config set <key> <value>
 
 - `bsp_list` 支持逗号或分号分隔。
 - `def_bsp` 设置后若不在 `bsp_list` 中，会自动追加。
-- `default_lang` 仅允许 `zh|en|ja|ko`。
+- `default_lang` 仅允许 `zh|zht|en|ja|ko`。
 - `def_fmt` 允许 `txt|json|csv|jsonl|ics`。
 - `def_prety` 用 `0|1`。
 
@@ -510,11 +511,11 @@ lunar completion bash|zsh|fish|powershell
 - `h` 帮助
 - `q` 退出
 
-## 11. i18n（中/英/日/韩）
+## 11. i18n（中简/中繁/英/日/韩）
 
 ### 11.1 语言来源
 
-- 命令行：`--lang zh|en|ja|ko`
+- 命令行：`--lang zh|zht|en|ja|ko`
 - 配置默认：`default_lang`
 
 优先级：命令行高于配置默认。
@@ -524,6 +525,7 @@ lunar completion bash|zsh|fish|powershell
 - 交互界面文案（`src/i18n/catalog_interact.cpp`）
 - 事件名称翻译（`src/i18n/catalog_event.cpp`）
 - 星体/天象相关文案（`src/i18n/catalog_astro.cpp`）
+- 黄历字段翻译（`src/i18n/catalog_almanac.cpp`）
 - 部分 CLI 提示与注释
 
 结构化 JSON 的键名保持稳定，不随语言改变。

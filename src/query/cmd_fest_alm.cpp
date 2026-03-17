@@ -117,6 +117,7 @@ int cmd_alm(const std::vector<std::string>&args){
 	AtData atd=
 		at_fromjd(eph,smp_jdutc,tz_off,tz,date_text+"T12:00:00","+08:00",false,
 				  false,0.0,hli_lon_deg,&cache);
+	lunar::i18n::localize_hli(&atd.hli);
 	std::set<int> years={y-1,y,y+1};
 	std::vector<EventRec> all_events=
 		col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr);

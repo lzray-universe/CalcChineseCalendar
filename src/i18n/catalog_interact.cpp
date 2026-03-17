@@ -231,6 +231,8 @@ std::string pick_item(const Item&item){
 	switch(current_lang()){
 		case Lang::Zh:
 			return item.zh;
+		case Lang::ZhHant:
+			return to_zh_hant(item.zh);
 		case Lang::En:
 			return item.en;
 		case Lang::Ja:

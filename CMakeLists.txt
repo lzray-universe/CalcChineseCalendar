@@ -32,6 +32,7 @@ set(LUNAR_CORE_SOURCES
     src/i18n/lang.cpp
     src/i18n/catalog_event.cpp
     src/i18n/catalog_astro.cpp
+    src/i18n/catalog_almanac.cpp
     src/i18n/catalog_interact.cpp
     src/cli.cpp
     src/cli_common.cpp

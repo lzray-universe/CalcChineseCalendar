@@ -406,7 +406,7 @@ int cmd_cfg(const std::vector<std::string>&args){
 				 if(!lunar::i18n::try_parse_lang(value,&parsed)){
 					 throw std::invalid_argument(
 						 "invalid default_lang: "+value+
-						 " (expected zh|en|ja|ko)");
+						 " (expected zh|zht|en|ja|ko)");
 				 }
 				 cfg.default_lang=lunar::i18n::lang_code(parsed);
 			 }},

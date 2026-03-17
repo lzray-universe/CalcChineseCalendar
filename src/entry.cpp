@@ -54,12 +54,12 @@ std::vector<std::string> parse_global_opts(const std::vector<std::string>&args,
 		}
 		if(arg=="--lang"){
 			if(i+1>=args.size()){
-				throw std::invalid_argument("--lang requires: zh|en|ja|ko");
+				throw std::invalid_argument("--lang requires: zh|zht|en|ja|ko");
 			}
 			const std::string&value=args[++i];
 			if(!lunar::i18n::try_parse_lang(value,&lang)){
 				throw std::invalid_argument(
-					"invalid --lang: "+value+" (expected zh|en|ja|ko)");
+					"invalid --lang: "+value+" (expected zh|zht|en|ja|ko)");
 			}
 			continue;
 		}
@@ -67,7 +67,7 @@ std::vector<std::string> parse_global_opts(const std::vector<std::string>&args,
 			std::string value=arg.substr(lang_prefix.size());
 			if(!lunar::i18n::try_parse_lang(value,&lang)){
 				throw std::invalid_argument(
-					"invalid --lang: "+value+" (expected zh|en|ja|ko)");
+					"invalid --lang: "+value+" (expected zh|zht|en|ja|ko)");
 			}
 			continue;
 		}

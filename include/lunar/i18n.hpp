@@ -2,6 +2,8 @@
 
 #include<string>
 
+struct HliData;
+
 namespace lunar{
 struct StarRecord;
 }
@@ -10,6 +12,7 @@ namespace lunar::i18n{
 
 enum class Lang{
 	Zh,
+	ZhHant,
 	En,
 	Ja,
 	Ko,
@@ -27,7 +30,10 @@ std::string lang_code(Lang lang);
 
 std::string current_lang_code();
 
-std::string pick(const char*zh,const char*en,const char*ja,const char*ko);
+std::string pick(const char*zh,const char*en,const char*ja,const char*ko,
+				 const char*zht=nullptr);
+
+std::string to_zh_hant(const std::string&text);
 
 std::string tz_note();
 
@@ -48,5 +54,6 @@ std::string tr_lunar_day(int day,const std::string&fallback="");
 std::string tr_lunar_label(int lunar_year,int month_no,bool is_leap,int lunar_day,
 						   const std::string&fallback="");
 
-}
+void localize_hli(::HliData*data);
 
+}

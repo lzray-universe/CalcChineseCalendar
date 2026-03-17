@@ -66,6 +66,8 @@ std::string pick_name(const EventNameItem&item){
 	switch(current_lang()){
 		case Lang::Zh:
 			return item.zh;
+		case Lang::ZhHant:
+			return to_zh_hant(item.zh);
 		case Lang::En:
 			return item.en;
 		case Lang::Ja:
@@ -89,4 +91,3 @@ std::string tr_event_name(const std::string&kind,const std::string&code,
 }
 
 }
-

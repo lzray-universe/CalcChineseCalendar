@@ -46,6 +46,10 @@ std::string tr_star_name(const StarRecord&st){
 	switch(current_lang()){
 		case Lang::Zh:
 			return pick_non_empty(nz(st.zh),nz(st.en),nz(st.id),nullptr);
+		case Lang::ZhHant:{
+			std::string zh=pick_non_empty(nz(st.zh),nz(st.en),nz(st.id),nullptr);
+			return to_zh_hant(zh);
+		}
 		case Lang::En:
 			return pick_non_empty(nz(st.en),nz(st.id),nz(st.zh),nullptr);
 		case Lang::Ja:
@@ -57,4 +61,3 @@ std::string tr_star_name(const StarRecord&st){
 }
 
 }
-

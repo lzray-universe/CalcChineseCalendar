@@ -140,6 +140,6 @@ void use_main(){
 			 <<"  lunar download --help\n";
 	std::cout<<"Global option:\n"
 			 <<"  --eclipse-method modern|legacy  (default: modern)\n";
-	std::cout<<"  --lang zh|en|ja|ko  (default: from config default_lang)\n";
+	std::cout<<"  --lang zh|zht|en|ja|ko  (default: from config default_lang)\n";
 }
 
