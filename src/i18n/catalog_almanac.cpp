@@ -13,24 +13,25 @@ namespace lunar::i18n{
 
 namespace{
 
-struct Text4{
+struct Text5{
 	const char*zh;
 	const char*en;
 	const char*ja;
 	const char*ko;
+	const char*zht=nullptr;
 };
 
 struct DictItem{
 	const char*key;
-	Text4 text;
+	Text5 text;
 };
 
-std::string pick_text(const Text4&text){
-	return pick(text.zh,text.en,text.ja,text.ko);
+std::string pick_text(const Text5&text){
+	return pick(text.zh,text.en,text.ja,text.ko,text.zht);
 }
 
 template<std::size_t N>
-std::string pick_index(const std::array<Text4,N>&items,int idx,
+std::string pick_index(const std::array<Text5,N>&items,int idx,
 					  const std::string&fallback){
 	if(idx<0||idx>=static_cast<int>(N)){
 		return fallback;
@@ -38,7 +39,7 @@ std::string pick_index(const std::array<Text4,N>&items,int idx,
 	return pick_text(items[static_cast<std::size_t>(idx)]);
 }
 
-const std::array<Text4,10> kStem={{
+const std::array<Text5,10> kStem={{
 	{"甲","Jia","甲","갑"},
 	{"乙","Yi","乙","을"},
 	{"丙","Bing","丙","병"},
@@ -51,7 +52,7 @@ const std::array<Text4,10> kStem={{
 	{"癸","Gui","癸","계"},
 }};
 
-const std::array<Text4,12> kBranch={{
+const std::array<Text5,12> kBranch={{
 	{"子","Zi","子","자"},
 	{"丑","Chou","丑","축"},
 	{"寅","Yin","寅","인"},
@@ -66,7 +67,7 @@ const std::array<Text4,12> kBranch={{
 	{"亥","Hai","亥","해"},
 }};
 
-const std::array<Text4,12> kZodiac={{
+const std::array<Text5,12> kZodiac={{
 	{"鼠","Rat","鼠","쥐"},
 	{"牛","Ox","牛","소"},
 	{"虎","Tiger","虎","호랑이"},
@@ -81,7 +82,7 @@ const std::array<Text4,12> kZodiac={{
 	{"猪","Pig","猪","돼지"},
 }};
 
-const std::array<Text4,5> kWuxing={{
+const std::array<Text5,5> kWuxing={{
 	{"木","Wood","木","목"},
 	{"火","Fire","火","화"},
 	{"土","Earth","土","토"},
@@ -89,7 +90,7 @@ const std::array<Text4,5> kWuxing={{
 	{"水","Water","水","수"},
 }};
 
-const std::array<Text4,30> kNayin={{
+const std::array<Text5,30> kNayin={{
 	{"海中金","Gold in the Sea","海中金","해중금"},
 	{"炉中火","Fire in the Furnace","炉中火","노중화"},
 	{"大林木","Wood of the Great Forest","大林木","대림목"},
@@ -122,7 +123,7 @@ const std::array<Text4,30> kNayin={{
 	{"大海水","Great Sea Water","大海水","대해수"},
 }};
 
-const std::array<Text4,10> kPengStem={{
+const std::array<Text5,10> kPengStem={{
 	{"甲不开仓 财物耗散","Jia: avoid opening granaries; wealth may scatter.","甲は倉を開かず、財物耗散。","갑일에는 창고를 열지 말라, 재물이 흩어진다."},
 	{"乙不栽植 千株不长","Yi: avoid planting; growth is hindered.","乙は植栽せず、千株育たず。","을일에는 심기를 피하라, 잘 자라지 않는다."},
 	{"丙不修灶 必见灾殃","Bing: avoid repairing stoves; misfortune may follow.","丙は竈を修めず、災いを招く。","병일에는 부엌 수리를 피하라."},
@@ -135,7 +136,7 @@ const std::array<Text4,10> kPengStem={{
 	{"癸不词讼 理弱敌强","Gui: avoid lawsuits; your side may be weaker.","癸は訴訟せず、理弱く敵強し。","계일에는 소송을 피하라."},
 }};
 
-const std::array<Text4,12> kPengBranch={{
+const std::array<Text5,12> kPengBranch={{
 	{"子不问卜 自惹祸殃","Zi: avoid divination; self-invited trouble.","子は占わず、自ら禍を招く。","자일에는 점을 피하라."},
 	{"丑不冠带 主不还乡","Chou: avoid crowning/attire rites; return is delayed.","丑は冠帯せず、主は還郷し難し。","축일에는 관대 예식을 피하라."},
 	{"寅不祭祀 神鬼不尝","Yin: avoid sacrifice rites; offerings are not accepted.","寅は祭祀せず、神鬼味わわず。","인일에는 제사를 피하라."},

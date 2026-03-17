@@ -14,6 +14,7 @@ struct EventNameItem{
 	const char*en;
 	const char*ja;
 	const char*ko;
+	const char*zht=nullptr;
 };
 
 const std::array<EventNameItem,43> kEventNames={{
@@ -67,6 +68,9 @@ std::string pick_name(const EventNameItem&item){
 		case Lang::Zh:
 			return item.zh;
 		case Lang::ZhHant:
+			if(item.zht&&item.zht[0]!='\0'){
+				return item.zht;
+			}
 			return to_zh_hant(item.zh);
 		case Lang::En:
 			return item.en;

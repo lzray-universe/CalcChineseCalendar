@@ -9,25 +9,25 @@ namespace lunar::i18n{
 std::string tr_body_name(int id){
 	switch(id){
 		case 10:
-			return pick("太阳","Sun","太陽","태양");
+			return pick("太阳","Sun","太陽","태양","太陽");
 		case 199:
-			return pick("水星","Mercury","水星","수성");
+			return pick("水星","Mercury","水星","수성","水星");
 		case 299:
-			return pick("金星","Venus","金星","금성");
+			return pick("金星","Venus","金星","금성","金星");
 		case 301:
-			return pick("月球","Moon","月","달");
+			return pick("月球","Moon","月","달","月球");
 		case 499:
-			return pick("火星","Mars","火星","화성");
+			return pick("火星","Mars","火星","화성","火星");
 		case 599:
-			return pick("木星","Jupiter","木星","목성");
+			return pick("木星","Jupiter","木星","목성","木星");
 		case 699:
-			return pick("土星","Saturn","土星","토성");
+			return pick("土星","Saturn","土星","토성","土星");
 		case 799:
-			return pick("天王星","Uranus","天王星","천왕성");
+			return pick("天王星","Uranus","天王星","천왕성","天王星");
 		case 899:
-			return pick("海王星","Neptune","海王星","해왕성");
+			return pick("海王星","Neptune","海王星","해왕성","海王星");
 		default:
-			return pick("天体","Celestial Body","天体","천체");
+			return pick("天体","Celestial Body","天体","천체","天體");
 	}
 }
 
