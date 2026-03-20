@@ -294,8 +294,8 @@ double signed_gamma_re(const Vec3&axis,const Vec3&dvec,double jd_tdb){
 }
 
 bool eval_geo(EphRead&eph,double jd_tdb,GeoEval&g){
-	Vec3 sun=AberCorr::geo_app(eph,eph.SUN,jd_tdb,3);
-	Vec3 moon=AberCorr::geo_app(eph,eph.MOON,jd_tdb,3);
+	Vec3 sun=raw_vec(AberCorr::geo_app(eph,eph.SUN,jd_tdb,3));
+	Vec3 moon=raw_vec(AberCorr::geo_app(eph,eph.MOON,jd_tdb,3));
 	if(!finite_vec(sun)||!finite_vec(moon)){
 		return false;
 	}
@@ -670,16 +670,30 @@ double solve_bracketed(const std::function<double(double)>&fn,
 		}
 
 		double xn=0.5*(left+right);
-		double dfx=dfn(x);
-		if(std::isfinite(dfx)&&std::fabs(dfx)>1e-14){
-			double cand=x-fx/dfx;
+		double f_span=f_right-f_left;
+		if(std::isfinite(f_span)&&std::fabs(f_span)>0.0){
+			double cand=left-f_left*(right-left)/f_span;
 			if(cand>left&&cand<right){
 				xn=cand;
+			}
+		}
+		if(dfn){
+			double dfx=dfn(x);
+			if(std::isfinite(dfx)&&std::fabs(dfx)>1e-14){
+				double cand=x-fx/dfx;
+				if(cand>left&&cand<right){
+					xn=cand;
+				}
 			}
 		}
 		x=xn;
 	}
 	return 0.5*(left+right);
+}
+
+double solve_bracketed(const std::function<double(double)>&fn,
+					   const Bracket&br,double x0,double x_tol){
+	return solve_bracketed(fn,std::function<double(double)>(),br,x0,x_tol);
 }
 
 bool solve_contact_pair(const std::function<double(double)>&fn,double center,
@@ -699,21 +713,11 @@ bool solve_contact_pair(const std::function<double(double)>&fn,double center,
 		return false;
 	}
 
-	auto dfn=[&](double jd) -> double{
-		constexpr double h=1e-5;
-		double f1=fn(jd+h);
-		double f2=fn(jd-h);
-		if(!std::isfinite(f1)||!std::isfinite(f2)){
-			return std::numeric_limits<double>::quiet_NaN();
-		}
-		return (f1-f2)/(2.0*h);
-	};
-
 	double guess1=std::clamp(center-0.05,b_left.left,b_left.right);
 	double guess2=std::clamp(center+0.05,b_right.left,b_right.right);
 	try{
-		t1=solve_bracketed(fn,dfn,b_left,guess1,1e-10);
-		t2=solve_bracketed(fn,dfn,b_right,guess2,1e-10);
+		t1=solve_bracketed(fn,b_left,guess1,1e-10);
+		t2=solve_bracketed(fn,b_right,guess2,1e-10);
 	}catch(const std::exception&){
 		return false;
 	}
@@ -818,8 +822,8 @@ Vec3 apply_diurnal_aberration(const Vec3&dir,const Vec3&obs_beta){
 }
 
 bool eval_body_ecef(EphRead&eph,double jd_tdb,double jd_utc,BodyEcefState&out){
-	Vec3 sun_geo=AberCorr::geo_app(eph,eph.SUN,jd_tdb,3);
-	Vec3 moon_geo=AberCorr::geo_app(eph,eph.MOON,jd_tdb,3);
+	Vec3 sun_geo=raw_vec(AberCorr::geo_app(eph,eph.SUN,jd_tdb,3));
+	Vec3 moon_geo=raw_vec(AberCorr::geo_app(eph,eph.MOON,jd_tdb,3));
 	if(!finite_vec(sun_geo)||!finite_vec(moon_geo)){
 		return false;
 	}

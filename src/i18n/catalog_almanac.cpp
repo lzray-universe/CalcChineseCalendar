@@ -391,17 +391,6 @@ std::string tr_nayin(int day60){
 	return pick_index(kNayin,idx,std::to_string(idx));
 }
 
-void replace_all(std::string&text,const std::string&from,const std::string&to){
-	if(from.empty()){
-		return;
-	}
-	std::size_t pos=0;
-	while((pos=text.find(from,pos))!=std::string::npos){
-		text.replace(pos,from.size(),to);
-		pos+=to.size();
-	}
-}
-
 std::string tr_fetal_god(const std::string&text){
 	if(current_lang()==Lang::ZhHant){
 		return to_zh_hant(text);
@@ -409,8 +398,7 @@ std::string tr_fetal_god(const std::string&text){
 	if(current_lang()!=Lang::En){
 		return text;
 	}
-	std::string out=text;
-	static const std::array<std::pair<const char*,const char*>,29> kRepl={{
+	static const std::array<std::pair<const char*,const char*>,29> kRepl={ {
 		{"占大门","Main Door"},
 		{"占门碓","Door-Mortar"},
 		{"占门床","Door-Bed"},
@@ -440,11 +428,49 @@ std::string tr_fetal_god(const std::string&text){
 		{"东","East"},
 		{"西","West"},
 		{"中","Center"},
-	}};
-	for(const auto&it : kRepl){
-		replace_all(out,it.first,it.second);
+	} };
+	std::string out;
+	std::size_t pos=0;
+	while(pos<text.size()){
+		bool matched=false;
+		for(const auto&it : kRepl){
+			const std::string from=it.first;
+			if(text.compare(pos,from.size(),from)!=0){
+				continue;
+			}
+			if(!out.empty()){
+				out.push_back(' ');
+			}
+			out+=it.second;
+			pos+=from.size();
+			matched=true;
+			break;
+		}
+		if(matched){
+			continue;
+		}
+		if(!out.empty()){
+			out.push_back(' ');
+		}
+		out.append(text,pos,1);
+		++pos;
 	}
 	return out;
+}
+
+std::string tr_fetal_god_code(int code){
+	static const std::array<const char*,60> kText={{
+		"碓磨门外东南","碓磨厕外东南","厨灶炉外正南","仓库门外正南","房床厕外正南","占门床外正南","占碓磨外正南","厨灶厕外西南","仓库炉外西南","房床门外西南",
+		"门碓栖外西南","碓磨床外西南","厨灶碓外西南","仓库厕外西南","房床厕外正南","房床炉外正西","碓磨栖外正西","厨灶床外正西","仓库碓外西北","房床厕外西北",
+		"占门炉外西北","碓磨门外西北","厨灶栖外西北","仓库床外西北","房床碓外正北","占门厕外正北","碓磨炉外正北","厨灶门外正北","仓库栖外正北","占房床房内北",
+		"占门碓房内北","碓磨门房内北","厨灶炉房内北","仓库门房内北","房床栖房内中","占门床房内中","占碓磨房内南","厨灶厕房内南","仓库炉房内南","房床门房内南",
+		"门鸡栖房内东","碓磨床房内东","厨灶碓房内东","仓库厕房内东","房床炉房内东","占大门外东北","碓磨栖外东北","厨灶床外东北","仓库碓外东北","房床厕外东北",
+		"占门炉外东北","碓磨门外正东","厨灶栖外正东","仓库床外正东","房床碓外正东","占门厕外正东","碓磨炉外东南","仓库栖外东南","占房床外东南","占门碓外东南"
+	}};
+	if(code<0||code>=static_cast<int>(kText.size())){
+		return "";
+	}
+	return tr_fetal_god(kText[static_cast<std::size_t>(code)]);
 }
 
 std::string tr_sha_dir_zh(int b){
@@ -635,35 +661,216 @@ std::string tr_hour_slot(std::size_t idx){
 	return tr_branch(0)+"(次日23:00-00:59)";
 }
 
+std::string tr_duty_tag_code(int code){
+	switch(code){
+		case 1:
+			return tr_dict("黄道日");
+		case 0:
+		default:
+			return tr_dict("黑道日");
+	}
+}
+
+std::string tr_dir_code(int code){
+	static const std::array<const char*,8> kText={
+		"正北","东北","正东","东南","正南","西南","正西","西北"
+	};
+	if(code<0||code>=static_cast<int>(kText.size())){
+		return "";
+	}
+	return tr_dict(kText[static_cast<std::size_t>(code)]);
+}
+
+std::string tr_meridian_code(int code){
+	static const std::array<const char*,12> kText={
+		"胆","肝","肺","大肠","胃","脾","心","小肠","膀胱","肾","心包","三焦"
+	};
+	if(code<0||code>=static_cast<int>(kText.size())){
+		return "";
+	}
+	return tr_dict(kText[static_cast<std::size_t>(code)]);
+}
+
+std::string tr_jianchu_code(int code){
+	static const std::array<const char*,12> kText={
+		"建","除","满","平","定","执","破","危","成","收","开","闭"
+	};
+	if(code<0||code>=static_cast<int>(kText.size())){
+		return "";
+	}
+	return tr_dict(kText[static_cast<std::size_t>(code)]);
+}
+
+std::string tr_god_code(int code){
+	static const std::array<const char*,43> kText={{
+		"青龙","明堂","天刑","朱雀","金匮","天德","白虎","玉堂","天牢","玄武","司命","勾陈",
+		"月破","岁破","杨公忌","四离","四绝","三合","六合","月德","月德合","天德合","岁德",
+		"岁德合","王日","官日","守日","相日","民日","时德","天贵","天喜","月恩","天赦","大耗",
+		"五鬼","咸池","血支","天狗","往亡","四击","月刑","月害"
+	}};
+	if(code<0||code>=static_cast<int>(kText.size())){
+		return "";
+	}
+	return tr_dict(kText[static_cast<std::size_t>(code)]);
+}
+
+std::string tr_act_code(int code){
+	static const std::array<const char*,71> kText={{
+		"祭祀","出行","移徙","结婚姻","宴会","嫁娶","安床","沐浴","剃头","修造","求医疗病","上表章",
+		"上官","入学","冠带","进人口","裁衣","竖柱上梁","经络","开市","立券交易","纳财","修置产室","开渠",
+		"穿井","安碓硙","扫舍宇","平治道涂","破屋坏垣","伐木","捕捉","畋猎","栽种","牧养","破土","安葬",
+		"启攒","施恩","招贤","举正直","临政","解除","整容","整手足甲","裁制","开仓","塞穴","补垣","修饰垣墙",
+		"祈福","求嗣","纳采","搬移","营建","筑堤防","安抚边境","选将","诉讼","纳畜","酝酿","修仓库","取鱼",
+		"乘船渡水","针刺","出师","庆赐","行船","登高","苫盖","诸事不宜","诸事不忌"
+	}};
+	if(code<0||code>=static_cast<int>(kText.size())){
+		return "";
+	}
+	return tr_dict(kText[static_cast<std::size_t>(code)]);
+}
+
+std::string tr_xiu_code(int code){
+	static const std::array<const char*,28> kText={{
+		"角木蛟","亢金龙","氐土貉","房日兔","心月狐","尾火虎","箕水豹","斗木獬","牛金牛","女土蝠","虚日鼠","危月燕","室火猪","壁水貐",
+		"奎木狼","娄金狗","胃土雉","昴日鸡","毕月乌","觜火猴","参水猿","井木犴","鬼金羊","柳土獐","星日马","张月鹿","翼火蛇","轸水蚓"
+	}};
+	if(code<0||code>=static_cast<int>(kText.size())){
+		return "";
+	}
+	return tr_dict(kText[static_cast<std::size_t>(code)]);
+}
+
+std::string tr_rule_code(int code){
+	switch(static_cast<HliRuleCode>(code)){
+		case HliRuleCode::FollowYiIgnoreJi:
+			return tr_dict("从宜不从忌");
+		case HliRuleCode::FollowBoth:
+			return tr_dict("从宜亦从忌");
+		case HliRuleCode::FollowJiIgnoreYi:
+			return tr_dict("从忌不从宜");
+		case HliRuleCode::AvoidEverything:
+			return tr_dict("诸事皆忌");
+	}
+	return "";
+}
+
+std::string tr_nayin_code(int code){
+	if(code<0||code>=static_cast<int>(kNayin.size())){
+		return "";
+	}
+	return pick_text(kNayin[static_cast<std::size_t>(code)]);
+}
+
+std::string tr_profile_code(int code){
+	switch(static_cast<HliProfileCode>(code)){
+		case HliProfileCode::ZiPing:
+			return pick("子平八字","Zi Ping Ba Zi","子平八字","자평팔자");
+		case HliProfileCode::PurpleStar:
+			return pick("紫微斗数","Purple Star","紫微斗数","자미두수");
+		case HliProfileCode::XieJi:
+			return pick("协纪辨方书","Xie Ji Bian Fang","協紀辨方書","협기변방서");
+		case HliProfileCode::Custom:
+			return pick("自定义","Custom","カスタム","사용자 정의");
+		case HliProfileCode::Folk:
+		default:
+			return pick("民俗黄历","Folk Almanac","民俗黄暦","민속 황력");
+	}
+}
+
+std::string tr_year_boundary_code(int code){
+	switch(static_cast<HliYearBoundary>(code)){
+		case HliYearBoundary::LiChun:
+			return pick("立春换年","Year at Li Chun","立春で換年","입춘 기준 연전환");
+		case HliYearBoundary::WinterSolstice:
+			return pick("冬至换年","Year at Winter Solstice","冬至で換年","동지 기준 연전환");
+		case HliYearBoundary::LunarNewYear:
+		default:
+			return pick("正月初一换年","Year at Lunar New Year","旧暦正月初一で換年","음력 설 기준 연전환");
+	}
+}
+
+std::string tr_month_boundary_code(int code){
+	switch(static_cast<HliMonthBoundary>(code)){
+		case HliMonthBoundary::SolarTerm:
+			return pick("节气换月","Month at Solar Term","節気で換月","절기 기준 월전환");
+		case HliMonthBoundary::LunarFirstDay:
+		default:
+			return pick("初一换月","Month at Lunar First Day","朔日で換月","초하루 기준 월전환");
+	}
+}
+
+std::string tr_leap_month_mode_code(int code){
+	switch(static_cast<HliLeapMonthMode>(code)){
+		case HliLeapMonthMode::Ignore:
+			return pick("忽略闰月","Ignore Leap Month","閏月を無視","윤달 무시");
+		case HliLeapMonthMode::SplitMidway:
+			return pick("闰月前半随前月后半作下月","Leap Month Split Midway","閏月を前後半で分割","윤달 전반/후반 분할");
+		case HliLeapMonthMode::ShiftToNext:
+			return pick("闰月作下月","Leap Month as Next Month","閏月を次月扱い","윤달을 다음달로 처리");
+		case HliLeapMonthMode::InheritPrevious:
+		default:
+			return pick("闰月随前月","Leap Month Inherits Previous","閏月は前月継承","윤달은 전월 계승");
+	}
+}
+
+std::string tr_day_boundary_code(int code){
+	switch(static_cast<HliDayBoundary>(code)){
+		case HliDayBoundary::Hour0:
+			return pick("子正换日","Day at 00:00","子正で換日","자정 기준 일전환");
+		case HliDayBoundary::Hour23:
+		default:
+			return pick("子初换日","Day at 23:00","子初で換日","23시 기준 일전환");
+	}
+}
+
 }
 
 void localize_hli(::HliData*data){
 	if(data==nullptr){
 		throw std::invalid_argument("localize_hli requires non-null data");
 	}
-	if(current_lang()==Lang::Zh){
-		return;
-	}
 
 	auto tr_gz_node=[](GzNode&g){ g.text=tr_gz(g.stem,g.branch); };
 
 	tr_gz_node(data->y_lun);
 	tr_gz_node(data->y_lchun);
+	tr_gz_node(data->y_rule);
 	tr_gz_node(data->m_gz);
 	tr_gz_node(data->d_gz);
 	tr_gz_node(data->h_gz);
 	tr_gz_node(data->h_gz_true);
 
 	data->bazi_clock=
-		data->y_lchun.text+" "+data->m_gz.text+" "+data->d_gz.text+" "+
+		data->y_rule.text+" "+data->m_gz.text+" "+data->d_gz.text+" "+
 		data->h_gz.text;
 	data->bazi_true=
-		data->y_lchun.text+" "+data->m_gz.text+" "+data->d_gz.text+" "+
+		data->y_rule.text+" "+data->m_gz.text+" "+data->d_gz.text+" "+
 		data->h_gz_true.text;
 
-	data->jianchu=tr_dict(data->jianchu);
-	data->duty_god=tr_dict(data->duty_god);
-	data->duty_tag=tr_dict(data->duty_tag);
+	data->rule_profile=tr_profile_code(data->rule_profile_code);
+	data->year_boundary_text=tr_year_boundary_code(data->year_boundary_code);
+	data->month_boundary_text=
+		tr_month_boundary_code(data->month_boundary_code);
+	data->leap_month_mode_text=
+		tr_leap_month_mode_code(data->leap_month_mode_code);
+	data->day_boundary_text=tr_day_boundary_code(data->day_boundary_code);
+
+	if(data->jianchu_code>=0){
+		data->jianchu=tr_jianchu_code(data->jianchu_code);
+	}else{
+		data->jianchu=tr_dict(data->jianchu);
+	}
+	if(data->duty_god_code>=0){
+		data->duty_god=tr_god_code(data->duty_god_code);
+		data->duty_tag=tr_duty_tag_code(data->duty_tag_code);
+	}else{
+		data->duty_god=tr_dict(data->duty_god);
+		if(data->duty_tag_code>=0){
+			data->duty_tag=tr_duty_tag_code(data->duty_tag_code);
+		}else{
+			data->duty_tag=tr_dict(data->duty_tag);
+		}
+	}
 	data->clash=tr_clash(data->d_gz.branch);
 	data->chong_sha=tr_chong_sha(data->d_gz.branch);
 	data->six_he=tr_six_he(data->d_gz.branch);
@@ -672,28 +879,112 @@ void localize_hli(::HliData*data){
 
 	int day60=gz_idx60(data->d_gz.stem,data->d_gz.branch);
 	data->pengzu=tr_pengzu(data->d_gz.stem,data->d_gz.branch);
-	data->nayin=tr_nayin(day60);
+	if(data->nayin_code>=0){
+		data->nayin=tr_nayin_code(data->nayin_code);
+	}else{
+		data->nayin=tr_nayin(day60);
+	}
 	data->wx_day=tr_wx_day(*data,day60);
-	data->fetal_god=tr_fetal_god(data->fetal_god);
+	if(data->fetal_god_code>=0){
+		data->fetal_god=tr_fetal_god_code(data->fetal_god_code);
+	}else{
+		data->fetal_god=tr_fetal_god(data->fetal_god);
+	}
 
-	data->meridian=tr_dict(data->meridian);
-	data->lucky_dir=tr_dict(data->lucky_dir);
-	data->wealth_dir=tr_dict(data->wealth_dir);
-	data->mascot_dir=tr_dict(data->mascot_dir);
-	data->sun_noble_dir=tr_dict(data->sun_noble_dir);
-	data->moon_noble_dir=tr_dict(data->moon_noble_dir);
-	data->xiu28=tr_dict(data->xiu28);
+	if(data->meridian_code>=0){
+		data->meridian=tr_meridian_code(data->meridian_code);
+	}else{
+		data->meridian=tr_dict(data->meridian);
+	}
+	if(data->lucky_dir_code>=0){
+		data->lucky_dir=tr_dir_code(data->lucky_dir_code);
+	}else{
+		data->lucky_dir=tr_dict(data->lucky_dir);
+	}
+	if(data->wealth_dir_code>=0){
+		data->wealth_dir=tr_dir_code(data->wealth_dir_code);
+	}else{
+		data->wealth_dir=tr_dict(data->wealth_dir);
+	}
+	if(data->mascot_dir_code>=0){
+		data->mascot_dir=tr_dir_code(data->mascot_dir_code);
+	}else{
+		data->mascot_dir=tr_dict(data->mascot_dir);
+	}
+	if(data->sun_noble_dir_code>=0){
+		data->sun_noble_dir=tr_dir_code(data->sun_noble_dir_code);
+	}else{
+		data->sun_noble_dir=tr_dict(data->sun_noble_dir);
+	}
+	if(data->moon_noble_dir_code>=0){
+		data->moon_noble_dir=tr_dir_code(data->moon_noble_dir_code);
+	}else{
+		data->moon_noble_dir=tr_dict(data->moon_noble_dir);
+	}
+	if(data->xiu28_code>=0){
+		data->xiu28=tr_xiu_code(data->xiu28_code);
+	}else{
+		data->xiu28=tr_dict(data->xiu28);
+	}
+	if(data->xiu28_mod28_code>=0){
+		data->xiu28_mod28=tr_xiu_code(data->xiu28_mod28_code);
+	}else{
+		data->xiu28_mod28=tr_dict(data->xiu28_mod28);
+	}
+	data->xiu_id=tr_star_name_text(data->xiu_id);
 
-	tr_vec(data->good_gods);
-	tr_vec(data->bad_gods);
-	tr_vec(data->yi);
-	tr_vec(data->ji);
-	data->yi_ji_rule=tr_dict(data->yi_ji_rule);
+	if(!data->good_god_codes.empty()){
+		data->good_gods.clear();
+		for(int code : data->good_god_codes){
+			data->good_gods.push_back(tr_god_code(code));
+		}
+	}else{
+		tr_vec(data->good_gods);
+	}
+	if(!data->bad_god_codes.empty()){
+		data->bad_gods.clear();
+		for(int code : data->bad_god_codes){
+			data->bad_gods.push_back(tr_god_code(code));
+		}
+	}else{
+		tr_vec(data->bad_gods);
+	}
+	if(!data->yi_codes.empty()){
+		data->yi.clear();
+		for(int code : data->yi_codes){
+			data->yi.push_back(tr_act_code(code));
+		}
+	}else{
+		tr_vec(data->yi);
+	}
+	if(!data->ji_codes.empty()){
+		data->ji.clear();
+		for(int code : data->ji_codes){
+			data->ji.push_back(tr_act_code(code));
+		}
+	}else{
+		tr_vec(data->ji);
+	}
+	if(data->yi_ji_rule_code>=0){
+		data->yi_ji_rule=tr_rule_code(data->yi_ji_rule_code);
+	}else{
+		data->yi_ji_rule=tr_dict(data->yi_ji_rule);
+	}
 
 	for(std::size_t i=0;i<data->hour_jx.size();++i){
-		data->hour_jx[i].slot=tr_hour_slot(i);
-		data->hour_jx[i].gz=tr_gz_text(data->hour_jx[i].gz);
-		data->hour_jx[i].luck=tr_hour_luck(data->hour_jx[i].luck);
+		std::size_t slot_idx=
+			data->hour_jx[i].slot_index>=0
+				?static_cast<std::size_t>(data->hour_jx[i].slot_index)
+				:i;
+		data->hour_jx[i].slot=tr_hour_slot(slot_idx);
+		if(data->hour_jx[i].gz_index>=0){
+			int idx60=data->hour_jx[i].gz_index;
+			data->hour_jx[i].gz=tr_gz(idx60%10,idx60%12);
+		}else{
+			data->hour_jx[i].gz=tr_gz_text(data->hour_jx[i].gz);
+		}
+		data->hour_jx[i].luck=
+			tr_hour_luck(data->hour_jx[i].is_bad?"凶":data->hour_jx[i].luck);
 	}
 }
 

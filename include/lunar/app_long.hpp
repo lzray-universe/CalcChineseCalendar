@@ -6,8 +6,8 @@
 #include "lunar/spc_ephem.hpp"
 
 struct RetProp{
-	Vec3 X;
-	Vec3 V;
+	Pos3 X;
+	Vel3 V;
 	double tr;
 };
 
@@ -24,15 +24,15 @@ struct EoTData{
 };
 
 struct AberCorr{
-	static double lightday(const Vec3&vec);
+	static double lightday(const Pos3&vec);
 
 	static RetProp geo_prop(EphRead&eph,int target,double jd_tdb,
 							int max_iter=3);
 
-	static Vec3 geo_app(EphRead&eph,int target,double jd_tdb,double*tr_out,
+	static Pos3 geo_app(EphRead&eph,int target,double jd_tdb,double*tr_out,
 						int max_iter=3);
 
-	static Vec3 geo_app(EphRead&eph,int target,double jd_tdb,int max_iter=3);
+	static Pos3 geo_app(EphRead&eph,int target,double jd_tdb,int max_iter=3);
 };
 
 struct AppLon{

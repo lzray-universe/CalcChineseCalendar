@@ -41,7 +41,7 @@ int run_abcli(const AtArgs&args){
 							   :static_cast<double>(tz_disp)/60.0*15.0;
 			row.data=at_ftxt(eph,line.raw,args.input_tz,tz_disp,args.tz,
 							 args.events,args.calc_eot,args.eot_lon_deg,
-							 hli_lon,&cache);
+							 hli_lon,&args.hli_rules,&cache);
 			row.ok=true;
 		}catch(const std::exception&ex){
 			row.ok=false;
@@ -125,8 +125,9 @@ int run_abcli(const AtArgs&args){
 			 os<<"tool=lunar format=txt type=at-batch tz_display="<<args.tz
 			   <<"\n";
 			 os<<"line_no\tstatus\traw\till_pct\tphase_name\tlunar_date\t"
-			   "y_lun_gz\ty_lchun_gz\tm_gz\td_gz\th_gz\th_true_gz\tjianchu\t"
-			   "chong_sha\tyi\tji";
+			   "y_lun_gz\ty_lchun_gz\ty_rule_gz\tm_gz\td_gz\th_gz\th_true_gz\t"
+			   "rule_profile\tyear_boundary\tmonth_boundary\tleap_month_mode\t"
+			   "day_boundary\tjianchu\tchong_sha\tyi\tji";
 			 if(args.calc_eot){
 				 os<<"\teot_minutes";
 			 }
@@ -139,10 +140,16 @@ int run_abcli(const AtArgs&args){
 					   <<row.data.lunar_date.lun_label<<"\t"
 					   <<row.data.hli.y_lun.text<<"\t"
 					   <<row.data.hli.y_lchun.text<<"\t"
+					   <<row.data.hli.y_rule.text<<"\t"
 					   <<row.data.hli.m_gz.text<<"\t"
 					   <<row.data.hli.d_gz.text<<"\t"
 					   <<row.data.hli.h_gz.text<<"\t"
 					   <<row.data.hli.h_gz_true.text<<"\t"
+					   <<row.data.hli.rule_profile<<"\t"
+					   <<row.data.hli.year_boundary_text<<"\t"
+					   <<row.data.hli.month_boundary_text<<"\t"
+					   <<row.data.hli.leap_month_mode_text<<"\t"
+					   <<row.data.hli.day_boundary_text<<"\t"
 					   <<row.data.hli.jianchu<<"\t"
 					   <<row.data.hli.chong_sha<<"\t"
 					   <<join_pipe(row.data.hli.yi)<<"\t"
@@ -153,7 +160,7 @@ int run_abcli(const AtArgs&args){
 					 os<<"\t\n";
 				 }else{
 					 os<<"error\t"<<row.raw
-					   <<"\t\t\t\t\t\t\t\t\t\t\t\t\t";
+					   <<"\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
 					 if(args.calc_eot){
 						 os<<"\t";
 					 }
@@ -410,6 +417,9 @@ int cmd_at(const std::vector<std::string>&args){
 	if(a.format!="txt"&&a.format!="json"&&a.format!="jsonl"){
 		a.format="txt";
 	}
+	a.hli_rules=hli_rules_from_cfg(cfg);
+	a.hli_trad=
+		hli_profile_key(static_cast<HliProfileCode>(a.hli_rules.profile_code));
 
 	std::size_t i=1;
 	if(i<args.size()&&!is_opt(args[i])){
@@ -465,6 +475,63 @@ int cmd_at(const std::vector<std::string>&args){
 			 a.eot_lon_deg=parse_double(req_val(src,idx,opt),"--eot-lon");
 			 a.calc_eot=true;
 		 }},
+		{"--trad",[&](const std::vector<std::string>&src,std::size_t&idx,
+					  const std::string&opt){
+			 std::string value=req_val(src,idx,opt);
+			 HliProfileCode parsed=HliProfileCode::Folk;
+			 if(!parse_hli_profile(value,&parsed)){
+				 throw std::invalid_argument(
+					 "invalid --trad: "+value+
+					 " (expected folk|ziping|purple|xieji)");
+			 }
+			 a.hli_trad=hli_profile_key(parsed);
+			 a.hli_rules=make_hli_rule_set(parsed);
+		 }},
+		{"--year-boundary",[&](const std::vector<std::string>&src,
+							   std::size_t&idx,const std::string&opt){
+			 std::string value=req_val(src,idx,opt);
+			 HliYearBoundary parsed=HliYearBoundary::LunarNewYear;
+			 if(!parse_hli_year_boundary(value,&parsed)){
+				 throw std::invalid_argument(
+					 "invalid --year-boundary: "+value+
+					 " (expected lichun|lunar_new_year|dongzhi)");
+			 }
+			 a.hli_rules.year_boundary=static_cast<int>(parsed);
+		 }},
+		{"--month-boundary",[&](const std::vector<std::string>&src,
+								std::size_t&idx,const std::string&opt){
+			 std::string value=req_val(src,idx,opt);
+			 HliMonthBoundary parsed=HliMonthBoundary::LunarFirstDay;
+			 if(!parse_hli_month_boundary(value,&parsed)){
+				 throw std::invalid_argument(
+					 "invalid --month-boundary: "+value+
+					 " (expected solar_term|lunar_first_day)");
+			 }
+			 a.hli_rules.month_boundary=static_cast<int>(parsed);
+		 }},
+		{"--leap-month-mode",[&](const std::vector<std::string>&src,
+								 std::size_t&idx,const std::string&opt){
+			 std::string value=req_val(src,idx,opt);
+			 HliLeapMonthMode parsed=HliLeapMonthMode::InheritPrevious;
+			 if(!parse_hli_leap_month_mode(value,&parsed)){
+				 throw std::invalid_argument(
+					 "invalid --leap-month-mode: "+value+
+					 " (expected ignore|inherit_previous|split_midway|"
+					 "shift_to_next)");
+			 }
+			 a.hli_rules.leap_month_mode=static_cast<int>(parsed);
+		 }},
+		{"--day-boundary",[&](const std::vector<std::string>&src,
+							  std::size_t&idx,const std::string&opt){
+			 std::string value=req_val(src,idx,opt);
+			 HliDayBoundary parsed=HliDayBoundary::Hour23;
+			 if(!parse_hli_day_boundary(value,&parsed)){
+				 throw std::invalid_argument(
+					 "invalid --day-boundary: "+value+
+					 " (expected hour23|hour0)");
+			 }
+			 a.hli_rules.day_boundary=static_cast<int>(parsed);
+		 }},
 	};
 
 	for(;i<args.size();++i){
@@ -498,6 +565,9 @@ int cmd_at(const std::vector<std::string>&args){
 		a.format="json";
 		a.pretty=false;
 	}
+	a.hli_rules=normalize_hli_rule_set(a.hli_rules);
+	a.hli_trad=
+		hli_profile_key(static_cast<HliProfileCode>(a.hli_rules.profile_code));
 
 	if(batch_mode){
 		return run_abcli(a);
@@ -637,7 +707,12 @@ void use_at(){
 		<<"  lunar at <bsp> --file <path>\n"
 		<<"    [--input-tz Z|+08:00|-05:00] [--tz Z|+08:00|-05:00]\n"
 		<<"    [--format json|txt|jsonl] [--out <path>] [--pretty 0|1] "
-		  "[--quiet] [--events 0|1] [--eot-lon <deg>]\n"
+		  "[--quiet] [--events 0|1] [--eot-lon <deg>] [--trad "
+		  "folk|ziping|purple|xieji]\n"
+		<<"    [--year-boundary lichun|lunar_new_year|dongzhi] "
+		  "[--month-boundary solar_term|lunar_first_day]\n"
+		<<"    [--leap-month-mode ignore|inherit_previous|split_midway|"
+		  "shift_to_next] [--day-boundary hour23|hour0]\n"
 		<<"    [--jobs N] [--meta-once 0|1]\n"
 		<<"Time formats:\n"
 		<<"  YYYY-MM-DD\n"
@@ -648,6 +723,7 @@ void use_at(){
 		<<"  lunar at D:\\de442.bsp 2025-06-01T00:00:00+08:00 --format json\n"
 		<<"  lunar at D:\\de442.bsp --time 2025-06-01T00:00 --input-tz +08:00 "
 		  "--tz Z\n"
+		<<"  lunar at D:\\de442.bsp 2025-01-31T12:00:00+08:00 --trad ziping\n"
 		<<"  lunar at D:\\de442.bsp 2025-06-01T00:00:00+08:00 --eot-lon "
 		  "116.391\n"
 		<<"  lunar at D:\\de442.bsp --file times.txt --format jsonl "

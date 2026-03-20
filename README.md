@@ -1,6 +1,6 @@
 # CalcChineseCalendar（lunar）
 
-CalcChineseCalendar 是一个基于 JPL DE BSP 星历文件的历法与天文计算工具，提供：
+CalcChineseCalendar 是一个优先使用 JPL DE BSP 星历、在缺失 BSP 时可自动回退到仓库内置 VSOP87A + ELPMPP02 的历法与天文计算工具，提供：
 
 - 命令行工具 `lunar`
 - 动态库 `lunar_dll`（导出 C API）
@@ -22,7 +22,7 @@ CalcChineseCalendar 是一个基于 JPL DE BSP 星历文件的历法与天文计
 - 事件检索：`next`、`range`、`search`
 - 日月食：`eclipse`
 - 传统节日与黄历摘要：`festival`、`almanac`
-- 星历信息与自检：`info`、`selftest`
+- 星历信息：`info`
 - 配置管理与补全脚本：`config`、`completion`
 - 交互式模式（无参数启动）
 
@@ -32,7 +32,7 @@ CalcChineseCalendar 是一个基于 JPL DE BSP 星历文件的历法与天文计
 
 - CMake 3.20+
 - 支持 C++20 的编译器
-- 运行时需要 BSP 文件（`.bsp`）
+- 运行时优先使用 BSP 文件（`.bsp`）；若未找到可自动回退到内置 VSOP87A + ELPMPP02
 - `download get` 需要系统中存在 `curl` 或 `wget`
 
 ### 2.2 Windows（Visual Studio）
@@ -53,8 +53,28 @@ cmake --build build -j
 
 - 可执行程序：`lunar`
 - 动态库：`lunar_dll`（输出名为 `lunar`，对应平台扩展名）
+- 测试程序：`lunar_tests`（启用 `LUNAR_BUILD_TESTS` 时）
 
-## 3. 运行前准备：BSP 星历
+### 2.5 可选构建开关
+
+- `-DLUNAR_ENABLE_SERIES_FALLBACK=ON|OFF`
+  - `ON`（默认）：未找到 BSP 时自动切换到内置 VSOP87A + ELPMPP02
+  - `OFF`：保持旧行为，必须提供可用 BSP
+- `-DLUNAR_BUILD_TESTS=ON|OFF`
+  - `ON`（默认）：构建 gtest/ctest 测试目标
+  - `OFF`：不构建测试目标
+
+### 2.6 运行测试
+
+```bash
+cmake -S . -B build
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
+
+若关闭 `LUNAR_ENABLE_SERIES_FALLBACK`，可通过环境变量 `LUNAR_TEST_BSP` 指定测试所用 BSP。
+
+## 3. 运行前准备：BSP 星历（可选但优先）
 
 ### 3.1 下载列表
 
@@ -104,7 +124,7 @@ lunar <command> [args...]
 
 ### 4.3 全局 BSP 覆盖参数
 
-所有需要星历的命令都支持：
+所有需要星历的命令都支持显式指定：
 
 - `--bsp <path>`
 - `--bsp=<path>`
@@ -129,7 +149,7 @@ lunar <bsp> <years> [months options...]
 
 ### 5.1 哪些命令需要 BSP
 
-- `months calendar year event at convert day monthview next range search eclipse festival almanac info selftest`
+- `months calendar year event at convert day monthview next range search eclipse festival almanac info`
 
 不需要 BSP 的命令：
 
@@ -149,7 +169,8 @@ lunar <bsp> <years> [months options...]
 - 若命令可推断时间区间，优先选择“完整覆盖该区间”的 BSP。
 - 若无完整覆盖，选择与区间重叠最多的 BSP。
 - 若无法推断区间，使用候选列表第一个。
-- 若没有可用候选，抛出错误并提示使用 `--bsp` 或 `lunar config set def_bsp`。
+- 若没有可用候选且 `LUNAR_ENABLE_SERIES_FALLBACK=ON`，自动切换到内置 VSOP87A + ELPMPP02。
+- 若没有可用候选且 `LUNAR_ENABLE_SERIES_FALLBACK=OFF`，抛出错误并提示使用 `--bsp` 或 `lunar config set def_bsp`。
 
 ## 6. 配置文件 `lun_cfg.txt`
 
@@ -449,26 +470,14 @@ lunar info <bsp> [--format json|txt] [--out ...] [--pretty 0|1] [--quiet]
 - 默认格式固定为 `txt`（不读取 `def_fmt`）。
 - 输出包含文件存在性、大小、SPK 覆盖区间等信息。
 
-### 9.17 selftest
-
-```bash
-lunar selftest <bsp> [--format json|txt] [--out ...] [--pretty 0|1] [--quiet]
-```
-
-说明：
-
-- 默认格式固定为 `txt`。
-- 当前内置测试用例包括 `at_illum`、`conv_rt`、`y25_cnt`。
-- 通过返回码 `0`，失败返回 `1`。
-
-### 9.18 config
+### 9.17 config
 
 ```bash
 lunar config show [--format json|txt] [--out ...] [--pretty 0|1] [--quiet]
 lunar config set <key> <value>
 ```
 
-### 9.19 completion
+### 9.18 completion
 
 ```bash
 lunar completion bash|zsh|fish|powershell
@@ -499,14 +508,13 @@ lunar completion bash|zsh|fish|powershell
 - `6` next
 - `7` festival
 - `8` info
-- `9` selftest
-- `10` monthview
-- `11` range
-- `12` search
-- `13` eclipse
-- `14` almanac
-- `15` config
-- `16` completion
+- `9` monthview
+- `10` range
+- `11` search
+- `12` eclipse
+- `13` almanac
+- `14` config
+- `15` completion
 - `d` 切换/下载 BSP
 - `h` 帮助
 - `q` 退出

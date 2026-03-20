@@ -208,11 +208,11 @@ AppCtx make_ctx_tdb(EphRead&eph,double jd_tdb){
 	ctx.jd_tdb=jd_tdb;
 	ctx.dt_yr=(jd_tdb-kJ2000Jd)/kDayPerYear;
 	auto earth=eph.get_state(eph.EARTH,eph.SSB,jd_tdb);
-	ctx.earth_pos_pc=earth.first*kPcPerAu;
-	ctx.earth_vel_au_day=earth.second;
-	ctx.sun_geo_au=eph.get_pos(eph.SUN,eph.EARTH,jd_tdb);
+	ctx.earth_pos_pc=raw_vec(earth.first)*kPcPerAu;
+	ctx.earth_vel_au_day=raw_vec(earth.second);
+	ctx.sun_geo_au=raw_vec(eph.get_pos(eph.SUN,eph.EARTH,jd_tdb));
 	ctx.eq_true_mat=eq_true(jd_tdb);
-	Vec3 moon_geo=AberCorr::geo_app(eph,eph.MOON,jd_tdb,4);
+	Vec3 moon_geo=raw_vec(AberCorr::geo_app(eph,eph.MOON,jd_tdb,4));
 	ctx.moon_eq_u=unit_or(ctx.eq_true_mat*moon_geo,Vec3(1.0,0.0,0.0));
 	return ctx;
 }
@@ -418,7 +418,7 @@ ObsSite make_obs_site(const AstroObs&obs){
 
 bool topo_body_dir_sd(EphRead&eph,int phys_id,int eph_id,double jd_tdb,
 					  const ObsSite&obs,Vec3&u_ecef,double&sd_rad){
-	Vec3 geo=AberCorr::geo_app(eph,eph_id,jd_tdb,4);
+	Vec3 geo=raw_vec(AberCorr::geo_app(eph,eph_id,jd_tdb,4));
 	if(!finite_vec(geo)){
 		return false;
 	}
@@ -504,7 +504,7 @@ double body_sd_rad(EphRead&eph,int id,double jd_tdb){
 	if(!(rkm>0.0)){
 		return 0.0;
 	}
-	Vec3 geo=eph.get_pos(id,eph.EARTH,jd_tdb);
+	Vec3 geo=raw_vec(eph.get_pos(id,eph.EARTH,jd_tdb));
 	double dkm=geo.norm()*AU_KM;
 	if(!(dkm>rkm)){
 		return 0.0;
@@ -514,7 +514,7 @@ double body_sd_rad(EphRead&eph,int id,double jd_tdb){
 
 Vec3 body_eq_u(EphRead&eph,int id,double jd_tdb){
 	Mat3 m=eq_true(jd_tdb);
-	Vec3 geo=AberCorr::geo_app(eph,id,jd_tdb,4);
+	Vec3 geo=raw_vec(AberCorr::geo_app(eph,id,jd_tdb,4));
 	return unit_or(m*geo,Vec3(1.0,0.0,0.0));
 }
 
@@ -600,7 +600,7 @@ double bisect_root(Fn&&fn,double a,double b,int it=64){
 double body_lam(AppLon&app,int id,double jd_tdb){
 	RetProp st=AberCorr::geo_prop(app.eph,id,jd_tdb);
 	Mat3 r=app.rot_mat(jd_tdb);
-	Vec3 xec=r*st.X;
+	Vec3 xec=raw_vec(r*st.X);
 	double lam=std::atan2(xec.y,xec.x);
 	if(lam<0.0){
 		lam+=TWO_PI;
@@ -1123,8 +1123,8 @@ void find_transit(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 			   !topo_body_dir_sd(eph,id,eph_id,t,obs,body_u,body_sd)){
 				return false;
 			}
-			Vec3 sun_geo=eph.get_pos(sun_eph_id,eph.EARTH,t);
-			Vec3 body_geo=eph.get_pos(eph_id,eph.EARTH,t);
+			Vec3 sun_geo=raw_vec(eph.get_pos(sun_eph_id,eph.EARTH,t));
+			Vec3 body_geo=raw_vec(eph.get_pos(eph_id,eph.EARTH,t));
 			double sun_range=sun_geo.norm();
 			double body_range=body_geo.norm();
 			if(!std::isfinite(sun_range)||!std::isfinite(body_range)){

@@ -30,7 +30,7 @@ double day_frac_utc(double jd_utc){
 
 }
 
-double AberCorr::lightday(const Vec3&vec){
+double AberCorr::lightday(const Pos3&vec){
 	double r=vec.norm();
 	return r/C_AUDAY;
 }
@@ -41,7 +41,7 @@ RetProp AberCorr::geo_prop(EphRead&eph,int target,double jd_tdb,int max_iter){
 	for(int i=0;i<max_iter;++i){
 		auto tgt_state=eph.get_state(target,eph.SSB,tr);
 		auto earth_state=eph.get_state(eph.EARTH,eph.SSB,tr);
-		Vec3 X=tgt_state.first-earth_state.first;
+		Pos3 X=tgt_state.first-earth_state.first;
 		double lt=lightday(X);
 		double tr_new=jd_tdb-lt;
 		if(std::fabs(tr_new-tr)<1e-12){
@@ -53,26 +53,26 @@ RetProp AberCorr::geo_prop(EphRead&eph,int target,double jd_tdb,int max_iter){
 
 	auto tgt_state=eph.get_state(target,eph.SSB,tr);
 	auto earth_state=eph.get_state(eph.EARTH,eph.SSB,tr);
-	Vec3 X=tgt_state.first-earth_state.first;
-	Vec3 V=tgt_state.second-earth_state.second;
+	Pos3 X=tgt_state.first-earth_state.first;
+	Vel3 V=tgt_state.second-earth_state.second;
 
 	return {X,V,tr};
 }
 
-Vec3 AberCorr::geo_app(EphRead&eph,int target,double jd_tdb,int max_iter){
+Pos3 AberCorr::geo_app(EphRead&eph,int target,double jd_tdb,int max_iter){
 	return geo_app(eph,target,jd_tdb,nullptr,max_iter);
 }
 
-Vec3 AberCorr::geo_app(EphRead&eph,int target,double jd_tdb,double*tr_out,
+Pos3 AberCorr::geo_app(EphRead&eph,int target,double jd_tdb,double*tr_out,
 					   int max_iter){
 	auto earth_state=eph.get_state(eph.EARTH,eph.SSB,jd_tdb);
-	Vec3 xE_t=earth_state.first;
-	Vec3 vE_t=earth_state.second;
+	Pos3 xE_t=earth_state.first;
+	Vel3 vE_t=earth_state.second;
 
 	double tr=jd_tdb;
-	Vec3 xt=eph.get_pos(target,eph.SSB,tr);
+	Pos3 xt=eph.get_pos(target,eph.SSB,tr);
 	for(int i=0;i<max_iter;++i){
-		Vec3 r_geo=xt-xE_t;
+		Pos3 r_geo=xt-xE_t;
 		double lt=lightday(r_geo);
 		double tr_new=jd_tdb-lt;
 		if(std::fabs(tr_new-tr)<1e-12){
@@ -85,11 +85,11 @@ Vec3 AberCorr::geo_app(EphRead&eph,int target,double jd_tdb,double*tr_out,
 
 	xt=eph.get_pos(target,eph.SSB,tr);
 
-	Vec3 r_geo=xt-xE_t;
+	Pos3 r_geo=xt-xE_t;
 	double r=r_geo.norm();
-	Vec3 n=r_geo/r;
+	Vec3 n=raw_vec(r_geo)/r;
 
-	Vec3 beta=vE_t/C_AUDAY;
+	Vec3 beta=raw_vec(vE_t)/C_AUDAY;
 	double beta2=Vec3::dot(beta,beta);
 	double gamma_inv=std::sqrt(std::max(0.0,1.0-beta2));
 	double nb=Vec3::dot(n,beta);
@@ -101,12 +101,12 @@ Vec3 AberCorr::geo_app(EphRead&eph,int target,double jd_tdb,double*tr_out,
 		if(tr_out){
 			*tr_out=tr;
 		}
-		return n*r;
+		return pos3(n*r);
 	}
 	if(tr_out){
 		*tr_out=tr;
 	}
-	return (n_app/n_app_norm)*r;
+	return pos3((n_app/n_app_norm)*r);
 }
 
 AppLon::AppLon(EphRead&reader)
@@ -154,13 +154,13 @@ std::pair<double,double> AppLon::sun_calc(double jd_tdb){
 	RetProp st=AberCorr::geo_prop(eph,eph.SUN,jd_tdb);
 
 	Mat3 R=rot_mat(jd_tdb);
-	Vec3 Xec=R*st.X;
+	Vec3 Xec=raw_vec(R*st.X);
 	double lam=std::atan2(Xec.y,Xec.x);
 	if(lam<0){
 		lam+=TWO_PI;
 	}
 
-	Vec3 Xec_dot=R*st.V;
+	Vec3 Xec_dot=raw_vec(R*st.V);
 
 	double denom=Xec.x*Xec.x+Xec.y*Xec.y;
 	double lam_dot=0.0;
@@ -174,13 +174,13 @@ std::pair<double,double> AppLon::moon_calc(double jd_tdb){
 	RetProp st=AberCorr::geo_prop(eph,eph.MOON,jd_tdb);
 
 	Mat3 R=rot_mat(jd_tdb);
-	Vec3 Xec=R*st.X;
+	Vec3 Xec=raw_vec(R*st.X);
 	double lam=std::atan2(Xec.y,Xec.x);
 	if(lam<0){
 		lam+=TWO_PI;
 	}
 
-	Vec3 Xec_dot=R*st.V;
+	Vec3 Xec_dot=raw_vec(R*st.V);
 
 	double denom=Xec.x*Xec.x+Xec.y*Xec.y;
 	double lam_dot=0.0;
@@ -197,7 +197,7 @@ EoTData AppLon::eot_calc(double jd_utc,double lon_deg){
 	out.lon_deg=lon_deg;
 	out.lon_rad=norm_pm_pi(lon_deg*PI/180.0);
 
-	Vec3 sun_app=AberCorr::geo_app(eph,eph.SUN,out.jd_tdb,6);
+	Vec3 sun_app=raw_vec(AberCorr::geo_app(eph,eph.SUN,out.jd_tdb,6));
 
 	Mat3 P=prec_mat(out.jd_tdb);
 	Mat3 N=PrecNut::nut_mat(out.jd_tdb);

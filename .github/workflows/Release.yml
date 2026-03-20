@@ -54,7 +54,7 @@ jobs:
     
       - name: Configure (native)
         if: matrix.kind == 'native'
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_args }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLUNAR_ENABLE_SERIES_FALLBACK=ON ${{ matrix.cmake_args }}
 
       - name: Build (native)
         if: matrix.kind == 'native'
@@ -85,6 +85,7 @@ jobs:
 
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
+            -DLUNAR_ENABLE_SERIES_FALLBACK=ON \
             -DCMAKE_C_COMPILER="$PWD/zigcc" \
             -DCMAKE_CXX_COMPILER="$PWD/zigcxx" \
             -DCMAKE_C_FLAGS="-Wno-error=date-time -Wno-date-time" \
@@ -114,6 +115,8 @@ jobs:
           mkdir -p package
           cp README.md package/
           cp LICENSE package/
+          cp -R vsop87a package/
+          cp -R elpmpp02 package/
 
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp build/Release/lunar.exe package/

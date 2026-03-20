@@ -30,6 +30,7 @@ int cmd_day(const std::vector<std::string>&args){
 	bool has_astro_lon=false;
 	bool has_astro_h=false;
 	double hli_lon_deg=120.0;
+	HliRuleSet hli_rules=hli_rules_from_cfg(cfg);
 	lunar::ArgParser parser;
 	parser.add_value("--tz",[&](const std::string&value){ tz=value; });
 	parser.add_value("--format",
@@ -49,6 +50,51 @@ int cmd_day(const std::vector<std::string>&args){
 		"--lon",[&](const std::string&value){
 			hli_lon_deg=parse_double(value,"--lon");
 		});
+	parser.add_value("--trad",[&](const std::string&value){
+		HliProfileCode trad=HliProfileCode::Folk;
+		if(!parse_hli_profile(value,&trad)){
+			throw std::invalid_argument(
+				"invalid --trad: "+value+
+				" (expected folk|ziping|purple|xieji)");
+		}
+		hli_rules=make_hli_rule_set(trad);
+	});
+	parser.add_value("--year-boundary",[&](const std::string&value){
+		HliYearBoundary parsed=HliYearBoundary::LunarNewYear;
+		if(!parse_hli_year_boundary(value,&parsed)){
+			throw std::invalid_argument(
+				"invalid --year-boundary: "+value+
+				" (expected lichun|lunar_new_year|dongzhi)");
+		}
+		hli_rules.year_boundary=static_cast<int>(parsed);
+	});
+	parser.add_value("--month-boundary",[&](const std::string&value){
+		HliMonthBoundary parsed=HliMonthBoundary::LunarFirstDay;
+		if(!parse_hli_month_boundary(value,&parsed)){
+			throw std::invalid_argument(
+				"invalid --month-boundary: "+value+
+				" (expected solar_term|lunar_first_day)");
+		}
+		hli_rules.month_boundary=static_cast<int>(parsed);
+	});
+	parser.add_value("--leap-month-mode",[&](const std::string&value){
+		HliLeapMonthMode parsed=HliLeapMonthMode::InheritPrevious;
+		if(!parse_hli_leap_month_mode(value,&parsed)){
+			throw std::invalid_argument(
+				"invalid --leap-month-mode: "+value+
+				" (expected ignore|inherit_previous|split_midway|shift_to_next)");
+		}
+		hli_rules.leap_month_mode=static_cast<int>(parsed);
+	});
+	parser.add_value("--day-boundary",[&](const std::string&value){
+		HliDayBoundary parsed=HliDayBoundary::Hour23;
+		if(!parse_hli_day_boundary(value,&parsed)){
+			throw std::invalid_argument(
+				"invalid --day-boundary: "+value+
+				" (expected hour23|hour0)");
+		}
+		hli_rules.day_boundary=static_cast<int>(parsed);
+	});
 	parser.add_value(
 		"--astro",[&](const std::string&value){
 			inc_astro=parse_bool01(value,"--astro");
@@ -104,6 +150,7 @@ int cmd_day(const std::vector<std::string>&args){
 	opt.astro_mode_text=astro_mode_text;
 	opt.astro_pick_csv=astro_pick_csv;
 	opt.hli_lon_deg=hli_lon_deg;
+	opt.hli_rules=normalize_hli_rule_set(hli_rules);
 	opt.has_astro_site=has_astro_lat;
 	if(has_astro_lat){
 		opt.astro_lat_deg=astro_lat_deg;
@@ -272,7 +319,7 @@ int cmd_mview(const std::vector<std::string>&args){
 	for(int d=1;d<=n_days;++d){
 		double smp_jdutc=greg2jd(year,month,d,12,0,0.0)-UTC8DAY;
 		AtData atd=at_fromjd(eph,smp_jdutc,tz_off,tz,ymd_str(year,month,d),
-							 "+08:00",false,false,0.0,120.0,&cache);
+							 "+08:00",false,false,0.0,120.0,nullptr,&cache);
 		std::vector<std::string> ev_names;
 		auto it=day2ev.find(d);
 		if(it!=day2ev.end()){

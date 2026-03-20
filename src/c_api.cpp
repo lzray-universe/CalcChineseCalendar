@@ -1,5 +1,6 @@
 #include "lunar/c_api.h"
 
+#include<cstring>
 #include<cstdio>
 #include<exception>
 #include<stdexcept>
@@ -22,6 +23,120 @@ void set_err(const std::string&msg){
 
 void clr_err(){
 	g_last_error.clear();
+}
+
+template<typename Enum>
+Enum req_hli_code(int code,const char*name);
+
+template<>
+HliProfileCode req_hli_code<HliProfileCode>(int code,const char*name){
+	switch(static_cast<HliProfileCode>(code)){
+		case HliProfileCode::Folk:
+		case HliProfileCode::ZiPing:
+		case HliProfileCode::PurpleStar:
+		case HliProfileCode::XieJi:
+		case HliProfileCode::Custom:
+			return static_cast<HliProfileCode>(code);
+	}
+	throw std::invalid_argument(std::string("invalid ")+name);
+}
+
+template<>
+HliYearBoundary req_hli_code<HliYearBoundary>(int code,const char*name){
+	switch(static_cast<HliYearBoundary>(code)){
+		case HliYearBoundary::LiChun:
+		case HliYearBoundary::LunarNewYear:
+		case HliYearBoundary::WinterSolstice:
+			return static_cast<HliYearBoundary>(code);
+	}
+	throw std::invalid_argument(std::string("invalid ")+name);
+}
+
+template<>
+HliMonthBoundary req_hli_code<HliMonthBoundary>(int code,const char*name){
+	switch(static_cast<HliMonthBoundary>(code)){
+		case HliMonthBoundary::SolarTerm:
+		case HliMonthBoundary::LunarFirstDay:
+			return static_cast<HliMonthBoundary>(code);
+	}
+	throw std::invalid_argument(std::string("invalid ")+name);
+}
+
+template<>
+HliLeapMonthMode req_hli_code<HliLeapMonthMode>(int code,const char*name){
+	switch(static_cast<HliLeapMonthMode>(code)){
+		case HliLeapMonthMode::Ignore:
+		case HliLeapMonthMode::InheritPrevious:
+		case HliLeapMonthMode::SplitMidway:
+		case HliLeapMonthMode::ShiftToNext:
+			return static_cast<HliLeapMonthMode>(code);
+	}
+	throw std::invalid_argument(std::string("invalid ")+name);
+}
+
+template<>
+HliDayBoundary req_hli_code<HliDayBoundary>(int code,const char*name){
+	switch(static_cast<HliDayBoundary>(code)){
+		case HliDayBoundary::Hour23:
+		case HliDayBoundary::Hour0:
+			return static_cast<HliDayBoundary>(code);
+	}
+	throw std::invalid_argument(std::string("invalid ")+name);
+}
+
+int gz_index60(int stem,int branch){
+	for(int idx=0;idx<60;++idx){
+		if(idx%10==stem&&idx%12==branch){
+			return idx;
+		}
+	}
+	return -1;
+}
+
+void fill_ganzhi_node(lunar_ganzhi_node*out,const GzNode&src){
+	out->index=gz_index60(src.stem,src.branch);
+	out->stem=src.stem;
+	out->branch=src.branch;
+	std::snprintf(out->text,sizeof(out->text),"%s",src.text.c_str());
+}
+
+template<typename Summary>
+void fill_rule_codes(Summary*out,const HliRuleSet&rules){
+	out->rule_profile_code=rules.profile_code;
+	out->year_boundary_code=rules.year_boundary;
+	out->month_boundary_code=rules.month_boundary;
+	out->leap_month_mode_code=rules.leap_month_mode;
+	out->day_boundary_code=rules.day_boundary;
+}
+
+HliRuleSet rules_from_c(const lunar_hli_rules*rules){
+	if(rules==nullptr){
+		return make_hli_rule_set(HliProfileCode::Folk);
+	}
+	HliRuleSet out;
+	out.profile_code=
+		static_cast<int>(req_hli_code<HliProfileCode>(
+			rules->profile_code,"hli_rules.profile_code"));
+	out.year_boundary=
+		static_cast<int>(req_hli_code<HliYearBoundary>(
+			rules->year_boundary,"hli_rules.year_boundary"));
+	out.month_boundary=
+		static_cast<int>(req_hli_code<HliMonthBoundary>(
+			rules->month_boundary,"hli_rules.month_boundary"));
+	out.leap_month_mode=
+		static_cast<int>(req_hli_code<HliLeapMonthMode>(
+			rules->leap_month_mode,"hli_rules.leap_month_mode"));
+	out.day_boundary=
+		static_cast<int>(req_hli_code<HliDayBoundary>(
+			rules->day_boundary,"hli_rules.day_boundary"));
+	return normalize_hli_rule_set(out);
+}
+
+std::string c_api_or_default(const char*text,const char*fallback){
+	if(text==nullptr||text[0]=='\0'){
+		return fallback;
+	}
+	return text;
 }
 
 std::vector<std::string> mk_args(int argc,const char*const*argv){
@@ -163,6 +278,79 @@ int LUNAR_CALL lunar_core_day(const char*ephem,const char*date,const char*tz,
 	});
 }
 
+void LUNAR_CALL lunar_hli_rules_init(lunar_hli_rules*out){
+	clr_err();
+	if(out==nullptr){
+		set_err("out must not be null");
+		return;
+	}
+	HliRuleSet rules=make_hli_rule_set(HliProfileCode::Folk);
+	out->profile_code=rules.profile_code;
+	out->year_boundary=rules.year_boundary;
+	out->month_boundary=rules.month_boundary;
+	out->leap_month_mode=rules.leap_month_mode;
+	out->day_boundary=rules.day_boundary;
+}
+
+int LUNAR_CALL lunar_core_ganzhi(const char*ephem,const char*date,
+								 const char*at_time,const char*tz,
+								 const lunar_hli_rules*rules,
+								 lunar_ganzhi_summary*out){
+	return guard([&](){
+		if(ephem==nullptr||date==nullptr||out==nullptr){
+			throw std::invalid_argument("ephem/date/out must not be null");
+		}
+		lunar::core::GanzhiComputeOptions opt;
+		opt.ephem=ephem;
+		opt.date_text=date;
+		opt.at_time=c_api_or_default(at_time,"12:00:00");
+		opt.tz=c_api_or_default(tz,"+08:00");
+		opt.hli_rules=rules_from_c(rules);
+		lunar::core::GanzhiSummary sum=lunar::core::compute_ganzhi(opt);
+		std::memset(out,0,sizeof(*out));
+		fill_ganzhi_node(&out->year,sum.year);
+		fill_ganzhi_node(&out->month,sum.month);
+		fill_ganzhi_node(&out->day,sum.day);
+		fill_rule_codes(out,sum.hli_rules);
+		return 0;
+	});
+}
+
+int LUNAR_CALL lunar_core_ganzhi_month(
+	const char*ephem,int year,int month,const char*at_time,const char*tz,
+	const lunar_hli_rules*rules,lunar_ganzhi_month_summary*out){
+	return guard([&](){
+		if(ephem==nullptr||out==nullptr){
+			throw std::invalid_argument("ephem/out must not be null");
+		}
+		lunar::core::GanzhiMonthComputeOptions opt;
+		opt.ephem=ephem;
+		opt.year=year;
+		opt.month=month;
+		opt.at_time=c_api_or_default(at_time,"12:00:00");
+		opt.tz=c_api_or_default(tz,"+08:00");
+		opt.hli_rules=rules_from_c(rules);
+		lunar::core::GanzhiMonthSummary sum=lunar::core::compute_ganzhi_month(opt);
+		if(sum.years.size()!=sum.months.size()||sum.months.size()!=sum.days.size()){
+			throw std::runtime_error("ganzhi month result size mismatch");
+		}
+		if(sum.days.size()>31){
+			throw std::runtime_error("ganzhi month result exceeds buffer");
+		}
+		std::memset(out,0,sizeof(*out));
+		out->year=sum.year;
+		out->month=sum.month;
+		out->day_count=static_cast<int>(sum.days.size());
+		fill_rule_codes(out,sum.hli_rules);
+		for(std::size_t i=0;i<sum.days.size();++i){
+			fill_ganzhi_node(&out->years[i],sum.years[i]);
+			fill_ganzhi_node(&out->months[i],sum.months[i]);
+			fill_ganzhi_node(&out->days[i],sum.days[i]);
+		}
+		return 0;
+	});
+}
+
 int LUNAR_CALL lunar_cmd_month(int argc,const char*const*argv){
 	return guard([&](){ return run_cmd(cmd_month,argc,argv); });
 }
@@ -221,10 +409,6 @@ int LUNAR_CALL lunar_cmd_alm(int argc,const char*const*argv){
 
 int LUNAR_CALL lunar_cmd_info(int argc,const char*const*argv){
 	return guard([&](){ return run_cmd(cmd_info,argc,argv); });
-}
-
-int LUNAR_CALL lunar_cmd_test(int argc,const char*const*argv){
-	return guard([&](){ return run_cmd(cmd_test,argc,argv); });
 }
 
 int LUNAR_CALL lunar_cmd_cfg(int argc,const char*const*argv){
@@ -343,13 +527,6 @@ int LUNAR_CALL lunar_use_alm(void){
 int LUNAR_CALL lunar_use_info(void){
 	return guard([](){
 		use_info();
-		return 0;
-	});
-}
-
-int LUNAR_CALL lunar_use_test(void){
-	return guard([](){
-		use_test();
 		return 0;
 	});
 }

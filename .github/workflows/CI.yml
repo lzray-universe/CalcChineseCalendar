@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x64
+            cmake_args: ""
+
+          - os: ubuntu-24.04-arm
+            name: linux-arm64
+            cmake_args: ""
+
+          - os: windows-latest
+            name: windows-x64
+            cmake_args: "-A x64"
+
+          - os: windows-11-arm
+            name: windows-arm64
+            cmake_args: "-A ARM64"
+
+          - os: macos-15-intel
+            name: macos-x64
+            cmake_args: ""
+
+          - os: macos-latest
+            name: macos-arm64
+            cmake_args: ""
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DLUNAR_ENABLE_SERIES_FALLBACK=ON
+          -DLUNAR_BUILD_TESTS=ON
+          ${{ matrix.cmake_args }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure

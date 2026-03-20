@@ -118,148 +118,6 @@ int cmd_info(const std::vector<std::string>&args){
 	return 0;
 }
 
-int cmd_test(const std::vector<std::string>&args){
-	if(args.size()==1&&(args[0]=="-h"||args[0]=="--help")){
-		use_test();
-		return 0;
-	}
-	if(args.empty()){
-		throw std::invalid_argument("selftest requires: <bsp>");
-	}
-	std::string ephem=args[0];
-	std::string format="txt";
-	std::string out_path;
-	bool pretty=true;
-	bool quiet=false;
-	const OptMap handlers={
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
-						const std::string&opt){
-			 format=to_low(req_val(src,idx,opt));
-		 }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
-					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
-						const std::string&opt){
-			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ quiet=true; }},
-	};
-	for(std::size_t i=1;i<args.size();++i){
-		const std::string&opt=args[i];
-		apply_opt(handlers,args,i,opt,"selftest");
-	}
-	chk_fmt(format,{"json","txt"},"selftest");
-
-	struct Case{
-		std::string id;
-		bool pass=false;
-		std::string message;
-	};
-	std::vector<Case> cases;
-	bool all_pass=true;
-	try{
-		EphRead eph(ephem);
-		QueryCache cache(eph);
-
-		Case c1;
-		c1.id="at_illum";
-		try{
-			AtData atd=at_ftxt(eph,"2025-06-01T00:00:00+08:00","+08:00",480,
-							   "+08:00",true,false,0.0,120.0,&cache);
-			c1.pass=(atd.ill_pct>=0.0&&atd.ill_pct<=100.0);
-			c1.message=c1.pass?"ok":"illumination out of [0,100]";
-		}catch(const std::exception&ex){
-			c1.pass=false;
-			c1.message=ex.what();
-		}
-		cases.push_back(c1);
-		all_pass=all_pass&&c1.pass;
-
-		Case c2;
-		c2.id="conv_rt";
-		try{
-			IsoTime p=parse_iso("2026-02-18","+08:00");
-			LunDate ld=res_lun(eph,p.jd_utc,&cache);
-			GregDate g=res_greg(eph,ld.lunar_year,ld.lun_mno,ld.lunar_day,
-								ld.is_leap,&cache);
-			int gy=0,gm=0,gd=0;
-			std::tie(gy,gm,gd)=parse_ymd("2026-02-18");
-			int ry=0,rm=0,rd=0;
-			utc2cst(g.cstday_jd,ry,rm,rd);
-			c2.pass=(gy==ry&&gm==rm&&gd==rd);
-			c2.message=c2.pass?"ok":"roundtrip mismatch";
-		}catch(const std::exception&ex){
-			c2.pass=false;
-			c2.message=ex.what();
-		}
-		cases.push_back(c2);
-		all_pass=all_pass&&c2.pass;
-
-		Case c3;
-		c3.id="y25_cnt";
-		try{
-			SolLunCal solver(eph);
-			YearResult yr=solver.compute_year(2025,nullptr);
-			std::size_t solar_n=yr.sol_terms.size();
-			std::size_t phase_n=yr.lun_phase.size()*4;
-			c3.pass=(solar_n==24&&phase_n>=48);
-			std::ostringstream msg;
-			msg<<"sol_terms="<<solar_n<<", lp_events="<<phase_n;
-			c3.message=msg.str();
-		}catch(const std::exception&ex){
-			c3.pass=false;
-			c3.message=ex.what();
-		}
-		cases.push_back(c3);
-		all_pass=all_pass&&c3.pass;
-	}catch(const std::exception&ex){
-		all_pass=false;
-		cases.push_back(Case{"bootstrap",false,ex.what()});
-	}
-
-	OutTgt out=open_out(out_path);
-	const FmtMap fmt_handlers={
-		{"json",[&](){
-			 JsonWriter w(*out.stream,pretty);
-			 w.obj_begin();
-			 write_meta(w,ephem,"Z",{"type=selftest"});
-			 w.key("data");
-			 w.obj_begin();
-			 w.key("pass");
-			 w.value(all_pass);
-			 w.key("cases");
-			 w.arr_begin();
-			 for(const auto&c : cases){
-				 w.obj_begin();
-				 w.key("id");
-				 w.value(c.id);
-				 w.key("pass");
-				 w.value(c.pass);
-				 w.key("message");
-				 w.value(c.message);
-				 w.obj_end();
-			 }
-			 w.arr_end();
-			 w.obj_end();
-			 w.obj_end();
-			 *out.stream<<"\n";
-		 }},
-		{"txt",[&](){
-			 std::ostream&os=*out.stream;
-			 os<<"tool=lunar format=txt type=selftest\n";
-			 os<<"result.pass="<<(all_pass?"1":"0")<<"\n";
-			 os<<"id\tpass\tmessage\n";
-			 for(const auto&c : cases){
-				 os<<c.id<<"\t"<<(c.pass?"1":"0")<<"\t"<<c.message<<"\n";
-			 }
-		 }},
-	};
-	run_fmt(fmt_handlers,format,"selftest");
-	note_out(out_path,quiet);
-	return all_pass?0:1;
-}
-
 int cmd_cfg(const std::vector<std::string>&args){
 	if(args.empty()||(args.size()==1&&(args[0]=="-h"||args[0]=="--help"))){
 		use_cfg();
@@ -332,6 +190,16 @@ int cmd_cfg(const std::vector<std::string>&args){
 				 w.value(cfg.default_lang);
 				 w.key("def_fmt");
 				 w.value(cfg.def_fmt);
+				 w.key("hli_trad");
+				 w.value(cfg.hli_trad);
+				 w.key("hli_year_boundary");
+				 w.value(cfg.hli_year_boundary);
+				 w.key("hli_month_boundary");
+				 w.value(cfg.hli_month_boundary);
+				 w.key("hli_leap_month_mode");
+				 w.value(cfg.hli_leap_month_mode);
+				 w.key("hli_day_boundary");
+				 w.value(cfg.hli_day_boundary);
 				 w.key("def_prety");
 				 w.value(cfg.def_prety);
 				 w.obj_end();
@@ -346,6 +214,11 @@ int cmd_cfg(const std::vector<std::string>&args){
 				 *out.stream<<"default_tz="<<cfg.default_tz<<"\n";
 				 *out.stream<<"default_lang="<<cfg.default_lang<<"\n";
 				 *out.stream<<"def_fmt="<<cfg.def_fmt<<"\n";
+				 *out.stream<<"hli_trad="<<cfg.hli_trad<<"\n";
+				 *out.stream<<"hli_year_boundary="<<cfg.hli_year_boundary<<"\n";
+				 *out.stream<<"hli_month_boundary="<<cfg.hli_month_boundary<<"\n";
+				 *out.stream<<"hli_leap_month_mode="<<cfg.hli_leap_month_mode<<"\n";
+				 *out.stream<<"hli_day_boundary="<<cfg.hli_day_boundary<<"\n";
 				 *out.stream<<"def_prety="<<(cfg.def_prety?"1":"0")<<"\n";
 			 }},
 		};
@@ -361,6 +234,10 @@ int cmd_cfg(const std::vector<std::string>&args){
 		std::string key=to_low(args[1]);
 		std::string value=args[2];
 		parse_opt(3);
+		auto is_reset_value=[&](const std::string&text){
+			std::string v=to_low(text);
+			return v=="default"||v=="auto"||v=="inherit";
+		};
 		auto parse_sc=[](const std::string&text){
 			std::vector<std::string> out;
 			std::string token;
@@ -415,6 +292,68 @@ int cmd_cfg(const std::vector<std::string>&args){
 				 chk_fmt(v,{"txt","json","csv","jsonl","ics"},"config def_fmt");
 				 cfg.def_fmt=v;
 			 }},
+			{"hli_trad",[&](){
+				 HliProfileCode parsed=HliProfileCode::Folk;
+				 if(!parse_hli_profile(value,&parsed)){
+					 throw std::invalid_argument(
+						 "invalid hli_trad: "+value+
+						 " (expected folk|ziping|purple|xieji)");
+				 }
+				 cfg.hli_trad=hli_profile_key(parsed);
+			 }},
+			{"hli_year_boundary",[&](){
+				 if(is_reset_value(value)){
+					 cfg.hli_year_boundary.clear();
+					 return;
+				 }
+				 HliYearBoundary parsed=HliYearBoundary::LunarNewYear;
+				 if(!parse_hli_year_boundary(value,&parsed)){
+					 throw std::invalid_argument(
+						 "invalid hli_year_boundary: "+value+
+						 " (expected lichun|lunar_new_year|dongzhi|default)");
+				 }
+				 cfg.hli_year_boundary=hli_year_boundary_key(parsed);
+			 }},
+			{"hli_month_boundary",[&](){
+				 if(is_reset_value(value)){
+					 cfg.hli_month_boundary.clear();
+					 return;
+				 }
+				 HliMonthBoundary parsed=HliMonthBoundary::LunarFirstDay;
+				 if(!parse_hli_month_boundary(value,&parsed)){
+					 throw std::invalid_argument(
+						 "invalid hli_month_boundary: "+value+
+						 " (expected solar_term|lunar_first_day|default)");
+				 }
+				 cfg.hli_month_boundary=hli_month_boundary_key(parsed);
+			 }},
+			{"hli_leap_month_mode",[&](){
+				 if(is_reset_value(value)){
+					 cfg.hli_leap_month_mode.clear();
+					 return;
+				 }
+				 HliLeapMonthMode parsed=HliLeapMonthMode::InheritPrevious;
+				 if(!parse_hli_leap_month_mode(value,&parsed)){
+					 throw std::invalid_argument(
+						 "invalid hli_leap_month_mode: "+value+
+						 " (expected ignore|inherit_previous|split_midway|"
+						 "shift_to_next|default)");
+				 }
+				 cfg.hli_leap_month_mode=hli_leap_month_mode_key(parsed);
+			 }},
+			{"hli_day_boundary",[&](){
+				 if(is_reset_value(value)){
+					 cfg.hli_day_boundary.clear();
+					 return;
+				 }
+				 HliDayBoundary parsed=HliDayBoundary::Hour23;
+				 if(!parse_hli_day_boundary(value,&parsed)){
+					 throw std::invalid_argument(
+						 "invalid hli_day_boundary: "+value+
+						 " (expected hour23|hour0|default)");
+				 }
+				 cfg.hli_day_boundary=hli_day_boundary_key(parsed);
+			 }},
 			{"def_prety",[&](){ cfg.def_prety=parse_bool01(value,"def_prety"); }},
 		};
 		auto it=key_handlers.find(key);
@@ -448,7 +387,7 @@ int cmd_comp(const std::vector<std::string>&args){
 				 <<"  cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
 				 <<"  local cmds=\"months calendar year event download at "
 				   "convert day monthview next range search eclipse festival "
-				   "almanac info selftest config completion\"\n"
+				   "almanac info config completion\"\n"
 				 <<"  if [[ ${COMP_CWORD} -eq 1 ]]; then\n"
 				 <<"    COMPREPLY=( $(compgen -W \"${cmds}\" -- \"${cur}\") )\n"
 				 <<"    return 0\n"
@@ -458,7 +397,8 @@ int cmd_comp(const std::vector<std::string>&args){
 				   "--kinds --kind --eot-lon --near --stage --sample-min --point-lat "
 				   "--point-lon --point-height --point-refine --global-vis "
 				   "--global --global-format --grid-lat-step --grid-lon-step "
-				   "--lang\"\n"
+				   "--lang --trad --year-boundary --month-boundary "
+				   "--leap-month-mode --day-boundary\"\n"
 				 <<"  COMPREPLY=( $(compgen -W \"${opts}\" -- \"${cur}\") )\n"
 				 <<"}\n"
 				 <<"complete -F _lunar_complete lunar\n";
@@ -468,7 +408,7 @@ int cmd_comp(const std::vector<std::string>&args){
 		std::cout<<"complete -c lunar -f\n"
 				 <<"complete -c lunar -n '__fish_use_subcommand' -a 'months "
 				   "calendar year event download at convert day monthview next "
-				   "range search eclipse festival almanac info selftest config "
+				   "range search eclipse festival almanac info config "
 				   "completion'\n";
 		return 0;
 	}
@@ -480,7 +420,7 @@ int cmd_comp(const std::vector<std::string>&args){
 			<<"  $cmds = "
 			  "'months','calendar','year','event','download','at','convert','"
 			  "day','monthview','next','range','search','eclipse','festival',"
-			  "'almanac','info','selftest','config','completion'\n"
+			  "'almanac','info','config','completion'\n"
 			<<"  $cmds | Where-Object { $_ -like \"$wordToComplete*\" } | "
 			  "ForEach-Object {\n"
 			<<"    "

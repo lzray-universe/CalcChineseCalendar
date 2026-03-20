@@ -1,23 +1,33 @@
 void use_day(){
 	std::cout
 		<<"Usage:\n"
-		<<"  lunar day <bsp> <YYYY-MM-DD>\n"
+		<<"  lunar day [bsp] <YYYY-MM-DD>\n"
 		<<"    [--tz ...] [--format json|txt|csv|jsonl] [--out ...] [--pretty "
 		  "0|1] [--quiet]\n"
-		<<"    [--at HH:MM[:SS]] [--events 0|1] [--lon <deg>] [--astro 0|1]\n"
+		<<"    [--at HH:MM[:SS]] [--events 0|1] [--lon <deg>] [--trad "
+		  "folk|ziping|purple|xieji]\n"
+		<<"    [--year-boundary lichun|lunar_new_year|dongzhi] "
+		  "[--month-boundary solar_term|lunar_first_day]\n"
+		<<"    [--leap-month-mode ignore|inherit_previous|split_midway|"
+		  "shift_to_next] [--day-boundary hour23|hour0]\n"
+		<<"    [--astro 0|1]\n"
 		<<"    [--astro-mode less|all|pick] [--astro-pick id,en,zh,...]\n"
 		<<"    [--astro-lat deg --astro-lon deg [--astro-height m]]\n"
 		<<"Examples:\n"
 		<<"  lunar day D:\\de442.bsp 2025-06-01\n"
+		<<"  lunar day D:\\de442.bsp 2025-01-31 --trad ziping\n"
+		<<"  lunar day D:\\de442.bsp 2025-01-31 --trad four_pillars\n"
 		<<"  lunar day D:\\de442.bsp 2025-06-01 --format json --out day.json\n"
 		<<"Note:\n"
+		<<"  `--trad/--year-boundary/--month-boundary/--leap-month-mode/--day-boundary` "
+		  "also accept common ASCII aliases.\n"
 		<<"  Transit/occultation are topocentric and are emitted only when "
 		  "--astro-lat/--astro-lon are provided.\n";
 }
 
 void use_mview(){
 	std::cout<<"Usage:\n"
-			 <<"  lunar monthview <bsp> <YYYY-MM>\n"
+			 <<"  lunar monthview [bsp] <YYYY-MM>\n"
 			 <<"    [--tz ...] [--format json|txt|csv] [--out ...] [--pretty "
 			   "0|1] [--quiet] [--astro 0|1]\n"
 			 <<"    [--astro-mode less|all|pick] [--astro-pick id,en,zh,...]\n"
@@ -33,7 +43,7 @@ void use_mview(){
 
 void use_next(){
 	std::cout<<"Usage:\n"
-			 <<"  lunar next <bsp> --from <time> --count N\n"
+			 <<"  lunar next [bsp] --from <time> --count N\n"
 			 <<"    [--kinds solar_term,lunar_phase,lunar_eclipse,solar_eclipse] [--tz ...]\n"
 			 <<"    [--format json|txt|csv|ics|jsonl] [--out ...] [--pretty "
 			   "0|1] [--quiet] [--eclipse 0|1]\n"
@@ -46,7 +56,7 @@ void use_next(){
 
 void use_range(){
 	std::cout<<"Usage:\n"
-			 <<"  lunar range <bsp> --from <time> --to <time>\n"
+			 <<"  lunar range [bsp] --from <time> --to <time>\n"
 			 <<"    [--kinds solar_term,lunar_phase,lunar_eclipse,solar_eclipse] [--tz ...]\n"
 			 <<"    [--format json|txt|csv|ics|jsonl] [--out ...] [--pretty "
 			   "0|1] [--quiet] [--eclipse 0|1]\n"
@@ -59,7 +69,7 @@ void use_range(){
 void use_search(){
 	std::cout
 		<<"Usage:\n"
-		<<"  lunar search <bsp> <query> [--from <time>] [--count N]\n"
+		<<"  lunar search [bsp] <query> [--from <time>] [--count N]\n"
 		<<"    [--tz ...] [--format json|txt|csv|ics|jsonl] [--out ...] "
 		  "[--pretty 0|1] [--quiet] [--eclipse 0|1]\n"
 		<<"Examples:\n"
@@ -71,8 +81,8 @@ void use_search(){
 void use_eclipse(){
 	std::cout
 		<<"Usage:\n"
-		<<"  lunar [--eclipse-method modern|legacy] eclipse <bsp> --near <YYYY-MM-DD>\n"
-		<<"  lunar eclipse <bsp> --near <YYYY-MM-DD> [--kind lunar|solar]\n"
+		<<"  lunar [--eclipse-method modern|legacy] eclipse [bsp] --near <YYYY-MM-DD>\n"
+		<<"  lunar eclipse [bsp] --near <YYYY-MM-DD> [--kind lunar|solar]\n"
 		<<"    [--stage any|umb|total] (lunar) [--stage any|central] (solar)\n"
 		<<"    [--sample-min <minutes>]\n"
 		<<"    [--point-lat <deg> --point-lon <deg> [--point-height <m>]] "
@@ -93,7 +103,7 @@ void use_eclipse(){
 
 void use_fest(){
 	std::cout<<"Usage:\n"
-			 <<"  lunar festival <bsp> <year>\n"
+			 <<"  lunar festival [bsp] <year>\n"
 			 <<"    [--tz ...] [--format json|txt|csv] [--out ...] [--pretty "
 			   "0|1] [--quiet]\n"
 			 <<"Examples:\n"
@@ -104,32 +114,30 @@ void use_fest(){
 
 void use_alm(){
 	std::cout<<"Usage:\n"
-			 <<"  lunar almanac <bsp> <YYYY-MM-DD>\n"
+			 <<"  lunar almanac [bsp] <YYYY-MM-DD>\n"
 			 <<"    [--tz ...] [--format json|txt|csv] [--out ...] [--pretty "
-			   "0|1] [--quiet] [--lon <deg>]\n"
+			   "0|1] [--quiet] [--lon <deg>] [--trad folk|ziping|purple|xieji]\n"
+			 <<"    [--year-boundary lichun|lunar_new_year|dongzhi] "
+			   "[--month-boundary solar_term|lunar_first_day]\n"
+			 <<"    [--leap-month-mode ignore|inherit_previous|split_midway|"
+			   "shift_to_next] [--day-boundary hour23|hour0]\n"
 			 <<"Examples:\n"
 			 <<"  lunar almanac D:\\de442.bsp 2025-09-17\n"
+			 <<"  lunar almanac D:\\de442.bsp 2025-09-17 --trad xieji\n"
+			 <<"  lunar almanac D:\\de442.bsp 2025-09-17 --trad old_almanac\n"
 			 <<"  lunar almanac D:\\de442.bsp 2025-09-17 --format json --out "
-			   "almanac.json\n";
+			   "almanac.json\n"
+			 <<"Note:\n"
+			 <<"  Rule options accept stable keys and common ASCII aliases.\n";
 }
 
 void use_info(){
 	std::cout<<"Usage:\n"
-			 <<"  lunar info <bsp> [--format json|txt] [--out ...] [--pretty "
+			 <<"  lunar info [bsp] [--format json|txt] [--out ...] [--pretty "
 			   "0|1] [--quiet]\n"
 			 <<"Examples:\n"
 			 <<"  lunar info D:\\de442.bsp\n"
 			 <<"  lunar info D:\\de442.bsp --format json --out info.json\n";
-}
-
-void use_test(){
-	std::cout
-		<<"Usage:\n"
-		<<"  lunar selftest <bsp> [--format json|txt] [--out ...] [--pretty "
-		  "0|1] [--quiet]\n"
-		<<"Examples:\n"
-		<<"  lunar selftest D:\\de442.bsp\n"
-		<<"  lunar selftest D:\\de442.bsp --format json --out selftest.json\n";
 }
 
 void use_cfg(){
@@ -139,10 +147,15 @@ void use_cfg(){
 			 <<"  lunar config set <key> <value>\n"
 			 <<"Keys:\n"
 			 <<"  def_bsp | bsp_dir | bsp_list | default_tz | default_lang | def_fmt | "
-			   "def_prety\n"
+			   "hli_trad | hli_year_boundary | hli_month_boundary | "
+			   "hli_leap_month_mode | hli_day_boundary | def_prety\n"
 			 <<"Examples:\n"
 			 <<"  lunar config show\n"
 			 <<"  lunar config set default_tz +08:00\n"
+			 <<"  lunar config set hli_trad xieji\n"
+			 <<"  lunar config set hli_trad old_almanac\n"
+			 <<"  lunar config set hli_day_boundary hour0\n"
+			 <<"  lunar config set hli_day_boundary default\n"
 			 <<"  lunar config set default_lang en\n";
 }
 

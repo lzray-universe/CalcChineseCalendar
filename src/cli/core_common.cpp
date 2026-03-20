@@ -110,7 +110,7 @@ bool is_full_moon_ev(const EventRec&ev){
 
 double full_moon_dist_km(EphRead&eph,double jd_utc){
 	double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
-	Vec3 r=eph.get_pos(eph.MOON,eph.EARTH,jd_tdb);
+	Vec3 r=raw_vec(eph.get_pos(eph.MOON,eph.EARTH,jd_tdb));
 	return r.norm()*AU_KM;
 }
 

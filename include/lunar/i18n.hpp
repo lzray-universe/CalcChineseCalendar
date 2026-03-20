@@ -6,6 +6,7 @@ struct HliData;
 
 namespace lunar{
 struct StarRecord;
+struct MoonXg;
 }
 
 namespace lunar::i18n{
@@ -46,6 +47,10 @@ std::string tr_body_name(int id);
 
 std::string tr_star_name(const StarRecord&st);
 
+std::string tr_star_name_text(const std::string&text);
+
+std::string tr_star_region_text(const std::string&text);
+
 std::string tr_lunar_month(int month_no,bool is_leap,
 						   const std::string&fallback="");
 
@@ -53,6 +58,8 @@ std::string tr_lunar_day(int day,const std::string&fallback="");
 
 std::string tr_lunar_label(int lunar_year,int month_no,bool is_leap,int lunar_day,
 						   const std::string&fallback="");
+
+void localize_moon_xg(lunar::MoonXg*data);
 
 void localize_hli(::HliData*data);
 

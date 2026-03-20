@@ -13,11 +13,25 @@
 #include<unordered_set>
 #include<vector>
 
+#if LUNAR_ENABLE_SERIES_FALLBACK
+#include "elpmpp02/elpmpp02.hpp"
+#include "vsop87a/vsop87a.hpp"
+#endif
+
 namespace fs=std::filesystem;
 
 namespace{
 
 struct State6{
+	double px=0.0;
+	double py=0.0;
+	double pz=0.0;
+	double vx=0.0;
+	double vy=0.0;
+	double vz=0.0;
+};
+
+struct StateAu{
 	double px=0.0;
 	double py=0.0;
 	double pz=0.0;
@@ -39,6 +53,28 @@ State6 operator+(const State6&a,const State6&b){
 
 State6 operator-(const State6&a,const State6&b){
 	State6 out;
+	out.px=a.px-b.px;
+	out.py=a.py-b.py;
+	out.pz=a.pz-b.pz;
+	out.vx=a.vx-b.vx;
+	out.vy=a.vy-b.vy;
+	out.vz=a.vz-b.vz;
+	return out;
+}
+
+StateAu operator+(const StateAu&a,const StateAu&b){
+	StateAu out;
+	out.px=a.px+b.px;
+	out.py=a.py+b.py;
+	out.pz=a.pz+b.pz;
+	out.vx=a.vx+b.vx;
+	out.vy=a.vy+b.vy;
+	out.vz=a.vz+b.vz;
+	return out;
+}
+
+StateAu operator-(const StateAu&a,const StateAu&b){
+	StateAu out;
 	out.px=a.px-b.px;
 	out.py=a.py-b.py;
 	out.pz=a.pz-b.pz;
@@ -2712,13 +2748,143 @@ std::shared_ptr<SpkFile>acq_kernel(const std::string&filepath){
 	return fresh;
 }
 
+#if LUNAR_ENABLE_SERIES_FALLBACK
+
+bool code_to_vsop_body(int code,vsop87a::Body&body){
+	switch(code){
+		case 199:
+			body=vsop87a::Body::Mercury;
+			return true;
+		case 299:
+			body=vsop87a::Body::Venus;
+			return true;
+		case 399:
+			body=vsop87a::Body::Earth;
+			return true;
+		case 499:
+			body=vsop87a::Body::Mars;
+			return true;
+		case 599:
+			body=vsop87a::Body::Jupiter;
+			return true;
+		case 699:
+			body=vsop87a::Body::Saturn;
+			return true;
+		case 799:
+			body=vsop87a::Body::Uranus;
+			return true;
+		case 899:
+			body=vsop87a::Body::Neptune;
+			return true;
+		case 3:
+			body=vsop87a::Body::EarthMoonBarycenter;
+			return true;
+		default:
+			return false;
+	}
+}
+
+StateAu eval_vsop_state(int code,double jd_tdb){
+	vsop87a::Body body=vsop87a::Body::Earth;
+	if(!code_to_vsop_body(code,body)){
+		throw std::runtime_error("series ephemeris does not support code "+
+								 std::to_string(code));
+	}
+	double xyz[3]={0.0,0.0,0.0};
+	double vxyz[3]={0.0,0.0,0.0};
+	vsop87a::EvaluateXYZ(body,jd_tdb,xyz,vxyz);
+	return {xyz[0],xyz[1],xyz[2],vxyz[0],vxyz[1],vxyz[2]};
+}
+
+StateAu eval_elp_moon_geo(double jd_tdb){
+	elpmpp02::StateVector state;
+	elpmpp02::Evaluate(elpmpp02::CorrectionSet::DE405,jd_tdb,state);
+	return {
+		state.position_km[0]/AU_KM,
+		state.position_km[1]/AU_KM,
+		state.position_km[2]/AU_KM,
+		state.velocity_km_per_day[0]/AU_KM,
+		state.velocity_km_per_day[1]/AU_KM,
+		state.velocity_km_per_day[2]/AU_KM,
+	};
+}
+
+StateAu series_abs_state(int target,double jd_tdb){
+	thread_local double memo_jd=std::numeric_limits<double>::quiet_NaN();
+	thread_local std::unordered_map<int,StateAu> memo;
+	if(memo_jd!=jd_tdb){
+		memo.clear();
+		memo_jd=jd_tdb;
+	}
+	auto it=memo.find(target);
+	if(it!=memo.end()){
+		return it->second;
+	}
+
+	StateAu out;
+	switch(target){
+		case 0:
+		case 10:
+			break;
+		case 199:
+		case 299:
+		case 399:
+		case 499:
+		case 599:
+		case 699:
+		case 799:
+		case 899:
+		case 3:
+			out=eval_vsop_state(target,jd_tdb);
+			break;
+		case 301:
+			out=series_abs_state(399,jd_tdb)+eval_elp_moon_geo(jd_tdb);
+			break;
+		default:
+			throw std::runtime_error("series ephemeris does not support code "+
+									 std::to_string(target));
+	}
+	memo[target]=out;
+	return out;
+}
+
+StateAu series_rel_state(int target,int observer,double jd_tdb){
+	if(target==observer){
+		return StateAu{};
+	}
+	StateAu t=series_abs_state(target,jd_tdb);
+	StateAu o=series_abs_state(observer,jd_tdb);
+	return t-o;
+}
+
+bool should_use_series_backend(const std::string&filepath){
+	if(is_series_ephem(filepath)||filepath.empty()){
+		return true;
+	}
+	std::error_code ec;
+	fs::path p(filepath);
+	if(!fs::exists(p,ec)||!fs::is_regular_file(p,ec)){
+		return true;
+	}
+	return false;
+}
+
+const std::vector<int>&series_object_ids(){
+	static const std::vector<int> ids={10,3,301,399,199,299,499,599,699,799,899};
+	return ids;
+}
+
+#endif
+
 }
 
 EphRead::EphRead(const std::string&path){
 	filepath=path;
+#if !LUNAR_ENABLE_SERIES_FALLBACK
 	if(filepath.empty()){
 		throw std::runtime_error("ephemeris path is empty");
 	}
+#endif
 	SSB=0;
 	SUN=10;
 	EMB=3;
@@ -2727,15 +2893,31 @@ EphRead::EphRead(const std::string&path){
 
 	id_name[SSB]="SOLAR SYSTEM BARYCENTER";
 	id_name[SUN]="SUN";
+	id_name[199]="MERCURY";
+	id_name[299]="VENUS";
 	id_name[EMB]="EARTH BARYCENTER";
 	id_name[EARTH]="EARTH";
 	id_name[MOON]="MOON";
+	id_name[499]="MARS";
+	id_name[599]="JUPITER";
+	id_name[699]="SATURN";
+	id_name[799]="URANUS";
+	id_name[899]="NEPTUNE";
 
 	load_kern();
 }
 
 void EphRead::load_kern(){
 	std::call_once(kern_flag,[this](){
+#if LUNAR_ENABLE_SERIES_FALLBACK
+		if(should_use_series_backend(filepath)){
+			use_series=true;
+			if(filepath.empty()){
+				filepath=kSeriesEphemToken;
+			}
+			return;
+		}
+#endif
 		if(!fs::exists(filepath)){
 			throw std::runtime_error("ephemeris file not found: "+filepath);
 		}
@@ -2750,6 +2932,9 @@ void EphRead::load_kern(){
 		kern=acq_kernel(filepath);
 	});
 
+	if(use_series){
+		return;
+	}
 	if(!kern){
 		throw std::runtime_error("failed to initialize ephemeris kernel");
 	}
@@ -2765,6 +2950,9 @@ std::string EphRead::to_name(int code) const{
 
 void EphRead::val_kern(){
 	load_kern();
+	if(use_series){
+		return;
+	}
 	if(kern->obj_ids.empty()){
 		throw std::runtime_error("No SPK segments found in ephemeris "+filepath);
 	}
@@ -2772,47 +2960,77 @@ void EphRead::val_kern(){
 
 double EphRead::et_fromjd(double jd_tdb){ return (jd_tdb-2451545.0)*SEC_DAY; }
 
-std::pair<Vec3,Vec3> EphRead::get_state_et_km(int target,int observer,
-											  double et_tdb){
+std::pair<PosKm3,VelKmSec3> EphRead::get_state_et_km(int target,int observer,
+													  double et_tdb){
 	load_kern();
+#if LUNAR_ENABLE_SERIES_FALLBACK
+	if(use_series){
+		double jd_tdb=2451545.0+et_tdb/SEC_DAY;
+		StateAu st=series_rel_state(target,observer,jd_tdb);
+		PosKm3 pos(st.px*AU_KM,st.py*AU_KM,st.pz*AU_KM);
+		VelKmSec3 vel(st.vx*(AU_KM/SEC_DAY),st.vy*(AU_KM/SEC_DAY),
+					  st.vz*(AU_KM/SEC_DAY));
+		return {pos,vel};
+	}
+#endif
 	State6 st=kern->rel_state(target,observer,et_tdb);
-	Vec3 pos(st.px,st.py,st.pz);
-	Vec3 vel(st.vx,st.vy,st.vz);
+	PosKm3 pos(st.px,st.py,st.pz);
+	VelKmSec3 vel(st.vx,st.vy,st.vz);
 	return {pos,vel};
 }
 
-Vec3 EphRead::get_pos_et_km(int target,int observer,double et_tdb){
+PosKm3 EphRead::get_pos_et_km(int target,int observer,double et_tdb){
 	return get_state_et_km(target,observer,et_tdb).first;
 }
 
-Vec3 EphRead::get_vel_et_kms(int target,int observer,double et_tdb){
+VelKmSec3 EphRead::get_vel_et_kms(int target,int observer,double et_tdb){
 	return get_state_et_km(target,observer,et_tdb).second;
 }
 
-std::pair<Vec3,Vec3> EphRead::get_state(int target,int observer,double jd_tdb){
+std::pair<Pos3,Vel3> EphRead::get_state(int target,int observer,double jd_tdb){
+#if LUNAR_ENABLE_SERIES_FALLBACK
+	load_kern();
+	if(use_series){
+		StateAu st=series_rel_state(target,observer,jd_tdb);
+		Pos3 pos(st.px,st.py,st.pz);
+		Vel3 vel(st.vx,st.vy,st.vz);
+		return {pos,vel};
+	}
+#endif
 	double et=et_fromjd(jd_tdb);
 	auto st=get_state_et_km(target,observer,et);
-	Vec3 pos(st.first.x/AU_KM,st.first.y/AU_KM,st.first.z/AU_KM);
-	Vec3 vel(st.second.x*(SEC_DAY/AU_KM),st.second.y*(SEC_DAY/AU_KM),
+	Pos3 pos(st.first.x/AU_KM,st.first.y/AU_KM,st.first.z/AU_KM);
+	Vel3 vel(st.second.x*(SEC_DAY/AU_KM),st.second.y*(SEC_DAY/AU_KM),
 			 st.second.z*(SEC_DAY/AU_KM));
 	return {pos,vel};
 }
 
-Vec3 EphRead::get_pos(int target,int observer,double jd_tdb){
+Pos3 EphRead::get_pos(int target,int observer,double jd_tdb){
 	return get_state(target,observer,jd_tdb).first;
 }
 
-Vec3 EphRead::get_vel(int target,int observer,double jd_tdb){
+Vel3 EphRead::get_vel(int target,int observer,double jd_tdb){
 	return get_state(target,observer,jd_tdb).second;
 }
 
 std::vector<int> EphRead::spk_objects(){
 	load_kern();
+#if LUNAR_ENABLE_SERIES_FALLBACK
+	if(use_series){
+		return series_object_ids();
+	}
+#endif
 	return kern->obj_ids;
 }
 
 std::vector<std::pair<double,double>> EphRead::spk_coverage(int obj){
 	load_kern();
+#if LUNAR_ENABLE_SERIES_FALLBACK
+	if(use_series){
+		(void)obj;
+		return {};
+	}
+#endif
 	auto it=kern->cover_map.find(obj);
 	if(it==kern->cover_map.end()){
 		return {};

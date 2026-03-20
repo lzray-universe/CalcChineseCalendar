@@ -10,7 +10,7 @@ void cli_at(const AtArgs&args){
 					   :static_cast<double>(tz_disp)/60.0*15.0;
 	AtData result=
 		at_ftxt(eph,args.time_raw,args.input_tz,tz_disp,args.tz,args.events,
-				args.calc_eot,args.eot_lon_deg,hli_lon,&cache);
+				args.calc_eot,args.eot_lon_deg,hli_lon,&args.hli_rules,&cache);
 
 	OutTgt out=open_out(args.out);
 	const FmtMap fmt_handlers={

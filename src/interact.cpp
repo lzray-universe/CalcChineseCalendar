@@ -9,6 +9,7 @@
 
 #include "lunar/i18n.hpp"
 #include "lunar/i18n_interact.hpp"
+#include "lunar/spc_ephem.hpp"
 
 namespace fs=std::filesystem;
 
@@ -98,6 +99,16 @@ bool load_cfg(InterCfg&cfg){
 			cfg.default_lang=value;
 		}else if(key=="def_fmt"){
 			cfg.def_fmt=value;
+		}else if(key=="hli_trad"){
+			cfg.hli_trad=value;
+		}else if(key=="hli_year_boundary"){
+			cfg.hli_year_boundary=value;
+		}else if(key=="hli_month_boundary"){
+			cfg.hli_month_boundary=value;
+		}else if(key=="hli_leap_month_mode"){
+			cfg.hli_leap_month_mode=value;
+		}else if(key=="hli_day_boundary"){
+			cfg.hli_day_boundary=value;
 		}else if(key=="def_prety"){
 			cfg.def_prety=(value=="1"||value=="true"||value=="yes");
 		}
@@ -116,11 +127,50 @@ bool save_cfg(const InterCfg&cfg){
 	ofs<<"default_tz="<<cfg.default_tz<<"\n";
 	ofs<<"default_lang="<<cfg.default_lang<<"\n";
 	ofs<<"def_fmt="<<cfg.def_fmt<<"\n";
+	ofs<<"hli_trad="<<cfg.hli_trad<<"\n";
+	ofs<<"hli_year_boundary="<<cfg.hli_year_boundary<<"\n";
+	ofs<<"hli_month_boundary="<<cfg.hli_month_boundary<<"\n";
+	ofs<<"hli_leap_month_mode="<<cfg.hli_leap_month_mode<<"\n";
+	ofs<<"hli_day_boundary="<<cfg.hli_day_boundary<<"\n";
 	ofs<<"def_prety="<<(cfg.def_prety?"1":"0")<<"\n";
 	return true;
 }
 
+HliRuleSet hli_rules_from_cfg(const InterCfg&cfg){
+	HliProfileCode trad=HliProfileCode::Folk;
+	(void)parse_hli_profile(cfg.hli_trad,&trad);
+	HliRuleSet rules=make_hli_rule_set(trad);
+	if(!cfg.hli_year_boundary.empty()){
+		HliYearBoundary parsed=HliYearBoundary::LunarNewYear;
+		if(parse_hli_year_boundary(cfg.hli_year_boundary,&parsed)){
+			rules.year_boundary=static_cast<int>(parsed);
+		}
+	}
+	if(!cfg.hli_month_boundary.empty()){
+		HliMonthBoundary parsed=HliMonthBoundary::LunarFirstDay;
+		if(parse_hli_month_boundary(cfg.hli_month_boundary,&parsed)){
+			rules.month_boundary=static_cast<int>(parsed);
+		}
+	}
+	if(!cfg.hli_leap_month_mode.empty()){
+		HliLeapMonthMode parsed=HliLeapMonthMode::InheritPrevious;
+		if(parse_hli_leap_month_mode(cfg.hli_leap_month_mode,&parsed)){
+			rules.leap_month_mode=static_cast<int>(parsed);
+		}
+	}
+	if(!cfg.hli_day_boundary.empty()){
+		HliDayBoundary parsed=HliDayBoundary::Hour23;
+		if(parse_hli_day_boundary(cfg.hli_day_boundary,&parsed)){
+			rules.day_boundary=static_cast<int>(parsed);
+		}
+	}
+	return normalize_hli_rule_set(rules);
+}
+
 bool file_ok(const std::string&path){
+	if(is_series_ephem(path)){
+		return true;
+	}
 	std::error_code ec;
 	return fs::exists(path,ec);
 }
@@ -351,7 +401,19 @@ std::string init_bsp(InterCfg&cfg){
 								 "BSP が見つからないためダウンロード画面を開きます。",
 								 "BSP 파일을 찾지 못해 다운로드 화면으로 이동합니다.")
 			 <<std::endl;
+#if LUNAR_ENABLE_SERIES_FALLBACK
+	cfg.def_bsp=kSeriesEphemToken;
+	add_bsp_if_missing(cfg,cfg.def_bsp);
+	save_cfg(cfg);
+	std::cout<<lunar::i18n::pick("将自动切换到内置 VSOP87A/ELPMPP02 星历。",
+								 "Switching to built-in VSOP87A/ELPMPP02 ephemeris.",
+								 "内蔵 VSOP87A/ELPMPP02 星暦へ切り替えます。",
+								 "?? VSOP87A/ELPMPP02 ??? ?? ????.")
+			 <<std::endl;
+	return cfg.def_bsp;
+#else
 	return pick_bsp(cfg);
+#endif
 }
 
 void int_month(const std::string&ephem){
@@ -636,13 +698,6 @@ void run_iint(const std::string&ephem){
 	ask_line(done_back_msg());
 }
 
-void run_tint(const std::string&ephem){
-	std::vector<std::string> args={ephem};
-	int rc=cmd_test(args);
-	std::cout<<itx("msg.selftest_code")<<rc<<std::endl;
-	ask_line(done_back_msg());
-}
-
 void run_mvint(const std::string&ephem){
 	std::string ym=ask_line(itx("prompt.monthview_ym"));
 	if(ym.empty()){
@@ -889,14 +944,13 @@ void int_mode(){
 		std::cout<<"[6] "<<itx("menu.next")<<" (next)\n";
 		std::cout<<"[7] "<<itx("menu.festival")<<" (festival)\n";
 		std::cout<<"[8] "<<itx("menu.info")<<" (info)\n";
-		std::cout<<"[9] "<<itx("menu.selftest")<<" (selftest)\n";
-		std::cout<<"[10] "<<itx("menu.monthview")<<" (monthview)\n";
-		std::cout<<"[11] "<<itx("menu.range")<<" (range)\n";
-		std::cout<<"[12] "<<itx("menu.search")<<" (search)\n";
-		std::cout<<"[13] "<<itx("menu.eclipse")<<" (eclipse)\n";
-		std::cout<<"[14] "<<itx("menu.almanac")<<" (almanac)\n";
-		std::cout<<"[15] "<<itx("menu.config")<<" (config)\n";
-		std::cout<<"[16] "<<itx("menu.completion")<<" (completion)\n";
+		std::cout<<"[9] "<<itx("menu.monthview")<<" (monthview)\n";
+		std::cout<<"[10] "<<itx("menu.range")<<" (range)\n";
+		std::cout<<"[11] "<<itx("menu.search")<<" (search)\n";
+		std::cout<<"[12] "<<itx("menu.eclipse")<<" (eclipse)\n";
+		std::cout<<"[13] "<<itx("menu.almanac")<<" (almanac)\n";
+		std::cout<<"[14] "<<itx("menu.config")<<" (config)\n";
+		std::cout<<"[15] "<<itx("menu.completion")<<" (completion)\n";
 		std::cout<<"[d] "<<itx("menu.switch_bsp")<<"\n";
 		std::cout<<"[h] "<<itx("menu.help")<<"\n";
 		std::cout<<"[q] "<<itx("menu.exit")<<"\n";
@@ -919,20 +973,18 @@ void int_mode(){
 		}else if(choice=="8"){
 			run_with_err("info",[&](){ run_iint(ephem); });
 		}else if(choice=="9"){
-			run_with_err("selftest",[&](){ run_tint(ephem); });
-		}else if(choice=="10"){
 			run_with_err("monthview",[&](){ run_mvint(ephem); });
-		}else if(choice=="11"){
+		}else if(choice=="10"){
 			run_with_err("range",[&](){ run_rint(ephem); });
-		}else if(choice=="12"){
+		}else if(choice=="11"){
 			run_with_err("search",[&](){ run_sint(ephem); });
-		}else if(choice=="13"){
+		}else if(choice=="12"){
 			run_with_err("eclipse",[&](){ run_eint(ephem); });
-		}else if(choice=="14"){
+		}else if(choice=="13"){
 			run_with_err("almanac",[&](){ run_aint(ephem); });
-		}else if(choice=="15"){
+		}else if(choice=="14"){
 			run_with_err("config",[&](){ run_cfgint(); });
-		}else if(choice=="16"){
+		}else if(choice=="15"){
 			run_with_err("completion",[&](){ run_pint(); });
 		}else if(choice=="d"||choice=="D"){
 			std::string new_ephem=init_bspq(cfg);

@@ -163,9 +163,6 @@ int run_cli_args(const std::vector<std::string>&args){
 	if(first=="info"){
 		return cmd_info(tail_for(first));
 	}
-	if(first=="selftest"){
-		return cmd_test(tail_for(first));
-	}
 	if(first=="config"){
 		return cmd_cfg(tail_for(first));
 	}

@@ -61,6 +61,9 @@ bool ends_with_bsp(const std::string&s){
 }
 
 bool looks_like_bsp_token(const std::string&s){
+	if(is_series_ephem(s)){
+		return true;
+	}
 	if(ends_with_bsp(s)){
 		return true;
 	}
@@ -97,6 +100,12 @@ void add_unique_existing(std::vector<std::string>&out,
 						 std::unordered_set<std::string>&seen,
 						 const std::string&path){
 	if(path.empty()){
+		return;
+	}
+	if(is_series_ephem(path)){
+		if(seen.insert(path).second){
+			out.push_back(path);
+		}
 		return;
 	}
 	fs::path p=fs::path(path);
@@ -168,7 +177,7 @@ bool needs_bsp(const std::string&cmd){
 	static const std::unordered_set<std::string> kNeed={
 		"months","calendar","year","event","at","convert","day",
 		"monthview","next","range","search","eclipse","festival",
-		"almanac","info","selftest"};
+		"almanac","info"};
 	return kNeed.find(cmd)!=kNeed.end();
 }
 
@@ -361,6 +370,10 @@ CovInfo load_cov_cached(const std::string&path){
 	}
 	CovInfo rec;
 	rec.loaded=true;
+	if(is_series_ephem(path)){
+		cache[path]=rec;
+		return rec;
+	}
 	try{
 		EphRead eph(path);
 		eph.load_kern();
@@ -517,6 +530,9 @@ std::vector<std::string> prep_cmd_args(const std::string&command,
 	if(chosen.empty()){
 		auto interval=infer_jd_interval(command,rest,ctx.default_tz);
 		chosen=choose_bsp(ctx.bsp_candidates,interval);
+	}
+	if(chosen.empty()&&series_fallback_enabled()){
+		chosen=kSeriesEphemToken;
 	}
 	if(chosen.empty()){
 		throw std::invalid_argument(lunar::i18n::pick(

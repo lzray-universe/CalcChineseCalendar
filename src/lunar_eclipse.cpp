@@ -346,10 +346,10 @@ bool eval_shadow_state(EphRead&eph,double jd_tdb,ShadowBodyState&st){
 	constexpr int max_iter=3;
 	RetProp sun=AberCorr::geo_prop(eph,eph.SUN,jd_tdb,max_iter);
 	auto moon=eph.get_state(eph.MOON,eph.EARTH,jd_tdb);
-	st.s=sun.X;
-	st.s_dot=sun.V;
-	st.m=moon.first;
-	st.m_dot=moon.second;
+	st.s=raw_vec(sun.X);
+	st.s_dot=raw_vec(sun.V);
+	st.m=raw_vec(moon.first);
+	st.m_dot=raw_vec(moon.second);
 	return finite_vec(st.s)&&finite_vec(st.s_dot)&&finite_vec(st.m)&&
 		   finite_vec(st.m_dot);
 }
@@ -707,16 +707,6 @@ double g_value(EphRead&eph,double jd_tdb){
 	return 2.0*Vec3::dot(g.dvec,g.dvec_dot);
 }
 
-double g_derivative(EphRead&eph,double jd_tdb){
-	constexpr double h=1e-5;
-	double f1=g_value(eph,jd_tdb+h);
-	double f2=g_value(eph,jd_tdb-h);
-	if(!std::isfinite(f1)||!std::isfinite(f2)){
-		return std::numeric_limits<double>::quiet_NaN();
-	}
-	return (f1-f2)/(2.0*h);
-}
-
 bool bracket_near(const std::function<double(double)>&fn,double center,
 				  double span,double step,Bracket&out){
 	if(!(span>0.0)||!(step>0.0)){
@@ -868,16 +858,30 @@ double solve_bracketed(const std::function<double(double)>&fn,
 		}
 
 		double xn=0.5*(left+right);
-		double dfx=dfn(x);
-		if(std::isfinite(dfx)&&std::fabs(dfx)>1e-14){
-			double cand=x-fx/dfx;
+		double f_span=f_right-f_left;
+		if(std::isfinite(f_span)&&std::fabs(f_span)>0.0){
+			double cand=left-f_left*(right-left)/f_span;
 			if(cand>left&&cand<right){
 				xn=cand;
+			}
+		}
+		if(dfn){
+			double dfx=dfn(x);
+			if(std::isfinite(dfx)&&std::fabs(dfx)>1e-14){
+				double cand=x-fx/dfx;
+				if(cand>left&&cand<right){
+					xn=cand;
+				}
 			}
 		}
 		x=xn;
 	}
 	return 0.5*(left+right);
+}
+
+double solve_bracketed(const std::function<double(double)>&fn,
+					   const Bracket&br,double x0,double x_tol){
+	return solve_bracketed(fn,std::function<double(double)>(),br,x0,x_tol);
 }
 
 bool solve_contact_pair(EphRead&eph,double jd_max,const ShadowGeom&g_max,
@@ -921,22 +925,16 @@ bool solve_contact_pair(EphRead&eph,double jd_max,const ShadowGeom&g_max,
 		}
 		return contact_value(g,mode);
 	};
-	auto dfn=[&](double jd) -> double{
-		if(legacy_mode){
+	std::function<double(double)> dfn;
+	if(legacy_mode){
+		dfn=[&](double jd) -> double{
 			ShadowGeom g;
 			if(!eval_shadow(eph,jd,g)){
 				return std::numeric_limits<double>::quiet_NaN();
 			}
 			return contact_derivative_legacy(g,mode);
-		}
-		constexpr double h=1e-5;
-		double f1=fn(jd+h);
-		double f2=fn(jd-h);
-		if(!std::isfinite(f1)||!std::isfinite(f2)){
-			return std::numeric_limits<double>::quiet_NaN();
-		}
-		return (f1-f2)/(2.0*h);
-	};
+		};
+	}
 
 	Bracket b_left;
 	Bracket b_right;
@@ -950,8 +948,13 @@ bool solve_contact_pair(EphRead&eph,double jd_max,const ShadowGeom&g_max,
 	double guess1=std::clamp(jd_max-span_est,b_left.left,b_left.right);
 	double guess2=std::clamp(jd_max+span_est,b_right.left,b_right.right);
 	try{
-		t1=solve_bracketed(fn,dfn,b_left,guess1,1e-10);
-		t2=solve_bracketed(fn,dfn,b_right,guess2,1e-10);
+		if(dfn){
+			t1=solve_bracketed(fn,dfn,b_left,guess1,1e-10);
+			t2=solve_bracketed(fn,dfn,b_right,guess2,1e-10);
+		}else{
+			t1=solve_bracketed(fn,b_left,guess1,1e-10);
+			t2=solve_bracketed(fn,b_right,guess2,1e-10);
+		}
 	}catch(const std::exception&){
 		return false;
 	}
@@ -974,22 +977,11 @@ double opp_value(EphRead&eph,double jd_tdb){
 	return norm_pm_pi(m.ra-s.ra-PI);
 }
 
-double opp_derivative(EphRead&eph,double jd_tdb){
-	constexpr double h=1e-5;
-	double f1=opp_value(eph,jd_tdb+h);
-	double f2=opp_value(eph,jd_tdb-h);
-	if(!std::isfinite(f1)||!std::isfinite(f2)){
-		return std::numeric_limits<double>::quiet_NaN();
-	}
-	return norm_pm_pi(f1-f2)/(2.0*h);
-}
-
 bool solve_opp(EphRead&eph,double jd_near,double*jd_opp){
 	if(jd_opp==nullptr||!std::isfinite(jd_near)){
 		return false;
 	}
 	auto fn=[&](double jd) -> double{ return opp_value(eph,jd); };
-	auto dfn=[&](double jd) -> double{ return opp_derivative(eph,jd); };
 
 	Bracket br;
 	if(!bracket_near(fn,jd_near,2.0,1.0/24.0,br)){
@@ -1001,7 +993,7 @@ bool solve_opp(EphRead&eph,double jd_near,double*jd_opp){
 	double guess=std::clamp(jd_near,br.left,br.right);
 	double root=0.0;
 	try{
-		root=solve_bracketed(fn,dfn,br,guess,1e-10);
+		root=solve_bracketed(fn,br,guess,1e-10);
 	}catch(const std::exception&){
 		return false;
 	}
@@ -1095,7 +1087,6 @@ bool calc_lunar_eclipse(EphRead&eph,double jd_tdb_near_full_moon,
 	*out=LunarEclipse{};
 
 	auto fn_g=[&](double jd) -> double{ return g_value(eph,jd); };
-	auto dfn_g=[&](double jd) -> double{ return g_derivative(eph,jd); };
 
 	Bracket g_br;
 	if(!bracket_near(fn_g,jd_tdb_near_full_moon,2.0,1.0/24.0,g_br)){
@@ -1107,7 +1098,7 @@ bool calc_lunar_eclipse(EphRead&eph,double jd_tdb_near_full_moon,
 	double guess=std::clamp(jd_tdb_near_full_moon,g_br.left,g_br.right);
 	double jd_max=0.0;
 	try{
-		jd_max=solve_bracketed(fn_g,dfn_g,g_br,guess,1e-10);
+		jd_max=solve_bracketed(fn_g,g_br,guess,1e-10);
 	}catch(const std::exception&){
 		return false;
 	}
@@ -1331,7 +1322,7 @@ Vec3 apply_diurnal_aberration(const Vec3&dir,const Vec3&obs_beta){
 
 Vec3 moon_ecef(EphRead&eph,double jd_utc){
 	double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
-	Vec3 moon_geo=AberCorr::geo_app(eph,eph.MOON,jd_tdb,3);
+	Vec3 moon_geo=raw_vec(AberCorr::geo_app(eph,eph.MOON,jd_tdb,3));
 
 	Mat3 P=PrecNut::prec_mat(jd_tdb);
 	Mat3 N=PrecNut::nut_mat(jd_tdb);

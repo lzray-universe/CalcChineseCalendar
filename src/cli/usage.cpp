@@ -110,7 +110,6 @@ void use_main(){
 			 <<"  lunar festival ...\n"
 			 <<"  lunar almanac  ...\n"
 			 <<"  lunar info     ...\n"
-			 <<"  lunar selftest ...\n"
 			 <<"  lunar config   ...\n"
 			 <<"  lunar completion...\n"
 			 <<"  lunar download ...\n"
@@ -134,7 +133,6 @@ void use_main(){
 			 <<"  lunar festival --help\n"
 			 <<"  lunar almanac --help\n"
 			 <<"  lunar info --help\n"
-			 <<"  lunar selftest --help\n"
 			 <<"  lunar config --help\n"
 			 <<"  lunar completion --help\n"
 			 <<"  lunar download --help\n";

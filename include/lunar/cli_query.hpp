@@ -3,6 +3,8 @@
 #include<string>
 #include<vector>
 
+#include "lunar/almanac.hpp"
+
 struct AtArgs{
 	std::string ephem;
 	std::string time_raw;
@@ -15,6 +17,8 @@ struct AtArgs{
 	bool events=true;
 	bool calc_eot=false;
 	double eot_lon_deg=0.0;
+	std::string hli_trad="folk";
+	HliRuleSet hli_rules=make_hli_rule_set(HliProfileCode::Folk);
 	bool from_stdin=false;
 	std::string input_file;
 	int jobs=1;
@@ -59,7 +63,6 @@ int cmd_eclipse(const std::vector<std::string>&args);
 int cmd_fest(const std::vector<std::string>&args);
 int cmd_alm(const std::vector<std::string>&args);
 int cmd_info(const std::vector<std::string>&args);
-int cmd_test(const std::vector<std::string>&args);
 int cmd_cfg(const std::vector<std::string>&args);
 int cmd_comp(const std::vector<std::string>&args);
 
@@ -74,6 +77,5 @@ void use_eclipse();
 void use_fest();
 void use_alm();
 void use_info();
-void use_test();
 void use_cfg();
 void use_comp();

@@ -4,6 +4,7 @@
 #include<string>
 #include<vector>
 
+#include "lunar/almanac.hpp"
 #include "lunar/cli.hpp"
 #include "lunar/download.hpp"
 
@@ -14,6 +15,11 @@ struct InterCfg{
 	std::string default_tz="+08:00";
 	std::string default_lang="zh";
 	std::string def_fmt="txt";
+	std::string hli_trad="folk";
+	std::string hli_year_boundary;
+	std::string hli_month_boundary;
+	std::string hli_leap_month_mode;
+	std::string hli_day_boundary;
 	bool def_prety=true;
 };
 
@@ -24,6 +30,8 @@ std::string trim(const std::string&s);
 bool load_cfg(InterCfg&cfg);
 
 bool save_cfg(const InterCfg&cfg);
+
+HliRuleSet hli_rules_from_cfg(const InterCfg&cfg);
 
 bool file_ok(const std::string&path);
 

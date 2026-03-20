@@ -2,6 +2,7 @@
 
 #include<cmath>
 #include<string>
+#include<type_traits>
 
 constexpr double PI=3.141592653589793238462643383279502884;
 constexpr double TWO_PI=2.0*PI;
@@ -15,23 +16,34 @@ constexpr double UTC8DAY=8.0/24.0;
 constexpr double SYNODDAY=29.530588;
 constexpr double JD_EPSILON=1e-8;
 
-struct Vec3{
+struct UnitlessVecTag{};
+struct LengthAuVecTag{};
+struct SpeedAuDayVecTag{};
+struct LengthKmVecTag{};
+struct SpeedKmSecVecTag{};
+
+template<class Tag>
+struct BasicVec3{
 	double x,y,z;
-	Vec3() : x(0.0),y(0.0),z(0.0){}
-	Vec3(double xx,double yy,double zz) : x(xx),y(yy),z(zz){}
+	BasicVec3() : x(0.0),y(0.0),z(0.0){}
+	BasicVec3(double xx,double yy,double zz) : x(xx),y(yy),z(zz){}
 
-	Vec3 operator+(const Vec3&b) const{ return Vec3(x+b.x,y+b.y,z+b.z); }
-	Vec3 operator-(const Vec3&b) const{ return Vec3(x-b.x,y-b.y,z-b.z); }
-	Vec3 operator*(double s) const{ return Vec3(x*s,y*s,z*s); }
-	Vec3 operator/(double s) const{ return Vec3(x/s,y/s,z/s); }
+	BasicVec3 operator+(const BasicVec3&b) const{
+		return BasicVec3(x+b.x,y+b.y,z+b.z);
+	}
+	BasicVec3 operator-(const BasicVec3&b) const{
+		return BasicVec3(x-b.x,y-b.y,z-b.z);
+	}
+	BasicVec3 operator*(double s) const{ return BasicVec3(x*s,y*s,z*s); }
+	BasicVec3 operator/(double s) const{ return BasicVec3(x/s,y/s,z/s); }
 
-	Vec3&operator+=(const Vec3&b){
+	BasicVec3&operator+=(const BasicVec3&b){
 		x+=b.x;
 		y+=b.y;
 		z+=b.z;
 		return *this;
 	}
-	Vec3&operator-=(const Vec3&b){
+	BasicVec3&operator-=(const BasicVec3&b){
 		x-=b.x;
 		y-=b.y;
 		z-=b.z;
@@ -40,12 +52,56 @@ struct Vec3{
 
 	double norm() const{ return std::sqrt(x*x+y*y+z*z); }
 
-	static double dot(const Vec3&a,const Vec3&b){
+	static double dot(const BasicVec3&a,const BasicVec3&b){
 		return a.x*b.x+a.y*b.y+a.z*b.z;
 	}
 };
 
-inline Vec3 operator*(double s,const Vec3&v){ return v*s; }
+using Vec3=BasicVec3<UnitlessVecTag>;
+
+#ifndef LUNAR_ENABLE_DIMENSION_TYPES
+#define LUNAR_ENABLE_DIMENSION_TYPES 1
+#endif
+
+#if LUNAR_ENABLE_DIMENSION_TYPES
+using Pos3=BasicVec3<LengthAuVecTag>;
+using Vel3=BasicVec3<SpeedAuDayVecTag>;
+using PosKm3=BasicVec3<LengthKmVecTag>;
+using VelKmSec3=BasicVec3<SpeedKmSecVecTag>;
+#else
+using Pos3=Vec3;
+using Vel3=Vec3;
+using PosKm3=Vec3;
+using VelKmSec3=Vec3;
+#endif
+
+template<class Tag>
+inline BasicVec3<Tag> operator*(double s,const BasicVec3<Tag>&v){ return v*s; }
+
+template<class ToTag,class FromTag>
+inline BasicVec3<ToTag> vec_cast(const BasicVec3<FromTag>&v){
+	return BasicVec3<ToTag>(v.x,v.y,v.z);
+}
+
+inline Pos3 pos3(const Vec3&v){ return Pos3(v.x,v.y,v.z); }
+
+inline Vel3 vel3(const Vec3&v){ return Vel3(v.x,v.y,v.z); }
+
+inline PosKm3 pos_km3(const Vec3&v){ return PosKm3(v.x,v.y,v.z); }
+
+inline VelKmSec3 vel_kms3(const Vec3&v){ return VelKmSec3(v.x,v.y,v.z); }
+
+template<class Tag>
+inline Vec3 raw_vec(const BasicVec3<Tag>&v){
+	return Vec3(v.x,v.y,v.z);
+}
+
+static_assert(sizeof(Pos3)==sizeof(Vec3),"typed vectors must stay zero-cost");
+static_assert(sizeof(Vel3)==sizeof(Vec3),"typed vectors must stay zero-cost");
+static_assert(std::is_trivially_copyable<Pos3>::value,
+			  "typed vectors must stay trivially copyable");
+static_assert(std::is_trivially_copyable<Vel3>::value,
+			  "typed vectors must stay trivially copyable");
 
 struct Mat3{
 	double m[3][3];
@@ -64,10 +120,11 @@ struct Mat3{
 		return I;
 	}
 
-	Vec3 operator*(const Vec3&v) const{
-		return Vec3(m[0][0]*v.x+m[0][1]*v.y+m[0][2]*v.z,
-					m[1][0]*v.x+m[1][1]*v.y+m[1][2]*v.z,
-					m[2][0]*v.x+m[2][1]*v.y+m[2][2]*v.z);
+	template<class Tag>
+	BasicVec3<Tag> operator*(const BasicVec3<Tag>&v) const{
+		return BasicVec3<Tag>(m[0][0]*v.x+m[0][1]*v.y+m[0][2]*v.z,
+							  m[1][0]*v.x+m[1][1]*v.y+m[1][2]*v.z,
+							  m[2][0]*v.x+m[2][1]*v.y+m[2][2]*v.z);
 	}
 
 	Mat3 operator*(const Mat3&b) const{
