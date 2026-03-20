@@ -10,6 +10,7 @@ Thumbs.db
 # CMake out-of-source builds
 /build/
 /build-*/
+/build_wasm/
 /cmake-build-*/
 /out/
 /package/

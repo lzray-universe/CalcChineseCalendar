@@ -12,6 +12,28 @@ option(LUNAR_ENABLE_DIMENSION_TYPES "Enable compile-time tagged physical vectors
 option(LUNAR_ENABLE_SERIES_FALLBACK "Enable VSOP87A/ELPMPP02 fallback when BSP is unavailable" ON)
 option(LUNAR_BUILD_TESTS "Build GoogleTest-based test targets" ${BUILD_TESTING})
 
+if(EMSCRIPTEN)
+    set(LUNAR_EMSCRIPTEN_COMPILE_OPTIONS
+        -fexceptions
+    )
+    set(LUNAR_EMSCRIPTEN_LINK_OPTIONS
+        -fexceptions
+        -lnodefs.js
+        -lworkerfs.js
+        "SHELL:-sALLOW_MEMORY_GROWTH=1"
+        "SHELL:-sFORCE_FILESYSTEM=1"
+        "SHELL:-sEXIT_RUNTIME=1"
+        "SHELL:-sENVIRONMENT=node,web,worker"
+        "SHELL:-sEXPORTED_RUNTIME_METHODS=['FS','callMain']"
+        "SHELL:--pre-js ${CMAKE_CURRENT_SOURCE_DIR}/src/emscripten/lunar_pre.js"
+    )
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/emscripten/lunar_worker.js
+        ${CMAKE_CURRENT_BINARY_DIR}/lunar_worker.js
+        COPYONLY
+    )
+endif()
+
 set(LUNAR_SERIES_SOURCES
     vsop87a/vsop87a.cpp
     vsop87a/vsop87a_ear.cpp
@@ -100,6 +122,11 @@ target_compile_definitions(lunar_core PUBLIC
     LUNAR_ENABLE_DIMENSION_TYPES=$<BOOL:${LUNAR_ENABLE_DIMENSION_TYPES}>
     LUNAR_ENABLE_SERIES_FALLBACK=$<BOOL:${LUNAR_ENABLE_SERIES_FALLBACK}>
 )
+if(EMSCRIPTEN)
+    target_compile_options(lunar_core PUBLIC
+        ${LUNAR_EMSCRIPTEN_COMPILE_OPTIONS}
+    )
+endif()
 if(MSVC)
     target_compile_options(lunar_core PRIVATE /utf-8)
 endif()
@@ -115,8 +142,19 @@ target_include_directories(lunar PRIVATE
 if(MSVC)
     target_compile_options(lunar PRIVATE /utf-8)
 endif()
+if(EMSCRIPTEN)
+    target_link_options(lunar PRIVATE
+        ${LUNAR_EMSCRIPTEN_LINK_OPTIONS}
+    )
+endif()
 
-add_library(lunar_dll SHARED
+if(EMSCRIPTEN)
+    set(LUNAR_DLL_LIBRARY_TYPE STATIC)
+else()
+    set(LUNAR_DLL_LIBRARY_TYPE SHARED)
+endif()
+
+add_library(lunar_dll ${LUNAR_DLL_LIBRARY_TYPE}
     src/c_api.cpp
 )
 target_link_libraries(lunar_dll PRIVATE lunar_core)

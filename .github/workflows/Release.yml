@@ -46,6 +46,11 @@ jobs:
             kind: native
             cmake_args: '-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"'
 
+          - os: ubuntu-latest
+            name: wasm-emscripten
+            kind: emscripten
+            emsdk_version: 5.0.3
+
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -59,6 +64,34 @@ jobs:
       - name: Build (native)
         if: matrix.kind == 'native'
         run: cmake --build build --config Release -j
+
+      - name: Setup Emscripten
+        if: matrix.kind == 'emscripten'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install ${{ matrix.emsdk_version }}
+          "$RUNNER_TEMP/emsdk/emsdk" activate ${{ matrix.emsdk_version }}
+
+      - name: Configure (emscripten)
+        if: matrix.kind == 'emscripten'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLUNAR_ENABLE_SERIES_FALLBACK=ON \
+            -DLUNAR_BUILD_TESTS=OFF
+
+      - name: Build (emscripten)
+        if: matrix.kind == 'emscripten'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          cmake --build build -j
 
       
       - name: Setup Zig (musl)
@@ -115,16 +148,24 @@ jobs:
           mkdir -p package
           cp README.md package/
           cp LICENSE package/
-          cp -R vsop87a package/
-          cp -R elpmpp02 package/
 
-          if [ "${{ runner.os }}" = "Windows" ]; then
+          if [ "${{ matrix.kind }}" = "emscripten" ]; then
+            cp build/lunar.js package/
+            cp build/lunar.wasm package/
+            cp build/lunar_worker.js package/
+            cd package
+            tar -czvf ../lunar-${{ matrix.name }}.tar.gz *
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            cp -R vsop87a package/
+            cp -R elpmpp02 package/
             cp build/Release/lunar.exe package/
             cp build/Release/lunar.dll package/ || true
             cp build/Release/lunar.lib package/ || true
             cd package
             7z a ../lunar-${{ matrix.name }}.zip *
           else
+            cp -R vsop87a package/
+            cp -R elpmpp02 package/
             cp build/lunar package/
             cp build/liblunar.so package/ 2>/dev/null || true
             cp build/liblunar.dylib package/ 2>/dev/null || true

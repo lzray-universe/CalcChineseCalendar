@@ -49,13 +49,78 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-### 2.4 产物
+### 2.4 WebAssembly（Emscripten）
+
+```powershell
+git clone https://github.com/emscripten-core/emsdk.git D:\tools\emsdk
+D:\tools\emsdk\emsdk install latest
+D:\tools\emsdk\emsdk activate latest
+cmd /c "call D:\tools\emsdk\emsdk_env.bat && D:\tools\emsdk\upstream\emscripten\emcmake.bat cmake -S . -B build_wasm -G Ninja -DLUNAR_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release"
+cmd /c "call D:\tools\emsdk\emsdk_env.bat && cmake --build build_wasm --parallel"
+```
+
+说明：
+
+- 产物为 `build_wasm/lunar.js` 与 `build_wasm/lunar.wasm`
+- 兼容包装还会生成 `build_wasm/lunar_worker.js`
+- 保留现有 CLI 入口；Node 下可直接执行 `node build_wasm/lunar.js --version`
+- wasm 构建默认启用异常支持、文件系统支持、`FS`/`callMain` 导出与内存增长
+- Node 下会自动把当前工作目录挂载到 wasm 虚拟文件系统，当前目录内相对 `.bsp` 路径可直接使用
+- Windows 下会自动兼容 `D:\path\to\file.bsp` 这类盘符绝对路径
+- 浏览器 Worker 下可直接使用 `lunar_worker.js`，按 CLI 的 `argv` 方式调用
+- Worker 支持两种输入：`files` 写入内存文件，或 `mounts` 通过 `WORKERFS` 挂载 `File`/`Blob`
+- `lunar_worker.js` 保持 CLI 语义：单次执行后自动退出；下一条命令请新建 Worker
+- 若不需要 BSP，可继续使用 `@series`
+
+浏览器 Worker 示例：
+
+```js
+const worker=new Worker('./lunar_worker.js');
+
+worker.onmessage=({data})=>{
+  if(data.type==='ready'){
+    worker.postMessage({
+      argv:[
+        'day','2025-06-01',
+        '--bsp','/ephem/'+spkFile.name,
+        '--format','txt'
+      ],
+      mounts:[
+        {path:'/ephem',files:[spkFile]}
+      ]
+    });
+    return;
+  }
+  if(data.type==='result'){
+    console.log(data.exit_code);
+    console.log(data.stdout);
+    console.error(data.stderr);
+  }
+};
+```
+
+浏览器 Worker 也可先写入内存文件：
+
+```js
+worker.postMessage({
+  argv:[
+    'day','2025-06-01',
+    '--bsp','/ephem/de442s.bsp',
+    '--format','txt'
+  ],
+  files:[
+    {path:'/ephem/de442s.bsp',data:spkArrayBuffer}
+  ]
+});
+```
+
+### 2.5 产物
 
 - 可执行程序：`lunar`
 - 动态库：`lunar_dll`（输出名为 `lunar`，对应平台扩展名）
 - 测试程序：`lunar_tests`（启用 `LUNAR_BUILD_TESTS` 时）
 
-### 2.5 可选构建开关
+### 2.6 可选构建开关
 
 - `-DLUNAR_ENABLE_SERIES_FALLBACK=ON|OFF`
   - `ON`（默认）：未找到 BSP 时自动切换到内置 VSOP87A + ELPMPP02
@@ -64,7 +129,7 @@ cmake --build build -j
   - `ON`（默认）：构建 gtest/ctest 测试目标
   - `OFF`：不构建测试目标
 
-### 2.6 运行测试
+### 2.7 运行测试
 
 ```bash
 cmake -S . -B build
