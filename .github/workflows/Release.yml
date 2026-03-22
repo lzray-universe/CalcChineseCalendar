@@ -56,6 +56,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Derive release suffix
+        id: version
+        shell: bash
+        run: |
+          set -euxo pipefail
+          tag='${{ inputs.tag }}'
+          if [[ "$tag" =~ (v[0-9][0-9A-Za-z._-]*)$ ]]; then
+            echo "suffix=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unable to derive version suffix from tag: $tag" >&2
+            exit 1
+          fi
+
     
       - name: Configure (native)
         if: matrix.kind == 'native'
@@ -153,18 +166,21 @@ jobs:
       
       - name: Package
         shell: bash
+        env:
+          RELEASE_SUFFIX: ${{ steps.version.outputs.suffix }}
         run: |
           set -euxo pipefail
           mkdir -p package
           cp README.md package/
           cp LICENSE package/
+          archive_base="lunar-${{ matrix.name }}-${RELEASE_SUFFIX}"
 
           if [ "${{ matrix.kind }}" = "emscripten" ]; then
             cp build/lunar.js package/
             cp build/lunar.wasm package/
             cp build/lunar_worker.js package/
             cd package
-            tar -czvf ../lunar-${{ matrix.name }}.tar.gz *
+            tar -czvf "../${archive_base}.tar.gz" *
           elif [ "${{ runner.os }}" = "Windows" ]; then
             cp -R vsop87a package/
             cp -R elpmpp02 package/
@@ -172,7 +188,7 @@ jobs:
             cp build/Release/lunar.dll package/ || true
             cp build/Release/lunar.lib package/ || true
             cd package
-            7z a ../lunar-${{ matrix.name }}.zip *
+            7z a "../${archive_base}.zip" *
           else
             cp -R vsop87a package/
             cp -R elpmpp02 package/
@@ -180,13 +196,13 @@ jobs:
             cp build/liblunar.so package/ 2>/dev/null || true
             cp build/liblunar.dylib package/ 2>/dev/null || true
             cd package
-            tar -czvf ../lunar-${{ matrix.name }}.tar.gz *
+            tar -czvf "../${archive_base}.tar.gz" *
           fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: lunar-${{ matrix.name }}
-          path: lunar-${{ matrix.name }}.*
+          path: lunar-${{ matrix.name }}-${{ steps.version.outputs.suffix }}.*
 
   release:
     needs: build
