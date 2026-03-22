@@ -237,6 +237,58 @@ std::string itx(const std::string&key,const std::string&a0){
 	return lunar::i18n::interact::textf(key,a0);
 }
 
+void apply_lang_from_cfg(const InterCfg&cfg){
+	lunar::i18n::Lang lang=lunar::i18n::Lang::Zh;
+	if(!cfg.default_lang.empty()&&lunar::i18n::try_parse_lang(cfg.default_lang,&lang)){
+		lunar::i18n::set_lang(lang);
+	}
+}
+
+bool set_interact_lang(InterCfg&cfg,const std::string&choice){
+	lunar::i18n::Lang lang=lunar::i18n::Lang::Zh;
+	if(choice=="1"){
+		lang=lunar::i18n::Lang::Zh;
+	}else if(choice=="2"){
+		lang=lunar::i18n::Lang::ZhHant;
+	}else if(choice=="3"){
+		lang=lunar::i18n::Lang::En;
+	}else if(choice=="4"){
+		lang=lunar::i18n::Lang::Ja;
+	}else if(choice=="5"){
+		lang=lunar::i18n::Lang::Ko;
+	}else if(!lunar::i18n::try_parse_lang(choice,&lang)){
+		return false;
+	}
+	cfg.default_lang=lunar::i18n::lang_code(lang);
+	lunar::i18n::set_lang(lang);
+	save_cfg(cfg);
+	return true;
+}
+
+std::string use_series_ephem(InterCfg&cfg){
+#if LUNAR_ENABLE_SERIES_FALLBACK
+	cfg.def_bsp=kSeriesEphemToken;
+	add_bsp_if_missing(cfg,cfg.def_bsp);
+	save_cfg(cfg);
+	std::cout<<itx("info.series_selected")<<std::endl;
+	return cfg.def_bsp;
+#else
+	(void)cfg;
+	return "";
+#endif
+}
+
+std::string maybe_use_series_ephem(InterCfg&cfg){
+#if LUNAR_ENABLE_SERIES_FALLBACK
+	if(ask_yes_no(itx("prompt.use_series_fallback"),false)){
+		return use_series_ephem(cfg);
+	}
+#else
+	(void)cfg;
+#endif
+	return "";
+}
+
 std::string pick_bsp(InterCfg&cfg){
 	auto options=bsp_opts();
 	std::cout<<"\n"<<lunar::i18n::pick("可下载的 BSP 星历：",
@@ -377,13 +429,17 @@ std::string init_bsp(InterCfg&cfg){
 									 "사용할 BSP 번호를 선택하세요 (0은 다운로드 화면): ");
 		std::string sel;
 		std::getline(std::cin,sel);
-		if(!sel.empty()&&std::isdigit(static_cast<unsigned char>(sel[0]))){
+		if(sel.empty()||sel=="q"||sel=="Q"){
+			return "";
+		}
+		if(std::isdigit(static_cast<unsigned char>(sel[0]))){
 			int idx=std::stoi(sel);
 			if(idx==0){
 				std::string downloaded=pick_bsp(cfg);
 				if(!downloaded.empty()){
 					return downloaded;
 				}
+				return maybe_use_series_ephem(cfg);
 			}else if(idx>=1&&static_cast<std::size_t>(idx)<=bsp_files.size()){
 				cfg.def_bsp=bsp_files[idx-1].string();
 				add_bsp_if_missing(cfg,cfg.def_bsp);
@@ -394,6 +450,8 @@ std::string init_bsp(InterCfg&cfg){
 				return cfg.def_bsp;
 			}
 		}
+		std::cout<<itx("invalid_option")<<std::endl;
+		return "";
 	}
 
 	std::cout<<lunar::i18n::pick("未找到 BSP 文件，将进入下载界面。",
@@ -401,19 +459,11 @@ std::string init_bsp(InterCfg&cfg){
 								 "BSP が見つからないためダウンロード画面を開きます。",
 								 "BSP 파일을 찾지 못해 다운로드 화면으로 이동합니다.")
 			 <<std::endl;
-#if LUNAR_ENABLE_SERIES_FALLBACK
-	cfg.def_bsp=kSeriesEphemToken;
-	add_bsp_if_missing(cfg,cfg.def_bsp);
-	save_cfg(cfg);
-	std::cout<<lunar::i18n::pick("将自动切换到内置 VSOP87A/ELPMPP02 星历。",
-								 "Switching to built-in VSOP87A/ELPMPP02 ephemeris.",
-								 "内蔵 VSOP87A/ELPMPP02 星暦へ切り替えます。",
-								 "?? VSOP87A/ELPMPP02 ??? ?? ????.")
-			 <<std::endl;
-	return cfg.def_bsp;
-#else
-	return pick_bsp(cfg);
-#endif
+	std::string ephem=pick_bsp(cfg);
+	if(!ephem.empty()){
+		return ephem;
+	}
+	return maybe_use_series_ephem(cfg);
 }
 
 void int_month(const std::string&ephem){
@@ -859,7 +909,27 @@ void run_aint(const std::string&ephem){
 	ask_line(done_back_msg());
 }
 
-void run_cfgint(){
+void run_langint(InterCfg&cfg){
+	std::cout<<itx("lang.current",lunar::i18n::current_lang_code())<<std::endl;
+	std::cout<<"[1] 简体中文 (zh)\n";
+	std::cout<<"[2] 繁體中文 (zht)\n";
+	std::cout<<"[3] English (en)\n";
+	std::cout<<"[4] 日本語 (ja)\n";
+	std::cout<<"[5] 한국어 (ko)\n";
+	std::string choice=ask_line(itx("prompt.lang_choice"));
+	if(choice.empty()||choice=="q"||choice=="Q"){
+		return;
+	}
+	if(!set_interact_lang(cfg,choice)){
+		std::cout<<itx("lang.invalid")<<std::endl;
+		ask_line(back_msg());
+		return;
+	}
+	std::cout<<itx("lang.updated",cfg.default_lang)<<std::endl;
+	ask_line(done_back_msg());
+}
+
+void run_cfgint(InterCfg&cfg){
 	std::string act=ask_line(itx("prompt.config_action"));
 	if(act=="2"||act=="set"){
 		std::string key=ask_line(itx("prompt.config_key"));
@@ -872,6 +942,8 @@ void run_cfgint(){
 		}
 		std::vector<std::string> args={"set",key,value};
 		cmd_cfg(args);
+		load_cfg(cfg);
+		apply_lang_from_cfg(cfg);
 		ask_line(done_back_msg());
 		return;
 	}
@@ -952,6 +1024,7 @@ void int_mode(){
 		std::cout<<"[14] "<<itx("menu.config")<<" (config)\n";
 		std::cout<<"[15] "<<itx("menu.completion")<<" (completion)\n";
 		std::cout<<"[d] "<<itx("menu.switch_bsp")<<"\n";
+		std::cout<<"[l] "<<itx("menu.lang")<<"\n";
 		std::cout<<"[h] "<<itx("menu.help")<<"\n";
 		std::cout<<"[q] "<<itx("menu.exit")<<"\n";
 		std::string choice=ask_line(itx("input_select"));
@@ -983,7 +1056,7 @@ void int_mode(){
 		}else if(choice=="13"){
 			run_with_err("almanac",[&](){ run_aint(ephem); });
 		}else if(choice=="14"){
-			run_with_err("config",[&](){ run_cfgint(); });
+			run_with_err("config",[&](){ run_cfgint(cfg); });
 		}else if(choice=="15"){
 			run_with_err("completion",[&](){ run_pint(); });
 		}else if(choice=="d"||choice=="D"){
@@ -991,6 +1064,8 @@ void int_mode(){
 			if(!new_ephem.empty()){
 				ephem=new_ephem;
 			}
+		}else if(choice=="l"||choice=="L"){
+			run_with_err("lang",[&](){ run_langint(cfg); });
 		}else if(choice=="h"||choice=="H"){
 			use_main();
 			ask_line(back_msg());

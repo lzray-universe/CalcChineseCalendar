@@ -21,6 +21,7 @@ add_executable(lunar_tests
     test_core_cli.cpp
     test_eclipse.cpp
     test_almanac_i18n.cpp
+    test_interact.cpp
 )
 lunar_enable_runtime_optimizations(lunar_tests)
 

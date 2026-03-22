@@ -581,6 +581,7 @@ lunar completion bash|zsh|fish|powershell
 - `14` config
 - `15` completion
 - `d` 切换/下载 BSP
+- `l` 切换语言
 - `h` 帮助
 - `q` 退出
 
@@ -590,6 +591,7 @@ lunar completion bash|zsh|fish|powershell
 
 - 命令行：`--lang zh|zht|en|ja|ko`
 - 配置默认：`default_lang`
+- 交互模式：主菜单 `l` 可即时切换并写回 `default_lang`
 
 优先级：命令行高于配置默认。
 
