@@ -10,6 +10,7 @@ CalcChineseCalendar 是一个优先使用 JPL DE BSP 星历、在缺失 BSP 时�
 
 [![License](https://img.shields.io/github/license/lzray-universe/CalcChineseCalendar)](LICENSE)
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lzray-universe/CalcChineseCalendar)
 ## 1. 功能概览
 
 - 农历月枚举：`months`
