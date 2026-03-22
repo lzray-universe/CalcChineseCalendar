@@ -22,6 +22,7 @@ add_executable(lunar_tests
     test_eclipse.cpp
     test_almanac_i18n.cpp
 )
+lunar_enable_runtime_optimizations(lunar_tests)
 
 target_link_libraries(lunar_tests PRIVATE
     lunar_core

@@ -59,7 +59,13 @@ jobs:
     
       - name: Configure (native)
         if: matrix.kind == 'native'
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLUNAR_ENABLE_SERIES_FALLBACK=ON ${{ matrix.cmake_args }}
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DLUNAR_ENABLE_SERIES_FALLBACK=ON
+          -DLUNAR_ENABLE_IPO=ON
+          -DLUNAR_ENABLE_FAST_MATH=OFF
+          ${{ matrix.cmake_args }}
 
       - name: Build (native)
         if: matrix.kind == 'native'
@@ -83,6 +89,8 @@ jobs:
           emcmake cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DLUNAR_ENABLE_SERIES_FALLBACK=ON \
+            -DLUNAR_ENABLE_IPO=OFF \
+            -DLUNAR_ENABLE_FAST_MATH=OFF \
             -DLUNAR_BUILD_TESTS=OFF
 
       - name: Build (emscripten)
@@ -119,6 +127,8 @@ jobs:
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DLUNAR_ENABLE_SERIES_FALLBACK=ON \
+            -DLUNAR_ENABLE_IPO=ON \
+            -DLUNAR_ENABLE_FAST_MATH=OFF \
             -DCMAKE_C_COMPILER="$PWD/zigcc" \
             -DCMAKE_CXX_COMPILER="$PWD/zigcxx" \
             -DCMAKE_C_FLAGS="-Wno-error=date-time -Wno-date-time" \

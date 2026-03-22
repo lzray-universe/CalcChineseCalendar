@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(lunar LANGUAGES C CXX)
 
 include(CTest)
+include(CheckIPOSupported)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,6 +12,44 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(LUNAR_ENABLE_DIMENSION_TYPES "Enable compile-time tagged physical vectors" ON)
 option(LUNAR_ENABLE_SERIES_FALLBACK "Enable VSOP87A/ELPMPP02 fallback when BSP is unavailable" ON)
 option(LUNAR_BUILD_TESTS "Build GoogleTest-based test targets" ${BUILD_TESTING})
+option(LUNAR_ENABLE_IPO "Enable link-time/interprocedural optimization for release-like builds" ON)
+option(LUNAR_ENABLE_FAST_MATH "Enable faster but less strict floating-point optimizations" OFF)
+
+if(LUNAR_ENABLE_IPO AND NOT EMSCRIPTEN)
+    check_ipo_supported(RESULT LUNAR_IPO_SUPPORTED OUTPUT LUNAR_IPO_OUTPUT LANGUAGES C CXX)
+    if(LUNAR_IPO_SUPPORTED)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
+    else()
+        message(STATUS "IPO/LTO disabled: ${LUNAR_IPO_OUTPUT}")
+    endif()
+endif()
+
+function(lunar_enable_runtime_optimizations target_name)
+    if(MSVC)
+        target_compile_options(${target_name} PRIVATE
+            $<$<CONFIG:Release>:/Gw>
+            $<$<CONFIG:RelWithDebInfo>:/Gw>
+            $<$<CONFIG:RelWithDebInfo>:/Ob2>
+        )
+    elseif(NOT EMSCRIPTEN)
+        target_compile_options(${target_name} PRIVATE
+            $<$<CONFIG:RelWithDebInfo>:-O3>
+        )
+    endif()
+
+    if(LUNAR_ENABLE_FAST_MATH AND NOT EMSCRIPTEN)
+        if(MSVC)
+            target_compile_options(${target_name} PRIVATE
+                $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:/fp:fast>
+            )
+        else()
+            target_compile_options(${target_name} PRIVATE
+                $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:-ffast-math>
+            )
+        endif()
+    endif()
+endfunction()
 
 if(EMSCRIPTEN)
     set(LUNAR_EMSCRIPTEN_COMPILE_OPTIONS
@@ -109,6 +148,7 @@ endif()
 add_library(lunar_core STATIC
     ${LUNAR_CORE_SOURCES}
 )
+lunar_enable_runtime_optimizations(lunar_core)
 
 set_target_properties(lunar_core PROPERTIES
     POSITION_INDEPENDENT_CODE ON
@@ -134,6 +174,7 @@ endif()
 add_executable(lunar
     src/main.cpp
 )
+lunar_enable_runtime_optimizations(lunar)
 target_link_libraries(lunar PRIVATE lunar_core)
 target_include_directories(lunar PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -157,6 +198,7 @@ endif()
 add_library(lunar_dll ${LUNAR_DLL_LIBRARY_TYPE}
     src/c_api.cpp
 )
+lunar_enable_runtime_optimizations(lunar_dll)
 target_link_libraries(lunar_dll PRIVATE lunar_core)
 target_include_directories(lunar_dll PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include

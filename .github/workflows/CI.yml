@@ -13,26 +13,37 @@ jobs:
         include:
           - os: ubuntu-latest
             name: linux-x64
+            build_type: Release
             cmake_args: ""
 
           - os: ubuntu-24.04-arm
             name: linux-arm64
+            build_type: Release
             cmake_args: ""
 
           - os: windows-latest
             name: windows-x64
+            build_type: Release
             cmake_args: "-A x64"
 
           - os: windows-11-arm
             name: windows-arm64
+            build_type: Release
             cmake_args: "-A ARM64"
 
           - os: macos-15-intel
             name: macos-x64
+            build_type: Release
             cmake_args: ""
 
           - os: macos-latest
             name: macos-arm64
+            build_type: Release
+            cmake_args: ""
+
+          - os: ubuntu-latest
+            name: linux-x64-relwithdebinfo
+            build_type: RelWithDebInfo
             cmake_args: ""
 
     runs-on: ${{ matrix.os }}
@@ -43,13 +54,15 @@ jobs:
       - name: Configure
         run: >
           cmake -S . -B build
-          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           -DLUNAR_ENABLE_SERIES_FALLBACK=ON
           -DLUNAR_BUILD_TESTS=ON
+          -DLUNAR_ENABLE_IPO=ON
+          -DLUNAR_ENABLE_FAST_MATH=OFF
           ${{ matrix.cmake_args }}
 
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure
