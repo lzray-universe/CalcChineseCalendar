@@ -6,6 +6,8 @@ CalcChineseCalendar 是一个优先使用 JPL DE BSP 星历、在缺失 BSP 时�
 - 动态库 `lunar_dll`（导出 C API）
 - 面向 C++ 的可复用计算接口（`lunar::core`）
 
+[![CI](https://github.com/lzray-universe/CalcChineseCalendar/actions/workflows/CI.yml/badge.svg)](https://github.com/lzray-universe/CalcChineseCalendar/actions/workflows/CI.yml)
+
 [![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Ftokei.kojix2.net%2Fbadge%2Fgithub%2Flzray-universe%2FCalcChineseCalendar%2Flines)](https://tokei.kojix2.net/github/lzray-universe/CalcChineseCalendar)
 
 [![License](https://img.shields.io/github/license/lzray-universe/CalcChineseCalendar)](LICENSE)
