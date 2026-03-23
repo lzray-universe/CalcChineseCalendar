@@ -1,0 +1,91 @@
+{
+  "repo_notes": [
+    {
+      "content": "CalcChineseCalendar (binary name: lunar) is a C++20 astronomical and Chinese calendar computation library and CLI tool authored by lzray-universe. It has three primary outputs: (1) the `lunar` command-line executable, (2) the `lunar_dll` shared library exposing a stable C API, and (3) the `lunar::core` C++ namespace for direct library use. The project preferentially uses JPL DE BSP ephemeris files for high-accuracy planetary positions and automatically falls back to the bundled VSOP87A + ELPMPP02 series when no BSP file is present. Build system is CMake 3.20+ targeting C++20. CI covers linux-x64, linux-arm64, windows-x64, windows-arm64, and macos-x64.",
+      "author": "lzray-universe"
+    },
+    {
+      "content": "Source layout: include/lunar/ contains all public headers (one header per major subsystem). src/ is the implementation root. src/cli/ implements the command-line dispatcher and all sub-command writers. src/query/ implements the computational core of each query command (day, calendar, eclipse, next, range, search, etc.). src/i18n/ holds the internationalization string catalogs. src/emscripten/ contains the WebAssembly wrapper (lunar_worker.js + lunar_pre.js) for browser Worker usage. tests/ contains GoogleTest suites covering almanac i18n, CLI core, eclipse, and interactive mode.",
+      "author": "lzray-universe"
+    },
+    {
+      "content": "Key subsystems to document: (1) Ephemeris layer — BSP loading via SPICE/SPK (spc_ephem.*), series fallback via VSOP87A + ELPMPP02. (2) Time scale conversions — TT, TDB, UT1, UTC handled in time_scale.*. (3) Reference frame transformations — frames.* (ecliptic, equatorial, horizontal). (4) Precession/nutation core — precnut_core.*. (5) Calendar arithmetic — calendar.* and almanac.*. (6) Event solver — rt_solver.* for root-finding, events_core for higher-level event dispatch. (7) Eclipse computation — solar_eclipse.* and lunar_eclipse.*. (8) Output serialisation — json.*, ics.*, js_writer.*, day_formatter.*. (9) C API surface — c_api.h / c_api.cpp. (10) WebAssembly layer — src/emscripten/.",
+      "author": "lzray-universe"
+    }
+  ],
+  "pages": [
+    {
+      "title": "Project Overview",
+      "purpose": "High-level introduction: what CalcChineseCalendar (lunar) does, its three output targets (CLI, DLL, C++ library), supported platforms, BSP-first / series-fallback design philosophy, and links to the build badge, license, and DeepWiki badge."
+    },
+    {
+      "title": "Architecture Overview",
+      "purpose": "Architectural diagram and narrative showing how the five major layers interact: (1) ephemeris data sources → (2) time-scale and reference-frame layer → (3) calendar and event computation core → (4) query command layer → (5) output / serialisation layer. Show where the CLI, C API, and WebAssembly layer plug in."
+    },
+    {
+      "title": "Building the Project",
+      "purpose": "Document all build paths: Linux/macOS with Ninja, Windows with Visual Studio, WebAssembly with Emscripten. Cover CMake flags LUNAR_ENABLE_SERIES_FALLBACK and LUNAR_BUILD_TESTS. Explain the three build artifacts (lunar, lunar_dll, lunar_tests) and how to run ctest.",
+      "parent": "Project Overview"
+    },
+    {
+      "title": "Ephemeris Layer",
+      "purpose": "Document the ephemeris subsystem: BSP/SPK file loading via spc_ephem.hpp/spc_ephem.cpp (SPICE kernel reading), the built-in VSOP87A (planetary) and ELPMPP02 (lunar) series in src/stars/ and elpmpp02/vsop87a/ (excluded from repomix but referenced), automatic fallback logic controlled by LUNAR_ENABLE_SERIES_FALLBACK, and the `download` command (download.hpp/cpp) for fetching DE440/DE440s/DE441/DE442 BSP files.",
+      "parent": "Architecture Overview"
+    },
+    {
+      "title": "Time Scale and Reference Frame",
+      "purpose": "Document time_scale.hpp/cpp (TT, TDB, UT1, UTC, Julian Day conversions, delta-T), frames.hpp/cpp (ecliptic, equatorial, horizontal reference frame transformations), and precnut_core.hpp/cpp (IAU precession/nutation model). Explain how these are composed to produce apparent positions.",
+      "parent": "Architecture Overview"
+    },
+    {
+      "title": "Calendar and Almanac Computation",
+      "purpose": "Document calendar.hpp/cpp (solar terms, lunar months, leap month determination, Gregorian↔Chinese conversion), almanac.hpp/cpp (traditional almanac — 干支, 纳音, 建除十二神, 冲煞, 吉凶宜忌), and math.hpp/cpp (shared astronomical math utilities). Cover the `months`, `calendar`, `year`, `convert`, `festival`, and `almanac` CLI commands.",
+      "parent": "Architecture Overview"
+    },
+    {
+      "title": "Event Solver",
+      "purpose": "Document rt_solver.hpp/cpp (iterative root-finding used for phase, solstice, and eclipse contact times), events.hpp and events_core.cpp (high-level event dispatch — new/full moon, solar terms, planetary conjunctions), and the `event`, `next`, `range`, and `search` CLI commands implemented in src/query/.",
+      "parent": "Architecture Overview"
+    },
+    {
+      "title": "Eclipse Computation",
+      "purpose": "Document solar_eclipse.hpp/cpp and lunar_eclipse.hpp/cpp: contact-time algorithms, magnitude, type classification (total/annular/partial/penumbral), and Saros cycle data. Cover the `eclipse` CLI command (src/query/cmd_eclipse.cpp) and its JSON/text output.",
+      "parent": "Architecture Overview"
+    },
+    {
+      "title": "CLI Command Reference",
+      "purpose": "Comprehensive reference for every sub-command: months, calendar, year, event, download, at, convert, day, monthview, next, range, search, eclipse, festival, almanac, info, config, completion. For each command describe purpose, key flags, and example invocations. Source: src/cli/, src/query/, include/lunar/cli*.hpp.",
+      "parent": "Project Overview"
+    },
+    {
+      "title": "Output Formats",
+      "purpose": "Document all serialisation backends: plain text (day_formatter.hpp/cpp), JSON (json.hpp/cpp), ICS/iCalendar (ics.hpp/cpp), and JavaScript object writer (js_writer.hpp/cpp). Explain the --format flag and which formats each command supports.",
+      "parent": "Project Overview"
+    },
+    {
+      "title": "C API",
+      "purpose": "Document the stable C API exposed by lunar_dll: include/lunar/c_api.h function signatures, lifetime and thread-safety guarantees, error-handling conventions (return codes / out-params), and a minimal usage example in C and Python ctypes. Source: c_api.h, src/c_api.cpp.",
+      "parent": "Project Overview"
+    },
+    {
+      "title": "WebAssembly and Browser Integration",
+      "purpose": "Document the Emscripten build: lunar.js + lunar.wasm output, lunar_worker.js Web Worker wrapper, supported message protocol (argv / files / mounts), WORKERFS usage for large BSP blobs, Node.js direct execution, and Windows drive-letter path compatibility shims. Source: src/emscripten/lunar_pre.js, src/emscripten/lunar_worker.js.",
+      "parent": "Project Overview"
+    },
+    {
+      "title": "Internationalisation (i18n)",
+      "purpose": "Document the i18n subsystem: i18n.hpp, i18n_interact.hpp, and the four string catalogs in src/i18n/ (catalog_almanac, catalog_astro, catalog_event, catalog_interact). Explain how language selection works at runtime and how to add a new locale.",
+      "parent": "Project Overview"
+    },
+    {
+      "title": "Testing",
+      "purpose": "Document the test suite under tests/: test_almanac_i18n (almanac string correctness), test_core_cli (CLI parsing and output regression), test_eclipse (eclipse contact times and classification), test_interact (interactive mode), and test_common shared helpers. Explain how to run with ctest and the LUNAR_TEST_BSP environment variable for series-off builds.",
+      "parent": "Project Overview"
+    },
+    {
+      "title": "CI/CD and Release",
+      "purpose": "Document .github/workflows/CI.yml (multi-platform matrix build and test on every push/PR) and .github/workflows/Release.yml (artifact packaging and GitHub Release creation). Cover the five target triples: linux-x64, linux-arm64, windows-x64, windows-arm64, macos-x64.",
+      "parent": "Project Overview"
+    }
+  ]
+}
