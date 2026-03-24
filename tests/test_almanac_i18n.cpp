@@ -248,6 +248,12 @@ TEST(AlmanacI18n, CatalogCoverageStaysClean){
 		lunar::i18n::localize_moon_xg(&moon_xg_ph);
 		ok=ok&&clean_text(moon_xg_ph.region)&&clean_text(moon_xg_ph.star_name);
 
+		ok=ok&&clean_text(lunar::i18n::tr_body_name(10))&&
+		   clean_text(lunar::i18n::tr_body_name(301))&&
+		   clean_text(lunar::i18n::tr_star_name_text("Spica"))&&
+		   clean_text(lunar::i18n::tr_star_region_text("角宿"))&&
+		   clean_text(lunar::i18n::tr_star_region_text("紫微垣"));
+
 		for(int code=0;code<=static_cast<int>(HliJianchuCode::Close);++code){
 			HliData h=make_hli_sample();
 			h.jianchu_code=code;

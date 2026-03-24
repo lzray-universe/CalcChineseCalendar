@@ -10,6 +10,7 @@ struct AtArgs{
 	std::string time_raw;
 	std::string input_tz="+08:00";
 	std::string tz="+08:00";
+	std::string lunar_day_tz="+08:00";
 	std::string format="txt";
 	std::string out;
 	bool pretty=true;
@@ -40,6 +41,7 @@ struct ConvArgs{
 
 	std::string input_tz="+08:00";
 	std::string tz="+08:00";
+	std::string lunar_day_tz="+08:00";
 	std::string format="txt";
 	std::string out;
 	bool pretty=true;
@@ -54,6 +56,7 @@ void cli_conv(const ConvArgs&args);
 
 int cmd_at(const std::vector<std::string>&args);
 int cmd_conv(const std::vector<std::string>&args);
+int cmd_sky(const std::vector<std::string>&args);
 int cmd_day(const std::vector<std::string>&args);
 int cmd_mview(const std::vector<std::string>&args);
 int cmd_next(const std::vector<std::string>&args);
@@ -68,6 +71,7 @@ int cmd_comp(const std::vector<std::string>&args);
 
 void use_at();
 void use_conv();
+void use_sky();
 void use_day();
 void use_mview();
 void use_next();

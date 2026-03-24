@@ -397,7 +397,7 @@ EventRec nearest_ecl(EphRead&eph,double jd_utc,int tz_off,bool quiet,
 }
 
 std::vector<EventRec> bld_fest(EphRead&eph,int lunar_year,int tz_off,
-							   QueryCache*cache=nullptr){
+							   int lunar_day_tz_off,QueryCache*cache=nullptr){
 	struct FDef{
 		const char*name;
 		int m;
@@ -416,7 +416,8 @@ std::vector<EventRec> bld_fest(EphRead&eph,int lunar_year,int tz_off,
 	std::vector<EventRec> out;
 	out.reserve(defs.size()+1);
 	for(const auto&def : defs){
-		GregDate g=res_greg(eph,lunar_year,def.m,def.d,false,cache);
+		GregDate g=
+			res_greg(eph,lunar_year,def.m,def.d,false,lunar_day_tz_off,cache);
 		EventRec ev;
 		ev.kind="festival";
 		ev.code=std::to_string(def.m)+"-"+std::to_string(def.d);
@@ -428,7 +429,8 @@ std::vector<EventRec> bld_fest(EphRead&eph,int lunar_year,int tz_off,
 		out.push_back(std::move(ev));
 	}
 
-	GregDate cny_next=res_greg(eph,lunar_year+1,1,1,false,cache);
+	GregDate cny_next=
+		res_greg(eph,lunar_year+1,1,1,false,lunar_day_tz_off,cache);
 	EventRec eve;
 	eve.kind="festival";
 	eve.code="12-last";

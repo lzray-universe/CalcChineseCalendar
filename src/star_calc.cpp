@@ -179,6 +179,97 @@ std::vector<const StarRecord*> occult_star_set(const StarPick&pick){
 	return select_stars(pick);
 }
 
+struct SkyBodyDef{
+	int id=0;
+	bool allow_bary=false;
+};
+
+constexpr std::array<SkyBodyDef,9> kSkyBodyDefs={{
+	{10,false},
+	{301,false},
+	{199,true},
+	{299,true},
+	{499,true},
+	{599,true},
+	{699,true},
+	{799,true},
+	{899,true},
+}};
+
+bool body_match_token(int id,const std::string&token,
+					  const std::string&token_low){
+	switch(id){
+		case 10:
+			return token_low=="sun"||token=="太阳"||token=="太陽"||
+				   token=="日"||token=="태양";
+		case 301:
+			return token_low=="moon"||token=="月亮"||token=="月球"||
+				   token=="月"||token=="달";
+		case 199:
+			return token_low=="mercury"||token=="水星"||token=="수성";
+		case 299:
+			return token_low=="venus"||token=="金星"||token=="금성";
+		case 499:
+			return token_low=="mars"||token=="火星"||token=="화성";
+		case 599:
+			return token_low=="jupiter"||token=="木星"||token=="목성";
+		case 699:
+			return token_low=="saturn"||token=="土星"||token=="토성";
+		case 799:
+			return token_low=="uranus"||token=="天王星"||token=="천왕성";
+		case 899:
+			return token_low=="neptune"||token=="海王星"||token=="해왕성";
+		default:
+			return false;
+	}
+}
+
+struct SkySelection{
+	std::unordered_set<int> body_ids;
+	std::vector<const StarRecord*> stars;
+};
+
+SkySelection select_sky(const SkyPick&pick){
+	SkySelection out;
+	if(pick.mode==SkyMode::All){
+		out.body_ids.reserve(kSkyBodyDefs.size());
+		for(const auto&body : kSkyBodyDefs){
+			out.body_ids.insert(body.id);
+		}
+		out.stars.reserve(B_STARS_COUNT);
+		for(std::size_t i=0;i<B_STARS_COUNT;++i){
+			out.stars.push_back(&B_STARS[i]);
+		}
+		return out;
+	}
+
+	std::unordered_set<std::size_t> added_stars;
+	for(const std::string&tok : pick.picks){
+		const std::string tok_low=low_ascii(tok);
+		bool found=false;
+		for(const auto&body : kSkyBodyDefs){
+			if(!body_match_token(body.id,tok,tok_low)){
+				continue;
+			}
+			found=true;
+			out.body_ids.insert(body.id);
+		}
+		for(std::size_t i=0;i<B_STARS_COUNT;++i){
+			if(!star_match(B_STARS[i],tok,tok_low)){
+				continue;
+			}
+			found=true;
+			if(added_stars.insert(i).second){
+				out.stars.push_back(&B_STARS[i]);
+			}
+		}
+		if(!found){
+			throw std::invalid_argument("sky target not found in --pick: "+tok);
+		}
+	}
+	return out;
+}
+
 Mat3 eq_true(double jd_tdb){
 	Mat3 b=CoordTf::bias_mat();
 	Mat3 p=PrecNut::prec_mat(jd_tdb);
@@ -200,6 +291,8 @@ struct ObsSite{
 	bool on=false;
 	Vec3 ecef;
 	Vec3 up_ecef;
+	Vec3 east_ecef;
+	Vec3 north_ecef;
 	Vec3 beta_ecef;
 };
 
@@ -362,6 +455,19 @@ Vec3 up_ecef_geo(double lat_deg,double lon_deg){
 	return Vec3(c_lat*std::cos(lon),c_lat*std::sin(lon),std::sin(lat));
 }
 
+Vec3 east_ecef_geo(double lon_deg){
+	double lon=lon_deg*kRadPerDeg;
+	return Vec3(-std::sin(lon),std::cos(lon),0.0);
+}
+
+Vec3 north_ecef_geo(double lat_deg,double lon_deg){
+	double lat=lat_deg*kRadPerDeg;
+	double lon=lon_deg*kRadPerDeg;
+	double s_lat=std::sin(lat);
+	double c_lat=std::cos(lat);
+	return Vec3(-s_lat*std::cos(lon),-s_lat*std::sin(lon),c_lat);
+}
+
 Vec3 observer_beta_ecef(const Vec3&obs_ecef){
 	Vec3 vel_au_day(-kEarthRotationRateRadPerDay*obs_ecef.y,
 					kEarthRotationRateRadPerDay*obs_ecef.x,0.0);
@@ -394,6 +500,16 @@ Mat3 ecef_rot(double jd_tdb){
 	return CoordTf::R3(gast);
 }
 
+Mat3 transpose(const Mat3&m){
+	Mat3 t;
+	for(int i=0;i<3;++i){
+		for(int j=0;j<3;++j){
+			t.m[i][j]=m.m[j][i];
+		}
+	}
+	return t;
+}
+
 ObsSite make_obs_site(const AstroObs&obs){
 	if(!obs.has_site){
 		return ObsSite{};
@@ -412,12 +528,15 @@ ObsSite make_obs_site(const AstroObs&obs){
 	out.on=true;
 	out.ecef=geodetic_to_ecef(obs.lat_deg,obs.lon_deg,obs.h_m);
 	out.up_ecef=up_ecef_geo(obs.lat_deg,obs.lon_deg);
+	out.east_ecef=east_ecef_geo(obs.lon_deg);
+	out.north_ecef=north_ecef_geo(obs.lat_deg,obs.lon_deg);
 	out.beta_ecef=observer_beta_ecef(out.ecef);
 	return out;
 }
 
 bool topo_body_dir_sd(EphRead&eph,int phys_id,int eph_id,double jd_tdb,
-					  const ObsSite&obs,Vec3&u_ecef,double&sd_rad){
+					  const ObsSite&obs,Vec3&u_ecef,double&sd_rad,
+					  double*range_au=nullptr){
 	Vec3 geo=raw_vec(AberCorr::geo_app(eph,eph_id,jd_tdb,4));
 	if(!finite_vec(geo)){
 		return false;
@@ -428,6 +547,9 @@ bool topo_body_dir_sd(EphRead&eph,int phys_id,int eph_id,double jd_tdb,
 	double rn=topo.norm();
 	if(!(rn>0.0)){
 		return false;
+	}
+	if(range_au!=nullptr){
+		*range_au=rn;
 	}
 	u_ecef=unit_or(topo,Vec3(1.0,0.0,0.0));
 	u_ecef=apply_diurnal_aberration(u_ecef,obs.beta_ecef);
@@ -440,14 +562,32 @@ bool topo_body_dir_sd(EphRead&eph,int phys_id,int eph_id,double jd_tdb,
 	return std::isfinite(sd_rad);
 }
 
-bool topo_star_dir(EphRead&eph,const StarRecord&st,double jd_tdb,
-				   const ObsSite&obs,Vec3&u_ecef){
-	AppCtx ctx=make_ctx_tdb(eph,jd_tdb);
+bool topo_star_dir_ctx(const StarRecord&st,const AppCtx&ctx,const Mat3&ecef_m,
+					   const ObsSite&obs,Vec3&u_ecef){
 	Vec3 u_eq=star_eq_u(st,ctx);
-	u_ecef=ecef_rot(jd_tdb)*u_eq;
+	u_ecef=ecef_m*u_eq;
 	u_ecef=unit_or(u_ecef,Vec3(1.0,0.0,0.0));
 	u_ecef=apply_diurnal_aberration(u_ecef,obs.beta_ecef);
 	return finite_vec(u_ecef);
+}
+
+bool topo_star_dir(EphRead&eph,const StarRecord&st,double jd_tdb,
+				   const ObsSite&obs,Vec3&u_ecef){
+	AppCtx ctx=make_ctx_tdb(eph,jd_tdb);
+	return topo_star_dir_ctx(st,ctx,ecef_rot(jd_tdb),obs,u_ecef);
+}
+
+void to_alt_az_deg(const Vec3&u_ecef,const ObsSite&obs,double&az_deg,
+				   double&alt_deg){
+	double up=clamp_u(Vec3::dot(u_ecef,obs.up_ecef));
+	double east=Vec3::dot(u_ecef,obs.east_ecef);
+	double north=Vec3::dot(u_ecef,obs.north_ecef);
+	double az=std::atan2(east,north);
+	if(az<0.0){
+		az+=TWO_PI;
+	}
+	az_deg=az*kDegPerRad;
+	alt_deg=std::asin(up)*kDegPerRad;
 }
 
 std::unordered_set<int> spk_obj_set(EphRead&eph){
@@ -1489,6 +1629,30 @@ StarPick make_star_pick(StarMode mode,const std::string&pick_csv){
 	return pick;
 }
 
+SkyMode parse_sky_mode(const std::string&text){
+	const std::string t=low_ascii(trim_copy(text));
+	if(t.empty()||t=="all"){
+		return SkyMode::All;
+	}
+	if(t=="pick"){
+		return SkyMode::Pick;
+	}
+	throw std::invalid_argument(
+		"invalid --mode: "+text+" (expected all|pick)");
+}
+
+SkyPick make_sky_pick(SkyMode mode,const std::string&pick_csv){
+	SkyPick pick;
+	pick.mode=mode;
+	if(mode==SkyMode::Pick){
+		pick.picks=split_csv(pick_csv);
+		if(pick.picks.empty()){
+			throw std::invalid_argument("--pick is required when --mode=pick");
+		}
+	}
+	return pick;
+}
+
 std::vector<StarApp> calc_star_app(EphRead&eph,double jd_utc,const StarPick&pick){
 	double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
 	AppCtx ctx=make_ctx_tdb(eph,jd_tdb);
@@ -1505,7 +1669,7 @@ std::vector<StarApp> calc_star_app(EphRead&eph,double jd_utc,const StarPick&pick
 		StarApp rec;
 		rec.id=nz(st.id);
 		rec.name=star_name(st);
-		rec.region=nz(st.region);
+		rec.region=i18n::tr_star_region_text(nz(st.region));
 		rec.mag_v=st.mag_v;
 		rec.is_juxing=st.is_juxing;
 		rec.ra_deg=ra_deg;
@@ -1513,6 +1677,94 @@ std::vector<StarApp> calc_star_app(EphRead&eph,double jd_utc,const StarPick&pick
 		rec.sep_moon_deg=sep;
 		out.push_back(std::move(rec));
 	}
+	return out;
+}
+
+std::vector<SkyPos> calc_sky_pos(EphRead&eph,double jd_utc,const AstroObs&obs,
+								 const SkyPick&pick){
+	if(!obs.has_site){
+		throw std::invalid_argument(
+			"sky observer coordinates require latitude and longitude");
+	}
+	const ObsSite site=make_obs_site(obs);
+	const SkySelection sel=select_sky(pick);
+	const double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
+	const AppCtx ctx=make_ctx_tdb(eph,jd_tdb);
+	const Mat3 ecef_m=ecef_rot(jd_tdb);
+	const Mat3 eq_from_ecef=transpose(ecef_m);
+	const std::unordered_set<int> ids=spk_obj_set(eph);
+
+	std::vector<SkyPos> out;
+	out.reserve(kSkyBodyDefs.size()+sel.stars.size());
+
+	for(const auto&body : kSkyBodyDefs){
+		if(sel.body_ids.find(body.id)==sel.body_ids.end()){
+			continue;
+		}
+		int eph_id=0;
+		if(body.id==10){
+			eph_id=eph.SUN;
+		}else{
+			eph_id=eph_id_or_zero(ids,body.id,body.allow_bary);
+		}
+		if(eph_id==0){
+			if(pick.mode==SkyMode::Pick){
+				throw std::invalid_argument(
+					"sky target not available in ephemeris: "+body_code(body.id));
+			}
+			continue;
+		}
+		Vec3 u_ecef;
+		double sd_rad=0.0;
+		if(!topo_body_dir_sd(eph,body.id,eph_id,jd_tdb,site,u_ecef,sd_rad)){
+			continue;
+		}
+		Vec3 u_eq=unit_or(eq_from_ecef*u_ecef,Vec3(1.0,0.0,0.0));
+		double ra_deg=0.0;
+		double dec_deg=0.0;
+		double az_deg=0.0;
+		double alt_deg=0.0;
+		to_ra_dec_deg(u_eq,ra_deg,dec_deg);
+		to_alt_az_deg(u_ecef,site,az_deg,alt_deg);
+		SkyPos rec;
+		rec.kind="solar_system";
+		rec.code=body_code(body.id);
+		rec.name=body_zh(body.id);
+		rec.is_solar_system=true;
+		rec.ra_deg=ra_deg;
+		rec.dec_deg=dec_deg;
+		rec.az_deg=az_deg;
+		rec.alt_deg=alt_deg;
+		out.push_back(std::move(rec));
+	}
+
+	for(const StarRecord*sp : sel.stars){
+		const StarRecord&st=*sp;
+		Vec3 u_ecef;
+		if(!topo_star_dir_ctx(st,ctx,ecef_m,site,u_ecef)){
+			continue;
+		}
+		Vec3 u_eq=unit_or(eq_from_ecef*u_ecef,Vec3(1.0,0.0,0.0));
+		double ra_deg=0.0;
+		double dec_deg=0.0;
+		double az_deg=0.0;
+		double alt_deg=0.0;
+		to_ra_dec_deg(u_eq,ra_deg,dec_deg);
+		to_alt_az_deg(u_ecef,site,az_deg,alt_deg);
+		SkyPos rec;
+		rec.kind="star";
+		rec.code=nz(st.id);
+		rec.name=star_name(st);
+		rec.region=i18n::tr_star_region_text(nz(st.region));
+		rec.is_juxing=st.is_juxing;
+		rec.mag_v=st.mag_v;
+		rec.ra_deg=ra_deg;
+		rec.dec_deg=dec_deg;
+		rec.az_deg=az_deg;
+		rec.alt_deg=alt_deg;
+		out.push_back(std::move(rec));
+	}
+
 	return out;
 }
 

@@ -55,6 +55,7 @@ int cmd_fest(const std::vector<std::string>&args){
 	std::string ephem=args[0];
 	int year=parse_int(args[1],"year");
 	std::string tz=cfg.default_tz;
+	std::string lunar_day_tz=resolve_lunar_day_tz(cfg);
 	std::string format=to_low(cfg.def_fmt);
 	if(format!="txt"&&format!="json"&&format!="csv"){
 		format="txt";
@@ -65,6 +66,10 @@ int cmd_fest(const std::vector<std::string>&args){
 	const OptMap handlers={
 		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
 					const std::string&opt){ tz=req_val(src,idx,opt); }},
+		{"--lunar-day-tz",[&](const std::vector<std::string>&src,
+							  std::size_t&idx,const std::string&opt){
+			 lunar_day_tz=req_val(src,idx,opt);
+		 }},
 		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
 						const std::string&opt){
 			 format=to_low(req_val(src,idx,opt));
@@ -84,11 +89,14 @@ int cmd_fest(const std::vector<std::string>&args){
 		apply_opt(handlers,args,i,opt,"festival");
 	}
 	chk_fmt(format,{"json","txt","csv"},"festival");
+	lunar_day_tz=canonical_tz_text(lunar_day_tz);
 
 	int tz_off=parse_tz(tz);
+	int lunar_day_tz_off=parse_tz(lunar_day_tz);
 	EphRead eph(ephem);
 	QueryCache cache(eph);
-	std::vector<EventRec> festivals=bld_fest(eph,year,tz_off,&cache);
+	std::vector<EventRec> festivals=
+		bld_fest(eph,year,tz_off,lunar_day_tz_off,&cache);
 
 	OutTgt out=open_out(out_path);
 	const FmtMap fmt_handlers={
@@ -115,6 +123,7 @@ int cmd_alm(const std::vector<std::string>&args){
 	std::string ephem=args[0];
 	std::string date_text=args[1];
 	std::string tz=cfg.default_tz;
+	std::string lunar_day_tz=resolve_lunar_day_tz(cfg);
 	std::string format=to_low(cfg.def_fmt);
 	if(format!="txt"&&format!="json"&&format!="csv"){
 		format="txt";
@@ -127,6 +136,10 @@ int cmd_alm(const std::vector<std::string>&args){
 	const OptMap handlers={
 		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
 					const std::string&opt){ tz=req_val(src,idx,opt); }},
+		{"--lunar-day-tz",[&](const std::vector<std::string>&src,
+							  std::size_t&idx,const std::string&opt){
+			 lunar_day_tz=req_val(src,idx,opt);
+		 }},
 		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
 						const std::string&opt){
 			 format=to_low(req_val(src,idx,opt));
@@ -206,20 +219,23 @@ int cmd_alm(const std::vector<std::string>&args){
 		apply_opt(handlers,args,i,opt,"almanac");
 	}
 	chk_fmt(format,{"json","txt","csv"},"almanac");
+	lunar_day_tz=canonical_tz_text(lunar_day_tz);
 
 	int y=0,m=0,d=0;
 	std::tie(y,m,d)=parse_ymd(date_text);
 	int tz_off=parse_tz(tz);
-	double smp_jdutc=greg2jd(y,m,d,12,0,0.0)-UTC8DAY;
-	double day_sutc=cst_midjd(y,m,d);
+	int lunar_day_tz_off=parse_tz(lunar_day_tz);
+	double smp_jdutc=civil_midjd(y,m,d,lunar_day_tz_off)+0.5;
+	double day_sutc=civil_midjd(y,m,d,lunar_day_tz_off);
 	double day_eutc=day_sutc+1.0;
 
 	EphRead eph(ephem);
 	QueryCache cache(eph);
 	hli_rules=normalize_hli_rule_set(hli_rules);
 	AtData atd=
-		at_fromjd(eph,smp_jdutc,tz_off,tz,date_text+"T12:00:00","+08:00",false,
-				  false,0.0,hli_lon_deg,&hli_rules,&cache);
+		at_fromjd(eph,smp_jdutc,tz_off,lunar_day_tz_off,tz,
+				  date_text+"T12:00:00",lunar_day_tz,false,false,0.0,
+				  hli_lon_deg,&hli_rules,&cache);
 	std::set<int> years={y-1,y,y+1};
 	std::vector<EventRec> all_events=
 		col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr);
@@ -230,7 +246,7 @@ int cmd_alm(const std::vector<std::string>&args){
 		}
 	}
 	std::vector<EventRec> festivals=
-		bld_fest(eph,atd.lunar_date.lunar_year,tz_off,&cache);
+		bld_fest(eph,atd.lunar_date.lunar_year,tz_off,lunar_day_tz_off,&cache);
 	std::vector<EventRec> day_fest;
 	for(const auto&ev : festivals){
 		if(ev.jd_utc>=day_sutc&&ev.jd_utc<day_eutc){
@@ -243,11 +259,13 @@ int cmd_alm(const std::vector<std::string>&args){
 		{"json",[&](){
 			 JsonWriter w(*out.stream,pretty);
 			 w.obj_begin();
-			 write_meta(w,ephem,tz,{"type=almanac",lunar::i18n::day_rule_note()});
+			 write_meta(w,ephem,tz,{"type=almanac",lunar_day_rule_note(lunar_day_tz)});
 			 w.key("input");
 			 w.obj_begin();
 			 w.key("date");
 			 w.value(date_text);
+			 w.key("lunar_day_tz");
+			 w.value(lunar_day_tz);
 			 w.key("lon_deg");
 			 w.value(hli_lon_deg);
 			 w.obj_end();
@@ -452,6 +470,7 @@ int cmd_alm(const std::vector<std::string>&args){
 			 std::ostream&os=*out.stream;
 			 os<<"tool=lunar format=txt type=almanac tz_display="<<tz<<"\n";
 			 os<<"input.date="<<date_text<<"\n";
+			 os<<"input.lunar_day_tz="<<lunar_day_tz<<"\n";
 			 os<<"input.lon_deg="<<format_num(hli_lon_deg)<<"\n";
 			 os<<"data.lun_label="<<atd.lunar_date.lun_label<<"\n";
 			 os<<"data.hli.y_lun="<<atd.hli.y_lun.text<<"\n";

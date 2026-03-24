@@ -14,6 +14,7 @@ struct InterCfg{
 	std::vector<std::string> bsp_list;
 	std::string default_tz="+08:00";
 	std::string default_lang="zh";
+	std::string default_lunar_day_tz;
 	std::string def_fmt="txt";
 	std::string hli_trad="folk";
 	std::string hli_year_boundary;
@@ -30,6 +31,10 @@ std::string trim(const std::string&s);
 bool load_cfg(InterCfg&cfg);
 
 bool save_cfg(const InterCfg&cfg);
+
+std::string default_lunar_day_tz_for_lang(const std::string&lang_code);
+
+std::string resolve_lunar_day_tz(const InterCfg&cfg);
 
 HliRuleSet hli_rules_from_cfg(const InterCfg&cfg);
 

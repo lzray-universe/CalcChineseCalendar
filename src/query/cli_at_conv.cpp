@@ -3,14 +3,16 @@ void cli_at(const AtArgs&args){
 	chk_fmt(format,{"json","txt"},"at");
 
 	int tz_disp=parse_tz(args.tz);
+	int lunar_day_tz_off=parse_tz(args.lunar_day_tz);
 	EphRead eph(args.ephem);
 	QueryCache cache(eph);
 	double hli_lon=args.calc_eot
 					   ?args.eot_lon_deg
 					   :static_cast<double>(tz_disp)/60.0*15.0;
 	AtData result=
-		at_ftxt(eph,args.time_raw,args.input_tz,tz_disp,args.tz,args.events,
-				args.calc_eot,args.eot_lon_deg,hli_lon,&args.hli_rules,&cache);
+		at_ftxt(eph,args.time_raw,args.input_tz,tz_disp,args.tz,
+				lunar_day_tz_off,args.events,args.calc_eot,args.eot_lon_deg,
+				hli_lon,&args.hli_rules,&cache);
 
 	OutTgt out=open_out(args.out);
 	const FmtMap fmt_handlers={
@@ -19,7 +21,11 @@ void cli_at(const AtArgs&args){
 			 w.obj_begin();
 			 write_meta(
 				 w,args.ephem,args.tz,
-				 {"农历判日固定按UTC+8民用日执行；--input-tz仅用于解析无时区输入"});
+				 {lunar_day_rule_note(args.lunar_day_tz),
+				  lunar::i18n::pick("--input-tz仅用于解析无时区输入",
+									"--input-tz only parses inputs without a timezone suffix.",
+									"--input-tz はタイムゾーン無し入力の解釈にのみ使います。",
+									"--input-tz 는 시간대 접미사가 없는 입력 해석에만 사용됩니다.")});
 			 w.key("input");
 			 wr_aijs(w,result);
 			 w.key("data");
@@ -38,13 +44,18 @@ void cli_conv(const ConvArgs&args){
 	chk_fmt(format,{"json","txt"},"convert");
 
 	int tz_disp=parse_tz(args.tz);
+	int lunar_day_tz_off=parse_tz(args.lunar_day_tz);
 
 	EphRead eph(args.ephem);
 	QueryCache cache(eph);
 
 	bool forward=!args.from_lunar;
 	std::string note=
-		"农历判日固定按UTC+8民用日执行；--input-tz仅用于解析无时区输入";
+		lunar_day_rule_note(args.lunar_day_tz)+"; "+
+		lunar::i18n::pick("--input-tz仅用于解析无时区输入",
+						  "--input-tz only parses inputs without a timezone suffix.",
+						  "--input-tz はタイムゾーン無し入力の解釈にのみ使います。",
+						  "--input-tz 는 시간대 접미사가 없는 입력 해석에만 사용됩니다.");
 
 	OutTgt out=open_out(args.out);
 	if(forward){
@@ -52,7 +63,7 @@ void cli_conv(const ConvArgs&args){
 		std::string tz_in=
 			parsed.has_tz?fmt_tz(parsed.tz_off):fmt_tz(parse_tz(args.input_tz));
 
-		LunDate lunar_date=res_lun(eph,parsed.jd_utc,&cache);
+		LunDate lunar_date=res_lun(eph,parsed.jd_utc,lunar_day_tz_off,&cache);
 		std::string utc_iso=fmt_iso(parsed.jd_utc,0,true);
 		std::string local_iso=fmt_iso(parsed.jd_utc,tz_disp,true);
 
@@ -72,6 +83,8 @@ void cli_conv(const ConvArgs&args){
 				 w.value(tz_in);
 				 w.key("display_tz");
 				 w.value(args.tz);
+				 w.key("lunar_day_tz");
+				 w.value(canonical_tz_text(args.lunar_day_tz));
 				 w.key("jd_utc");
 				 w.value(parsed.jd_utc);
 				 w.key("utc_iso");
@@ -109,6 +122,8 @@ void cli_conv(const ConvArgs&args){
 				 os<<"input.direction=greg2lun\n";
 				 os<<"input.value_raw="<<args.in_value<<"\n";
 				 os<<"input.input_tz="<<tz_in<<"\n";
+				 os<<"input.lunar_day_tz="
+				   <<canonical_tz_text(args.lunar_day_tz)<<"\n";
 				 os<<"input.jd_utc="<<format_num(parsed.jd_utc)<<"\n";
 				 os<<"input.utc_iso="<<utc_iso<<"\n";
 				 os<<"input.loc_iso="<<local_iso<<"\n";
@@ -128,8 +143,8 @@ void cli_conv(const ConvArgs&args){
 		run_fmt(fmt_handlers,format,"convert");
 	}else{
 		GregDate g=res_greg(eph,args.lunar_year,args.lun_mno,args.lunar_day,
-							args.leap,&cache);
-		LunDate l_check=res_lun(eph,g.cstday_jd,&cache);
+							args.leap,lunar_day_tz_off,&cache);
+		LunDate l_check=res_lun(eph,g.cstday_jd,lunar_day_tz_off,&cache);
 
 		const FmtMap fmt_handlers={
 			{"json",[&](){
@@ -149,6 +164,8 @@ void cli_conv(const ConvArgs&args){
 				 w.value(args.lunar_day);
 				 w.key("is_leap");
 				 w.value(args.leap);
+				 w.key("lunar_day_tz");
+				 w.value(canonical_tz_text(args.lunar_day_tz));
 				 w.obj_end();
 
 				 w.key("data");
@@ -180,6 +197,8 @@ void cli_conv(const ConvArgs&args){
 				 os<<"input.lun_mno="<<args.lun_mno<<"\n";
 				 os<<"input.lunar_day="<<args.lunar_day<<"\n";
 				 os<<"input.lun_leap="<<(args.leap?"1":"0")<<"\n";
+				 os<<"input.lunar_day_tz="
+				   <<canonical_tz_text(args.lunar_day_tz)<<"\n";
 				 os<<"data.gcst_date="<<ymd_str(g.year,g.month,g.day)<<"\n";
 				 os<<"data.gcst_jd="<<format_num(g.cstday_jd)<<"\n";
 				 os<<"data.gcst_uiso="<<fmt_iso(g.cstday_jd,0,true)<<"\n";

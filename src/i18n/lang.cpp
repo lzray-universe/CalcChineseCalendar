@@ -210,6 +210,15 @@ std::string day_rule_note(){
 				"음력 날짜 판정은 UTC+8 민간 날짜 기준으로 고정됩니다.");
 }
 
+std::string day_rule_note(const std::string&lunar_day_tz){
+	return pick(("农历判日按 "+lunar_day_tz+" 民用日执行").c_str(),
+				("Lunar day boundaries follow civil day "+lunar_day_tz+".")
+					.c_str(),
+				("旧暦の日付判定は "+lunar_day_tz+" の民用日で実行します。")
+					.c_str(),
+				("?? ?? ??? "+lunar_day_tz+" ?? ?? ???? ?????.").c_str());
+}
+
 std::string tr_lunar_month(int month_no,bool is_leap,const std::string&fallback){
 	if(month_no<1||month_no>12){
 		return fallback.empty()?std::to_string(month_no):fallback;

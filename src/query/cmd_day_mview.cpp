@@ -11,6 +11,7 @@ int cmd_day(const std::vector<std::string>&args){
 	std::string ephem=args[0];
 	std::string date_text=args[1];
 	std::string tz=cfg.default_tz;
+	std::string lunar_day_tz=resolve_lunar_day_tz(cfg);
 	std::string format=to_low(cfg.def_fmt);
 	if(format!="txt"&&format!="json"&&format!="csv"&&format!="jsonl"){
 		format="txt";
@@ -33,6 +34,8 @@ int cmd_day(const std::vector<std::string>&args){
 	HliRuleSet hli_rules=hli_rules_from_cfg(cfg);
 	lunar::ArgParser parser;
 	parser.add_value("--tz",[&](const std::string&value){ tz=value; });
+	parser.add_value("--lunar-day-tz",
+					 [&](const std::string&value){ lunar_day_tz=value; });
 	parser.add_value("--format",
 					 [&format](const std::string&value){ format=to_low(value); });
 	parser.add_value("--out",[&](const std::string&value){ out_path=value; });
@@ -138,12 +141,14 @@ int cmd_day(const std::vector<std::string>&args){
 			"--astro-height requires --astro-lat and --astro-lon");
 	}
 	chk_fmt(format,{"json","txt","csv","jsonl"},"day");
+	lunar_day_tz=canonical_tz_text(lunar_day_tz);
 
 	lunar::core::DayComputeOptions opt;
 	opt.ephem=ephem;
 	opt.date_text=date_text;
 	opt.at_time=at_time;
 	opt.tz=tz;
+	opt.lunar_day_tz=lunar_day_tz;
 	opt.quiet=quiet;
 	opt.include_events=inc_ev;
 	opt.include_astro=inc_astro;
@@ -178,6 +183,7 @@ int cmd_mview(const std::vector<std::string>&args){
 	std::string ephem=args[0];
 	std::string ym=args[1];
 	std::string tz=cfg.default_tz;
+	std::string lunar_day_tz=resolve_lunar_day_tz(cfg);
 	std::string format=to_low(cfg.def_fmt);
 	if(format!="txt"&&format!="json"&&format!="csv"){
 		format="txt";
@@ -196,6 +202,8 @@ int cmd_mview(const std::vector<std::string>&args){
 	bool has_astro_h=false;
 	lunar::ArgParser parser;
 	parser.add_value("--tz",[&](const std::string&value){ tz=value; });
+	parser.add_value("--lunar-day-tz",
+					 [&](const std::string&value){ lunar_day_tz=value; });
 	parser.add_value("--format",
 					 [&format](const std::string&value){ format=to_low(value); });
 	parser.add_value("--out",[&](const std::string&value){ out_path=value; });
@@ -247,11 +255,13 @@ int cmd_mview(const std::vector<std::string>&args){
 			"--astro-height requires --astro-lat and --astro-lon");
 	}
 	chk_fmt(format,{"json","txt","csv"},"monthview");
+	lunar_day_tz=canonical_tz_text(lunar_day_tz);
 	int year=0;
 	int month=0;
 	std::tie(year,month)=parse_ym(ym);
 
 	int tz_off=parse_tz(tz);
+	int lunar_day_tz_off=parse_tz(lunar_day_tz);
 	int n_days=days_gm(year,month);
 	StarPick astro_pick;
 	if(inc_astro){
@@ -274,7 +284,7 @@ int cmd_mview(const std::vector<std::string>&args){
 	std::map<int,std::vector<std::string>> day2ev;
 	for(const auto&ev : events){
 		int ey=0,em=0,ed=0;
-		utc2cst(ev.jd_utc,ey,em,ed);
+		utc2civil(ev.jd_utc,lunar_day_tz_off,ey,em,ed);
 		if(ey==year&&em==month){
 			day2ev[ed].push_back(ev.name);
 		}
@@ -287,15 +297,15 @@ int cmd_mview(const std::vector<std::string>&args){
 			n_month=1;
 			++n_year;
 		}
-		double month_sutc=cst_midjd(year,month,1);
-		double month_eutc=cst_midjd(n_year,n_month,1);
+		double month_sutc=civil_midjd(year,month,1,lunar_day_tz_off);
+		double month_eutc=civil_midjd(n_year,n_month,1,lunar_day_tz_off);
 		std::vector<AstroEvt> astro=
 			calc_astro_evt(eph,month_sutc,month_eutc,astro_pick,astro_obs);
 		for(const auto&ev : astro){
 			int ey=0;
 			int em=0;
 			int ed=0;
-			utc2cst(ev.jd_utc,ey,em,ed);
+			utc2civil(ev.jd_utc,lunar_day_tz_off,ey,em,ed);
 			if(ey==year&&em==month){
 				day2astro[ed].push_back(ev.name);
 			}
@@ -317,9 +327,10 @@ int cmd_mview(const std::vector<std::string>&args){
 	std::vector<Row> rows;
 	rows.reserve(static_cast<std::size_t>(n_days));
 	for(int d=1;d<=n_days;++d){
-		double smp_jdutc=greg2jd(year,month,d,12,0,0.0)-UTC8DAY;
-		AtData atd=at_fromjd(eph,smp_jdutc,tz_off,tz,ymd_str(year,month,d),
-							 "+08:00",false,false,0.0,120.0,nullptr,&cache);
+		double smp_jdutc=civil_midjd(year,month,d,lunar_day_tz_off)+0.5;
+		AtData atd=at_fromjd(eph,smp_jdutc,tz_off,lunar_day_tz_off,tz,
+							 ymd_str(year,month,d),lunar_day_tz,
+							 false,false,0.0,120.0,nullptr,&cache);
 		std::vector<std::string> ev_names;
 		auto it=day2ev.find(d);
 		if(it!=day2ev.end()){
@@ -342,11 +353,13 @@ int cmd_mview(const std::vector<std::string>&args){
 		{"json",[&](){
 			 JsonWriter w(*out.stream,pretty);
 			 w.obj_begin();
-			 write_meta(w,ephem,tz,{"type=monthview",lunar::i18n::day_rule_note()});
+			 write_meta(w,ephem,tz,{"type=monthview",lunar_day_rule_note(lunar_day_tz)});
 			 w.key("input");
 			 w.obj_begin();
 			 w.key("month");
 			 w.value(ym);
+			 w.key("lunar_day_tz");
+			 w.value(lunar_day_tz);
 			 w.key("astro");
 			 w.value(inc_astro);
 			 w.key("astro_mode");
@@ -433,6 +446,7 @@ int cmd_mview(const std::vector<std::string>&args){
 			 std::ostream&os=*out.stream;
 			 os<<"tool=lunar format=txt type=monthview tz_display="<<tz<<"\n";
 			 os<<"input.month="<<ym<<"\n";
+			 os<<"input.lunar_day_tz="<<lunar_day_tz<<"\n";
 			 os<<"input.astro="<<(inc_astro?"1":"0")<<"\n";
 			 os<<"input.astro_mode="<<astro_mode_text<<"\n";
 			 os<<"input.astro_pick="<<astro_pick_csv<<"\n";

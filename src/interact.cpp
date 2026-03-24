@@ -9,6 +9,7 @@
 
 #include "lunar/i18n.hpp"
 #include "lunar/i18n_interact.hpp"
+#include "lunar/format.hpp"
 #include "lunar/spc_ephem.hpp"
 
 namespace fs=std::filesystem;
@@ -74,13 +75,27 @@ std::string trim(const std::string&s){
 	return s.substr(start,end-start);
 }
 
+void strip_utf8_bom(std::string&line){
+	if(line.size()>=3&&
+	   static_cast<unsigned char>(line[0])==0xEF&&
+	   static_cast<unsigned char>(line[1])==0xBB&&
+	   static_cast<unsigned char>(line[2])==0xBF){
+		line.erase(0,3);
+	}
+}
+
 bool load_cfg(InterCfg&cfg){
 	std::ifstream ifs(CFG_FILE);
 	if(!ifs){
 		return false;
 	}
 	std::string line;
+	bool first_line=true;
 	while(std::getline(ifs,line)){
+		if(first_line){
+			strip_utf8_bom(line);
+			first_line=false;
+		}
 		auto pos=line.find('=');
 		if(pos==std::string::npos){
 			continue;
@@ -97,6 +112,8 @@ bool load_cfg(InterCfg&cfg){
 			cfg.default_tz=value;
 		}else if(key=="default_lang"){
 			cfg.default_lang=value;
+		}else if(key=="default_lunar_day_tz"){
+			cfg.default_lunar_day_tz=value;
 		}else if(key=="def_fmt"){
 			cfg.def_fmt=value;
 		}else if(key=="hli_trad"){
@@ -117,7 +134,7 @@ bool load_cfg(InterCfg&cfg){
 }
 
 bool save_cfg(const InterCfg&cfg){
-	std::ofstream ofs(CFG_FILE);
+	std::ofstream ofs(CFG_FILE,std::ios::binary);
 	if(!ofs){
 		return false;
 	}
@@ -126,6 +143,9 @@ bool save_cfg(const InterCfg&cfg){
 	ofs<<"bsp_list="<<join_bsp_list(cfg.bsp_list)<<"\n";
 	ofs<<"default_tz="<<cfg.default_tz<<"\n";
 	ofs<<"default_lang="<<cfg.default_lang<<"\n";
+	if(!cfg.default_lunar_day_tz.empty()){
+		ofs<<"default_lunar_day_tz="<<cfg.default_lunar_day_tz<<"\n";
+	}
 	ofs<<"def_fmt="<<cfg.def_fmt<<"\n";
 	ofs<<"hli_trad="<<cfg.hli_trad<<"\n";
 	ofs<<"hli_year_boundary="<<cfg.hli_year_boundary<<"\n";
@@ -134,6 +154,23 @@ bool save_cfg(const InterCfg&cfg){
 	ofs<<"hli_day_boundary="<<cfg.hli_day_boundary<<"\n";
 	ofs<<"def_prety="<<(cfg.def_prety?"1":"0")<<"\n";
 	return true;
+}
+
+std::string default_lunar_day_tz_for_lang(const std::string&lang_code){
+	lunar::i18n::Lang lang=lunar::i18n::Lang::Zh;
+	if(lunar::i18n::try_parse_lang(lang_code,&lang)){
+		if(lang==lunar::i18n::Lang::Ja||lang==lunar::i18n::Lang::Ko){
+			return "+09:00";
+		}
+	}
+	return "+08:00";
+}
+
+std::string resolve_lunar_day_tz(const InterCfg&cfg){
+	if(!cfg.default_lunar_day_tz.empty()){
+		return fmt_tz(parse_tz(cfg.default_lunar_day_tz));
+	}
+	return default_lunar_day_tz_for_lang(cfg.default_lang);
 }
 
 HliRuleSet hli_rules_from_cfg(const InterCfg&cfg){
@@ -242,6 +279,17 @@ void apply_lang_from_cfg(const InterCfg&cfg){
 	if(!cfg.default_lang.empty()&&lunar::i18n::try_parse_lang(cfg.default_lang,&lang)){
 		lunar::i18n::set_lang(lang);
 	}
+}
+
+std::string ask_lunar_day_tz(const InterCfg&cfg){
+	const std::string def_tz=resolve_lunar_day_tz(cfg);
+	return ask_line(
+		lunar::i18n::pick("农历判日日界时区（默认 ",
+						  "Lunar day timezone (default ",
+						  "旧暦の判日日界タイムゾーン（既定 ",
+						  "음력 날짜 판정 시간대(기본값 ")
+		+def_tz+
+		lunar::i18n::pick("）：","): ","): ","): "));
 }
 
 bool set_interact_lang(InterCfg&cfg,const std::string&choice){
@@ -529,8 +577,15 @@ void int_cal(const std::string&ephem){
 }
 
 void int_at(const std::string&ephem){
+	InterCfg cfg;
+	load_cfg(cfg);
 	AtArgs aargs;
 	aargs.ephem=ephem;
+	if(!cfg.default_tz.empty()){
+		aargs.input_tz=cfg.default_tz;
+		aargs.tz=cfg.default_tz;
+	}
+	aargs.lunar_day_tz=resolve_lunar_day_tz(cfg);
 	while(true){
 		aargs.time_raw=ask_line(
 			lunar::i18n::pick("请输入查询时刻（例如 2025-06-01T00:00:00+08:00，必填）：",
@@ -563,6 +618,10 @@ void int_at(const std::string&ephem){
 	if(!display_tz.empty()){
 		aargs.tz=display_tz;
 	}
+	std::string lunar_day_tz=ask_lunar_day_tz(cfg);
+	if(!lunar_day_tz.empty()){
+		aargs.lunar_day_tz=lunar_day_tz;
+	}
 	std::string fmt=ask_line(lunar::i18n::pick(
 		"输出格式：1) txt  2) json（默认 txt）：",
 		"Output format: 1) txt 2) json (default txt): ",
@@ -590,8 +649,15 @@ void int_at(const std::string&ephem){
 }
 
 void int_conv(const std::string&ephem){
+	InterCfg cfg;
+	load_cfg(cfg);
 	ConvArgs cargs;
 	cargs.ephem=ephem;
+	if(!cfg.default_tz.empty()){
+		cargs.input_tz=cfg.default_tz;
+		cargs.tz=cfg.default_tz;
+	}
+	cargs.lunar_day_tz=resolve_lunar_day_tz(cfg);
 
 	std::string mode=
 		ask_line(lunar::i18n::pick(
@@ -658,6 +724,10 @@ void int_conv(const std::string&ephem){
 	if(!display_tz.empty()){
 		cargs.tz=display_tz;
 	}
+	std::string lunar_day_tz=ask_lunar_day_tz(cfg);
+	if(!lunar_day_tz.empty()){
+		cargs.lunar_day_tz=lunar_day_tz;
+	}
 	std::string fmt=ask_line(lunar::i18n::pick(
 		"输出格式：1) txt  2) json（默认 txt）：",
 		"Output format: 1) txt 2) json (default txt): ",
@@ -677,6 +747,8 @@ void int_conv(const std::string&ephem){
 }
 
 void run_dint(const std::string&ephem){
+	InterCfg cfg;
+	load_cfg(cfg);
 	std::string date=ask_line(lunar::i18n::pick(
 		"请输入公历日期 YYYY-MM-DD：",
 		"Enter Gregorian date YYYY-MM-DD: ",
@@ -688,6 +760,11 @@ void run_dint(const std::string&ephem){
 			"日付は必須です","날짜는 비워둘 수 없습니다"));
 	}
 	std::vector<std::string> args={ephem,date};
+	std::string lunar_day_tz=ask_lunar_day_tz(cfg);
+	if(!lunar_day_tz.empty()){
+		args.push_back("--lunar-day-tz");
+		args.push_back(lunar_day_tz);
+	}
 	std::string fmt=ask_line(lunar::i18n::pick(
 		"输出格式：1) txt 2) json（默认 txt）：",
 		"Output format: 1) txt 2) json (default txt): ",
@@ -727,6 +804,8 @@ void run_nint(const std::string&ephem){
 }
 
 void run_fint(const std::string&ephem){
+	InterCfg cfg;
+	load_cfg(cfg);
 	std::string year=ask_line(lunar::i18n::pick(
 		"请输入农历年份（例如 2025）：",
 		"Enter lunar year (e.g. 2025): ",
@@ -738,6 +817,11 @@ void run_fint(const std::string&ephem){
 			"年は必須です","연도는 비워둘 수 없습니다"));
 	}
 	std::vector<std::string> args={ephem,year};
+	std::string lunar_day_tz=ask_lunar_day_tz(cfg);
+	if(!lunar_day_tz.empty()){
+		args.push_back("--lunar-day-tz");
+		args.push_back(lunar_day_tz);
+	}
 	cmd_fest(args);
 	ask_line(done_back_msg());
 }
@@ -749,11 +833,18 @@ void run_iint(const std::string&ephem){
 }
 
 void run_mvint(const std::string&ephem){
+	InterCfg cfg;
+	load_cfg(cfg);
 	std::string ym=ask_line(itx("prompt.monthview_ym"));
 	if(ym.empty()){
 		throw std::invalid_argument(itx("err.empty_required","YYYY-MM"));
 	}
 	std::vector<std::string> args={ephem,ym};
+	std::string lunar_day_tz=ask_lunar_day_tz(cfg);
+	if(!lunar_day_tz.empty()){
+		args.push_back("--lunar-day-tz");
+		args.push_back(lunar_day_tz);
+	}
 	std::string fmt=ask_line(itx("prompt.format_txt_json_csv"));
 	if(fmt=="2"||fmt=="json"){
 		args.push_back("--format");
@@ -887,11 +978,18 @@ void run_eint(const std::string&ephem){
 }
 
 void run_aint(const std::string&ephem){
+	InterCfg cfg;
+	load_cfg(cfg);
 	std::string date=ask_line(itx("prompt.almanac_date"));
 	if(date.empty()){
 		throw std::invalid_argument(itx("err.empty_required","date"));
 	}
 	std::vector<std::string> args={ephem,date};
+	std::string lunar_day_tz=ask_lunar_day_tz(cfg);
+	if(!lunar_day_tz.empty()){
+		args.push_back("--lunar-day-tz");
+		args.push_back(lunar_day_tz);
+	}
 	std::string fmt=ask_line(itx("prompt.format_txt_json_csv"));
 	if(fmt=="2"||fmt=="json"){
 		args.push_back("--format");
@@ -906,6 +1004,72 @@ void run_aint(const std::string&ephem){
 		args.push_back(out);
 	}
 	cmd_alm(args);
+	ask_line(done_back_msg());
+}
+
+void run_skyint(const std::string&ephem){
+	std::string time_raw=ask_line(itx("prompt.sky_time"));
+	if(time_raw.empty()){
+		throw std::invalid_argument(itx("err.empty_required","time"));
+	}
+	std::vector<std::string> args={ephem,time_raw};
+
+	std::string input_tz=ask_line(itx("prompt.sky_input_tz"));
+	if(!input_tz.empty()){
+		args.push_back("--input-tz");
+		args.push_back(input_tz);
+	}
+	std::string display_tz=ask_line(itx("prompt.sky_display_tz"));
+	if(!display_tz.empty()){
+		args.push_back("--tz");
+		args.push_back(display_tz);
+	}
+
+	std::string lat=ask_line(itx("prompt.sky_lat"));
+	if(lat.empty()){
+		throw std::invalid_argument(itx("err.empty_required","--lat"));
+	}
+	std::string lon=ask_line(itx("prompt.sky_lon"));
+	if(lon.empty()){
+		throw std::invalid_argument(itx("err.empty_required","--lon"));
+	}
+	args.push_back("--lat");
+	args.push_back(lat);
+	args.push_back("--lon");
+	args.push_back(lon);
+
+	std::string height=ask_line(itx("prompt.sky_height"));
+	if(!height.empty()){
+		args.push_back("--height");
+		args.push_back(height);
+	}
+
+	std::string mode=ask_line(itx("prompt.sky_mode"));
+	if(mode=="2"||mode=="pick"){
+		args.push_back("--mode");
+		args.push_back("pick");
+		std::string pick=ask_line(itx("prompt.sky_pick"));
+		if(pick.empty()){
+			throw std::invalid_argument(itx("err.empty_required","--pick"));
+		}
+		args.push_back("--pick");
+		args.push_back(pick);
+	}
+
+	std::string fmt=ask_line(itx("prompt.format_txt_json_csv"));
+	if(fmt=="2"||fmt=="json"){
+		args.push_back("--format");
+		args.push_back("json");
+	}else if(fmt=="3"||fmt=="csv"){
+		args.push_back("--format");
+		args.push_back("csv");
+	}
+	std::string out=ask_line(itx("prompt.out_file"));
+	if(!out.empty()){
+		args.push_back("--out");
+		args.push_back(out);
+	}
+	cmd_sky(args);
 	ask_line(done_back_msg());
 }
 
@@ -1023,6 +1187,7 @@ void int_mode(){
 		std::cout<<"[13] "<<itx("menu.almanac")<<" (almanac)\n";
 		std::cout<<"[14] "<<itx("menu.config")<<" (config)\n";
 		std::cout<<"[15] "<<itx("menu.completion")<<" (completion)\n";
+		std::cout<<"[16] "<<itx("menu.sky")<<" (sky)\n";
 		std::cout<<"[d] "<<itx("menu.switch_bsp")<<"\n";
 		std::cout<<"[l] "<<itx("menu.lang")<<"\n";
 		std::cout<<"[h] "<<itx("menu.help")<<"\n";
@@ -1059,6 +1224,8 @@ void int_mode(){
 			run_with_err("config",[&](){ run_cfgint(cfg); });
 		}else if(choice=="15"){
 			run_with_err("completion",[&](){ run_pint(); });
+		}else if(choice=="16"){
+			run_with_err("sky",[&](){ run_skyint(ephem); });
 		}else if(choice=="d"||choice=="D"){
 			std::string new_ephem=init_bspq(cfg);
 			if(!new_ephem.empty()){

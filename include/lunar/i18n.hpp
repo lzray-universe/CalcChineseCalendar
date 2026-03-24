@@ -38,7 +38,7 @@ std::string to_zh_hant(const std::string&text);
 
 std::string tz_note();
 
-std::string day_rule_note();
+std::string day_rule_note(const std::string&lunar_day_tz="+08:00");
 
 std::string tr_event_name(const std::string&kind,const std::string&code,
 						  const std::string&fallback="");

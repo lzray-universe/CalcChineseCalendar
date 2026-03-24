@@ -11,6 +11,7 @@ struct GanzhiComputeOptions{
 	std::string date_text;
 	std::string at_time="12:00:00";
 	std::string tz="+08:00";
+	std::string lunar_day_tz="+08:00";
 	HliRuleSet hli_rules=make_hli_rule_set(HliProfileCode::Folk);
 };
 
@@ -27,6 +28,7 @@ struct GanzhiMonthComputeOptions{
 	int month=0;
 	std::string at_time="12:00:00";
 	std::string tz="+08:00";
+	std::string lunar_day_tz="+08:00";
 	HliRuleSet hli_rules=make_hli_rule_set(HliProfileCode::Folk);
 };
 
@@ -46,6 +48,7 @@ struct DayComputeOptions{
 	std::string date_text;
 	std::string at_time="12:00:00";
 	std::string tz="+08:00";
+	std::string lunar_day_tz="+08:00";
 	bool quiet=false;
 	bool include_events=true;
 	bool include_astro=false;

@@ -18,6 +18,7 @@ int run_abcli(const AtArgs&args){
 	}
 
 	const int tz_disp=parse_tz(args.tz);
+	const int lunar_day_tz_off=parse_tz(args.lunar_day_tz);
 	EphRead eph(args.ephem);
 	QueryCache cache(eph);
 
@@ -40,7 +41,7 @@ int run_abcli(const AtArgs&args){
 							   ?args.eot_lon_deg
 							   :static_cast<double>(tz_disp)/60.0*15.0;
 			row.data=at_ftxt(eph,line.raw,args.input_tz,tz_disp,args.tz,
-							 args.events,args.calc_eot,args.eot_lon_deg,
+							 lunar_day_tz_off,args.events,args.calc_eot,args.eot_lon_deg,
 							 hli_lon,&args.hli_rules,&cache);
 			row.ok=true;
 		}catch(const std::exception&ex){
@@ -191,6 +192,7 @@ int run_cbcli(const ConvArgs&args){
 	}
 
 	EphRead eph(args.ephem);
+	const int lunar_day_tz_off=parse_tz(args.lunar_day_tz);
 	QueryCache cache(eph);
 
 	struct Row{
@@ -242,7 +244,7 @@ int run_cbcli(const ConvArgs&args){
 				row.jd_utc=parsed.jd_utc;
 				row.tz_in=parsed.has_tz?fmt_tz(parsed.tz_off)
 									   :fmt_tz(parse_tz(args.input_tz));
-				row.lunar_date=res_lun(eph,parsed.jd_utc,&cache);
+				row.lunar_date=res_lun(eph,parsed.jd_utc,lunar_day_tz_off,&cache);
 				row.greg_date.year=row.lunar_date.cst_year;
 				row.greg_date.month=row.lunar_date.cst_month;
 				row.greg_date.day=row.lunar_date.cst_day;
@@ -254,10 +256,11 @@ int run_cbcli(const ConvArgs&args){
 				bool leap=false;
 				parse_lun(line.raw,y,m,d,leap);
 				row.direction="lun2greg";
-				row.greg_date=res_greg(eph,y,m,d,leap,&cache);
+				row.greg_date=res_greg(eph,y,m,d,leap,lunar_day_tz_off,&cache);
 				row.jd_utc=row.greg_date.cstday_jd;
 				row.tz_in=args.tz;
-				row.lunar_date=res_lun(eph,row.greg_date.cstday_jd,&cache);
+				row.lunar_date=
+					res_lun(eph,row.greg_date.cstday_jd,lunar_day_tz_off,&cache);
 			}
 			row.ok=true;
 		}catch(const std::exception&ex){
@@ -269,11 +272,11 @@ int run_cbcli(const ConvArgs&args){
 	}
 
 	OutTgt out=open_out(args.out);
-	const std::string note=lunar::i18n::pick(
-		"农历判日固定按UTC+8民用日执行；--tz仅影响显示",
-		"Lunar day boundaries are fixed to civil day UTC+8; --tz affects display only.",
-		"旧暦の日付判定は UTC+8 の民用日で固定；--tz は表示のみ影響します。",
-		"음력 날짜 판정은 UTC+8 민간 날짜 기준으로 고정되며, --tz 는 표시만 바꿉니다.");
+	const std::string note=
+		lunar_day_rule_note(args.lunar_day_tz)+"; "+
+		lunar::i18n::pick("--tz仅影响显示","--tz affects display only.",
+						  "--tz は表示のみ影響します。",
+						  "--tz 는 표시만 바꿉니다.");
 	const FmtMap fmt_handlers={
 		{"jsonl",[&](){
 			 if(args.meta_once){
@@ -307,6 +310,8 @@ int run_cbcli(const ConvArgs&args){
 					 w.value(row.direction);
 					 w.key("input_tz");
 					 w.value(row.tz_in);
+					 w.key("lunar_day_tz");
+					 w.value(canonical_tz_text(args.lunar_day_tz));
 					 w.key("jd_utc");
 					 w.value(row.jd_utc);
 					 w.obj_end();
@@ -350,6 +355,8 @@ int run_cbcli(const ConvArgs&args){
 					 w.value(row.direction);
 					 w.key("input_tz");
 					 w.value(row.tz_in);
+					 w.key("lunar_day_tz");
+					 w.value(canonical_tz_text(args.lunar_day_tz));
 					 w.key("jd_utc");
 					 w.value(row.jd_utc);
 					 w.obj_end();
@@ -374,6 +381,8 @@ int run_cbcli(const ConvArgs&args){
 			 std::ostream&os=*out.stream;
 			 os<<"tool=lunar format=txt type=convert-batch tz_display="
 			   <<args.tz<<"\n";
+			 os<<"input.lunar_day_tz="<<canonical_tz_text(args.lunar_day_tz)
+			   <<"\n";
 			 os<<"line_no\tstatus\traw\tdirection\tgregorian_cst_date\tlunar_"
 				 "date\tmessage\n";
 			 for(const auto&row : rows){
@@ -412,6 +421,7 @@ int cmd_at(const std::vector<std::string>&args){
 	a.ephem=args[0];
 	a.input_tz=cfg.default_tz;
 	a.tz=cfg.default_tz;
+	a.lunar_day_tz=resolve_lunar_day_tz(cfg);
 	a.format=to_low(cfg.def_fmt);
 	a.pretty=cfg.def_prety;
 	if(a.format!="txt"&&a.format!="json"&&a.format!="jsonl"){
@@ -443,6 +453,10 @@ int cmd_at(const std::vector<std::string>&args){
 		 }},
 		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
 					const std::string&opt){ a.tz=req_val(src,idx,opt); }},
+		{"--lunar-day-tz",[&](const std::vector<std::string>&src,
+							  std::size_t&idx,const std::string&opt){
+			 a.lunar_day_tz=req_val(src,idx,opt);
+		 }},
 		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
 						const std::string&opt){
 			 a.format=to_low(req_val(src,idx,opt));
@@ -565,6 +579,7 @@ int cmd_at(const std::vector<std::string>&args){
 		a.format="json";
 		a.pretty=false;
 	}
+	a.lunar_day_tz=canonical_tz_text(a.lunar_day_tz);
 	a.hli_rules=normalize_hli_rule_set(a.hli_rules);
 	a.hli_trad=
 		hli_profile_key(static_cast<HliProfileCode>(a.hli_rules.profile_code));
@@ -592,6 +607,7 @@ int cmd_conv(const std::vector<std::string>&args){
 	c.ephem=args[0];
 	c.input_tz=cfg.default_tz;
 	c.tz=cfg.default_tz;
+	c.lunar_day_tz=resolve_lunar_day_tz(cfg);
 	c.format=to_low(cfg.def_fmt);
 	c.pretty=cfg.def_prety;
 	if(c.format!="txt"&&c.format!="json"&&c.format!="jsonl"){
@@ -632,6 +648,10 @@ int cmd_conv(const std::vector<std::string>&args){
 		 }},
 		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
 					const std::string&opt){ c.tz=req_val(src,idx,opt); }},
+		{"--lunar-day-tz",[&](const std::vector<std::string>&src,
+							  std::size_t&idx,const std::string&opt){
+			 c.lunar_day_tz=req_val(src,idx,opt);
+		 }},
 		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
 						const std::string&opt){
 			 c.format=to_low(req_val(src,idx,opt));
@@ -689,6 +709,7 @@ int cmd_conv(const std::vector<std::string>&args){
 		c.format="json";
 		c.pretty=false;
 	}
+	c.lunar_day_tz=canonical_tz_text(c.lunar_day_tz);
 
 	if(batch_mode){
 		return run_cbcli(c);
@@ -706,6 +727,7 @@ void use_at(){
 		<<"  lunar at <bsp> --stdin\n"
 		<<"  lunar at <bsp> --file <path>\n"
 		<<"    [--input-tz Z|+08:00|-05:00] [--tz Z|+08:00|-05:00]\n"
+		<<"    [--lunar-day-tz Z|+08:00|-05:00]\n"
 		<<"    [--format json|txt|jsonl] [--out <path>] [--pretty 0|1] "
 		  "[--quiet] [--events 0|1] [--eot-lon <deg>] [--trad "
 		  "folk|ziping|purple|xieji]\n"
@@ -722,7 +744,7 @@ void use_at(){
 		<<"Examples:\n"
 		<<"  lunar at D:\\de442.bsp 2025-06-01T00:00:00+08:00 --format json\n"
 		<<"  lunar at D:\\de442.bsp --time 2025-06-01T00:00 --input-tz +08:00 "
-		  "--tz Z\n"
+		  "--tz Z --lunar-day-tz +09:00\n"
 		<<"  lunar at D:\\de442.bsp 2025-01-31T12:00:00+08:00 --trad ziping\n"
 		<<"  lunar at D:\\de442.bsp 2025-06-01T00:00:00+08:00 --eot-lon "
 		  "116.391\n"
@@ -731,6 +753,8 @@ void use_at(){
 		<<"Notes:\n"
 		<<"  --input-tz only parses input without timezone suffix; --tz only "
 		  "affects display.\n"
+		<<"  --lunar-day-tz controls which civil-day boundary is used for lunar "
+		  "date mapping.\n"
 		<<"  --eot-lon uses east-positive degrees; output is apparent - mean "
 		  "solar time.\n";
 }
@@ -739,20 +763,21 @@ void use_conv(){
 	std::cout<<"Usage:\n"
 			 <<"  lunar convert <bsp> <dt_or_tm>\n"
 			 <<"    [--input-tz Z|+08:00|-05:00] [--tz Z|+08:00|-05:00]\n"
+			 <<"    [--lunar-day-tz Z|+08:00|-05:00]\n"
 			 <<"    [--format json|txt|jsonl] [--out <path>] [--pretty 0|1] "
 			   "[--quiet]\n"
 			 <<"    [--stdin|--file <path>] [--jobs N] [--meta-once 0|1]\n"
 			 <<"  lunar convert <bsp> --from-lunar <lunar_year> <month_no> "
 			   "<day> [--leap 0|1]\n"
-			 <<"    [--tz ...] [--format json|txt|jsonl] [--out <path>] "
+			 <<"    [--tz ...] [--lunar-day-tz ...] [--format json|txt|jsonl] [--out <path>] "
 			   "[--pretty 0|1] [--quiet]\n"
 			 <<"Examples:\n"
 			 <<"  lunar convert D:\\de442.bsp 2026-02-18 --format txt\n"
 			 <<"  lunar convert D:\\de442.bsp 2025-06-01T00:00 --input-tz "
-			   "+08:00 --format json\n"
+			   "+08:00 --lunar-day-tz +09:00 --format json\n"
 			 <<"  lunar convert D:\\de442.bsp --file dates.txt --format jsonl\n"
 			 <<"Notes:\n"
-			 <<"  lunar day-boundary mapping is fixed to UTC+8 civil day; --tz "
-			   "only affects display.\n";
+			 <<"  --lunar-day-tz selects the civil-day boundary used for lunar "
+			   "date mapping; --tz only affects display.\n";
 }
 

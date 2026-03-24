@@ -188,6 +188,8 @@ int cmd_cfg(const std::vector<std::string>&args){
 				 w.value(cfg.default_tz);
 				 w.key("default_lang");
 				 w.value(cfg.default_lang);
+				 w.key("default_lunar_day_tz");
+				 w.value(resolve_lunar_day_tz(cfg));
 				 w.key("def_fmt");
 				 w.value(cfg.def_fmt);
 				 w.key("hli_trad");
@@ -213,6 +215,8 @@ int cmd_cfg(const std::vector<std::string>&args){
 				 *out.stream<<"bsp_list="<<join_sc(cfg.bsp_list)<<"\n";
 				 *out.stream<<"default_tz="<<cfg.default_tz<<"\n";
 				 *out.stream<<"default_lang="<<cfg.default_lang<<"\n";
+				 *out.stream<<"default_lunar_day_tz="<<resolve_lunar_day_tz(cfg)
+							<<"\n";
 				 *out.stream<<"def_fmt="<<cfg.def_fmt<<"\n";
 				 *out.stream<<"hli_trad="<<cfg.hli_trad<<"\n";
 				 *out.stream<<"hli_year_boundary="<<cfg.hli_year_boundary<<"\n";
@@ -286,6 +290,13 @@ int cmd_cfg(const std::vector<std::string>&args){
 						 " (expected zh|zht|en|ja|ko)");
 				 }
 				 cfg.default_lang=lunar::i18n::lang_code(parsed);
+			 }},
+			{"default_lunar_day_tz",[&](){
+				 if(is_reset_value(value)){
+					 cfg.default_lunar_day_tz.clear();
+					 return;
+				 }
+				 cfg.default_lunar_day_tz=canonical_tz_text(value);
 			 }},
 			{"def_fmt",[&](){
 				 std::string v=to_low(value);
@@ -386,15 +397,17 @@ int cmd_comp(const std::vector<std::string>&args){
 				 <<"  COMPREPLY=()\n"
 				 <<"  cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
 				 <<"  local cmds=\"months calendar year event download at "
-				   "convert day monthview next range search eclipse festival "
+				   "convert sky day monthview next range search eclipse festival "
 				   "almanac info config completion\"\n"
 				 <<"  if [[ ${COMP_CWORD} -eq 1 ]]; then\n"
 				 <<"    COMPREPLY=( $(compgen -W \"${cmds}\" -- \"${cur}\") )\n"
 				 <<"    return 0\n"
 				 <<"  fi\n"
-				 <<"  local opts=\"--help --format --out --tz --pretty --quiet "
-				   "--stdin --file --jobs --meta-once --from --to --count "
-				   "--kinds --kind --eot-lon --near --stage --sample-min --point-lat "
+				 <<"  local opts=\"--help --time --input-tz --format --out --tz "
+				   "--lunar-day-tz "
+				   "--pretty --quiet --stdin --file --jobs --meta-once --from "
+				   "--to --count --kinds --kind --mode --pick --lat --lon "
+				   "--height --eot-lon --near --stage --sample-min --point-lat "
 				   "--point-lon --point-height --point-refine --global-vis "
 				   "--global --global-format --grid-lat-step --grid-lon-step "
 				   "--lang --trad --year-boundary --month-boundary "
@@ -407,7 +420,7 @@ int cmd_comp(const std::vector<std::string>&args){
 	if(shell=="fish"){
 		std::cout<<"complete -c lunar -f\n"
 				 <<"complete -c lunar -n '__fish_use_subcommand' -a 'months "
-				   "calendar year event download at convert day monthview next "
+				   "calendar year event download at convert sky day monthview next "
 				   "range search eclipse festival almanac info config "
 				   "completion'\n";
 		return 0;
@@ -419,7 +432,7 @@ int cmd_comp(const std::vector<std::string>&args){
 			<<"  param($wordToComplete, $commandAst, $cursorPosition)\n"
 			<<"  $cmds = "
 			  "'months','calendar','year','event','download','at','convert','"
-			  "day','monthview','next','range','search','eclipse','festival',"
+			  "sky','day','monthview','next','range','search','eclipse','festival',"
 			  "'almanac','info','config','completion'\n"
 			<<"  $cmds | Where-Object { $_ -like \"$wordToComplete*\" } | "
 			  "ForEach-Object {\n"

@@ -129,3 +129,87 @@ TEST(InteractMode, LanguageSwitchAppliesImmediatelyAndPersists){
 	std::error_code ec;
 	std::filesystem::remove_all(dir,ec);
 }
+
+TEST(InteractConfig, SaveCfgWritesLfOnly){
+	const std::filesystem::path dir=make_case_dir("interact_cfg_save_case");
+	{
+		ScopedCwd cwd(dir);
+		InterCfg cfg;
+		cfg.def_bsp="dummy.bsp";
+		cfg.bsp_list={"dummy.bsp","series"};
+		cfg.default_lang="en";
+		cfg.default_lunar_day_tz="+09:00";
+		ASSERT_TRUE(save_cfg(cfg));
+
+		const std::string cfg_text=read_file_text(dir/CFG_FILE);
+		EXPECT_EQ(cfg_text.find('\r'),std::string::npos);
+		EXPECT_EQ(trim(txt_value(cfg_text,"default_lang")),"en");
+		EXPECT_EQ(trim(txt_value(cfg_text,"default_lunar_day_tz")),"+09:00");
+	}
+	std::error_code ec;
+	std::filesystem::remove_all(dir,ec);
+}
+
+TEST(InteractConfig, LoadCfgAcceptsUtf8Bom){
+	const std::filesystem::path dir=make_case_dir("interact_cfg_bom_case");
+	write_text(dir/CFG_FILE,
+			   "\xEF\xBB\xBF""default_lang=en\n"
+			   "default_tz=+09:00\n");
+	{
+		ScopedCwd cwd(dir);
+		InterCfg cfg;
+		ASSERT_TRUE(load_cfg(cfg));
+		EXPECT_EQ(cfg.default_lang,"en");
+		EXPECT_EQ(cfg.default_tz,"+09:00");
+	}
+	std::error_code ec;
+	std::filesystem::remove_all(dir,ec);
+}
+
+TEST(InteractConfig, LunarDayTzFallsBackToLanguageDefault){
+	InterCfg zh_cfg;
+	zh_cfg.default_lang="en";
+	EXPECT_EQ(resolve_lunar_day_tz(zh_cfg),"+08:00");
+
+	InterCfg ja_cfg;
+	ja_cfg.default_lang="ja";
+	EXPECT_EQ(resolve_lunar_day_tz(ja_cfg),"+09:00");
+
+	InterCfg ko_cfg;
+	ko_cfg.default_lang="ko";
+	ko_cfg.default_lunar_day_tz="Z";
+	EXPECT_EQ(resolve_lunar_day_tz(ko_cfg),"Z");
+}
+
+TEST(InteractMode, SkyMenuRunsAndPrintsSelectedTarget){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path dir=make_case_dir("interact_sky_case");
+	write_text(dir/CFG_FILE,
+			   "def_bsp="+test_ephem()+"\n"
+			   "bsp_list="+test_ephem()+"\n"
+			   "default_tz=+08:00\n");
+	{
+		ScopedCwd cwd(dir);
+		ScopedCin input("\n16\n"
+						"2025-06-01T20:00:00+08:00\n"
+						"\n"
+						"\n"
+						"31.23\n"
+						"121.47\n"
+						"\n"
+						"2\n"
+						"sun\n"
+						"1\n"
+						"\n"
+						"\n"
+						"q\n");
+		ScopedCout output;
+		int_mode();
+		EXPECT_NE(output.str().find("input.mode=pick"),std::string::npos);
+		EXPECT_NE(output.str().find("\tsun\t"),std::string::npos);
+	}
+	std::error_code ec;
+	std::filesystem::remove_all(dir,ec);
+}

@@ -45,6 +45,7 @@ struct AtData{
 	std::string time_raw;
 	std::string tz_in;
 	std::string display_tz;
+	std::string lunar_day_tz="+08:00";
 	double jd_utc=0.0;
 	double jd_tdb=0.0;
 	std::string utc_iso;
@@ -75,6 +76,7 @@ struct DayResult{
 	std::string date_text;
 	std::string at_time;
 	std::string tz;
+	std::string lunar_day_tz="+08:00";
 	double hli_lon_deg=120.0;
 	bool inc_astro=false;
 	std::string astro_mode_text="less";

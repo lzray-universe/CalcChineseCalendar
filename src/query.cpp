@@ -5,6 +5,7 @@
 #include "query/help_usage.cpp"
 #include "query/cli_at_conv.cpp"
 #include "query/cmd_at_conv.cpp"
+#include "query/cmd_sky.cpp"
 #include "query/events_core.cpp"
 #include "query/day_core.cpp"
 #include "query/day_formatter.cpp"

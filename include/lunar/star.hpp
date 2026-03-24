@@ -1,6 +1,7 @@
 #pragma once
 
 #include<cstddef>
+#include<limits>
 #include<string>
 #include<vector>
 
@@ -84,14 +85,45 @@ struct AstroObs{
 	double h_m=0.0;
 };
 
+enum class SkyMode{
+	All,
+	Pick,
+};
+
+struct SkyPick{
+	SkyMode mode=SkyMode::All;
+	std::vector<std::string> picks;
+};
+
+struct SkyPos{
+	std::string kind;
+	std::string code;
+	std::string name;
+	std::string region;
+	bool is_solar_system=false;
+	bool is_juxing=false;
+	double mag_v=std::numeric_limits<double>::quiet_NaN();
+	double ra_deg=std::numeric_limits<double>::quiet_NaN();
+	double dec_deg=std::numeric_limits<double>::quiet_NaN();
+	double az_deg=std::numeric_limits<double>::quiet_NaN();
+	double alt_deg=std::numeric_limits<double>::quiet_NaN();
+};
+
 StarMode parse_star_mode(const std::string&text);
 
 StarPick make_star_pick(StarMode mode,const std::string&pick_csv);
+
+SkyMode parse_sky_mode(const std::string&text);
+
+SkyPick make_sky_pick(SkyMode mode,const std::string&pick_csv);
 
 std::vector<StarApp> calc_star_app(EphRead&eph,double jd_utc,
 								   const StarPick&pick);
 
 MoonXg calc_moon_xg(EphRead&eph,double jd_utc);
+
+std::vector<SkyPos> calc_sky_pos(EphRead&eph,double jd_utc,
+								 const AstroObs&obs,const SkyPick&pick);
 
 std::vector<AstroEvt> calc_astro_evt(EphRead&eph,double jd_utc_start,
 									 double jd_utc_end,const StarPick&pick,

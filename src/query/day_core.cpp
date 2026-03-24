@@ -36,6 +36,7 @@ GanzhiSummary compute_ganzhi(const GanzhiComputeOptions&opt){
 	day_opt.date_text=opt.date_text;
 	day_opt.at_time=opt.at_time;
 	day_opt.tz=opt.tz;
+	day_opt.lunar_day_tz=opt.lunar_day_tz;
 	day_opt.include_events=false;
 	day_opt.include_astro=false;
 	day_opt.hli_rules=opt.hli_rules;
@@ -49,6 +50,7 @@ GanzhiMonthSummary compute_ganzhi_month(const GanzhiMonthComputeOptions&opt){
 	}
 
 	int tz_off=parse_tz(opt.tz);
+	int lunar_day_tz_off=parse_tz(opt.lunar_day_tz);
 	int hh=12;
 	int mm=0;
 	double ss=0.0;
@@ -69,10 +71,13 @@ GanzhiMonthSummary compute_ganzhi_month(const GanzhiMonthComputeOptions&opt){
 	out.days.reserve(static_cast<std::size_t>(day_count));
 
 	for(int day=1;day<=day_count;++day){
-		double smp_jdutc=greg2jd(opt.year,opt.month,day,hh,mm,ss)-UTC8DAY;
-		AtData atd=at_fromjd(eph,smp_jdutc,tz_off,opt.tz,
+		double smp_jdutc=
+			civil_midjd(opt.year,opt.month,day,lunar_day_tz_off)+
+			(static_cast<double>(hh*3600+mm*60)+ss)/86400.0;
+		AtData atd=at_fromjd(eph,smp_jdutc,tz_off,lunar_day_tz_off,opt.tz,
 							 ymd_str(opt.year,opt.month,day)+"T"+opt.at_time,
-							 opt.tz,false,false,0.0,120.0,&opt.hli_rules,&cache);
+							 opt.lunar_day_tz,false,false,0.0,120.0,
+							 &opt.hli_rules,&cache);
 		out.years.push_back(atd.hli.y_rule);
 		out.months.push_back(atd.hli.m_gz);
 		out.days.push_back(atd.hli.d_gz);
@@ -92,8 +97,11 @@ DayResult compute_day(const DayComputeOptions&opt){
 	parse_hms(opt.at_time,hh,mm,ss);
 
 	int tz_off=parse_tz(opt.tz);
-	double smp_jdutc=greg2jd(y,m,d,hh,mm,ss)-UTC8DAY;
-	double day_sutc=cst_midjd(y,m,d);
+	int lunar_day_tz_off=parse_tz(opt.lunar_day_tz);
+	double smp_jdutc=
+		civil_midjd(y,m,d,lunar_day_tz_off)+
+		(static_cast<double>(hh*3600+mm*60)+ss)/86400.0;
+	double day_sutc=civil_midjd(y,m,d,lunar_day_tz_off);
 	double day_eutc=day_sutc+1.0;
 
 	StarPick astro_pick;
@@ -117,14 +125,15 @@ DayResult compute_day(const DayComputeOptions&opt){
 	out.date_text=opt.date_text;
 	out.at_time=opt.at_time;
 	out.tz=opt.tz;
+	out.lunar_day_tz=fmt_tz(lunar_day_tz_off);
 	out.hli_lon_deg=opt.hli_lon_deg;
 	out.inc_astro=opt.include_astro;
 	out.astro_mode_text=opt.astro_mode_text;
 	out.astro_pick_csv=opt.astro_pick_csv;
 	out.astro_obs=astro_obs;
-	out.at_data=at_fromjd(eph,smp_jdutc,tz_off,opt.tz,opt.date_text+"T"+opt.at_time,
-						  "+08:00",false,false,0.0,opt.hli_lon_deg,&opt.hli_rules,
-						  &cache);
+	out.at_data=at_fromjd(eph,smp_jdutc,tz_off,lunar_day_tz_off,opt.tz,
+						  opt.date_text+"T"+opt.at_time,fmt_tz(lunar_day_tz_off),
+						  false,false,0.0,opt.hli_lon_deg,&opt.hli_rules,&cache);
 
 	if(opt.include_events){
 		std::set<int> years={y-1,y,y+1};

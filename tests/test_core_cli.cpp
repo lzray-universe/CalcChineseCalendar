@@ -2,6 +2,7 @@
 
 #include<cmath>
 #include<filesystem>
+#include<sstream>
 #include<string>
 #include<vector>
 
@@ -195,6 +196,43 @@ TEST(CliConvert, RoundTripStaysOnSameCivilDate){
 	std::filesystem::remove(lun_out,ec);
 }
 
+TEST(CliConvert, LunarDayTzChangesCivilDateMapping){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path out_8=make_temp_path("convert_ldtz_8",".txt");
+	const std::filesystem::path out_9=make_temp_path("convert_ldtz_9",".txt");
+
+	std::vector<std::string> args_8={
+		"convert",test_ephem(),"2026-02-17T15:30:00Z",
+		"--lunar-day-tz","+08:00",
+		"--format","txt",
+		"--out",out_8.string(),
+		"--quiet"
+	};
+	std::vector<std::string> args_9={
+		"convert",test_ephem(),"2026-02-17T15:30:00Z",
+		"--lunar-day-tz","+09:00",
+		"--format","txt",
+		"--out",out_9.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args_8));
+	ASSERT_EQ(0,run_cli_args(args_9));
+
+	const std::string txt_8=read_file_text(out_8);
+	const std::string txt_9=read_file_text(out_9);
+	EXPECT_EQ(txt_value(txt_8,"input.lunar_day_tz"),"+08:00");
+	EXPECT_EQ(txt_value(txt_9,"input.lunar_day_tz"),"+09:00");
+	EXPECT_EQ(txt_value(txt_8,"data.gcst_date"),"2026-02-17");
+	EXPECT_EQ(txt_value(txt_9,"data.gcst_date"),"2026-02-18");
+	EXPECT_NE(txt_value(txt_8,"data.lun_label"),txt_value(txt_9,"data.lun_label"));
+
+	std::error_code ec;
+	std::filesystem::remove(out_8,ec);
+	std::filesystem::remove(out_9,ec);
+}
+
 TEST(CliInfo, SeriesEphemerisInfoWritesText){
 	if(!has_test_ephem()){
 		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
@@ -210,6 +248,78 @@ TEST(CliInfo, SeriesEphemerisInfoWritesText){
 	const std::string txt=read_file_text(out_path);
 	EXPECT_EQ(txt_value(txt,"ephem.path"),test_ephem());
 	EXPECT_EQ(txt_value(txt,"spk.coverage"),"not_avail");
+
+	std::error_code ec;
+	std::filesystem::remove(out_path,ec);
+}
+
+TEST(CliSky, PickQueryListsSolarSystemTargetsFirst){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path out_path=make_temp_path("sky",".txt");
+	std::vector<std::string> args={
+		"sky",test_ephem(),
+		"2025-06-01T20:00:00+08:00",
+		"--lat","31.23",
+		"--lon","121.47",
+		"--mode","pick",
+		"--pick","sun,moon,Spica",
+		"--format","txt",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args));
+	const std::string txt=read_file_text(out_path);
+	EXPECT_EQ(txt_value(txt,"input.mode"),"pick");
+	EXPECT_EQ(txt_value(txt,"input.lat_deg"),"31.23");
+	EXPECT_EQ(txt_value(txt,"input.lon_deg"),"121.47");
+
+	std::istringstream iss(txt);
+	std::string line;
+	std::string first_row;
+	std::string second_row;
+	std::string third_row;
+	while(std::getline(iss,line)){
+		if(line.rfind("kind\tcode\tname\tregion\tis_solar_system",0)==0){
+			ASSERT_TRUE(static_cast<bool>(std::getline(iss,first_row)));
+			ASSERT_TRUE(static_cast<bool>(std::getline(iss,second_row)));
+			ASSERT_TRUE(static_cast<bool>(std::getline(iss,third_row)));
+			break;
+		}
+	}
+	ASSERT_FALSE(first_row.empty());
+	EXPECT_NE(first_row.find("\tsun\t"),std::string::npos);
+	EXPECT_NE(second_row.find("\tmoon\t"),std::string::npos);
+	EXPECT_NE(third_row.find("\tHR5056\t"),std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(out_path,ec);
+}
+
+TEST(CliSky, EnglishOutputLocalizesNamesAndRegion){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path out_path=make_temp_path("sky_en",".txt");
+	std::vector<std::string> args={
+		"--lang","en",
+		"sky",test_ephem(),
+		"2025-06-01T20:00:00+08:00",
+		"--lat","31.23",
+		"--lon","121.47",
+		"--mode","pick",
+		"--pick","sun,moon,Spica",
+		"--format","txt",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args));
+	const std::string txt=read_file_text(out_path);
+	EXPECT_NE(txt.find("\tsun\tSun\t\t1\t"),std::string::npos);
+	EXPECT_NE(txt.find("\tmoon\tMoon\t\t1\t"),std::string::npos);
+	EXPECT_NE(txt.find("\tHR5056\tSpica\tJiao Mansion\t0\t"),std::string::npos);
+	EXPECT_EQ(txt.find("角宿"),std::string::npos);
 
 	std::error_code ec;
 	std::filesystem::remove(out_path,ec);

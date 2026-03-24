@@ -31,11 +31,17 @@ using cli_util::to_low;
 using lunar::AstroObs;
 using lunar::AstroEvt;
 using lunar::MoonXg;
+using lunar::SkyMode;
+using lunar::SkyPick;
+using lunar::SkyPos;
 using lunar::StarMode;
 using lunar::StarPick;
 using lunar::calc_astro_evt;
+using lunar::calc_sky_pos;
 using lunar::calc_moon_xg;
+using lunar::make_sky_pick;
 using lunar::make_star_pick;
+using lunar::parse_sky_mode;
 using lunar::parse_star_mode;
 
 using OptHandler=
@@ -119,13 +125,33 @@ int gz_index60(int stem,int branch){
 
 int gz_index_of(const GzNode&g){ return gz_index60(g.stem,g.branch); }
 
-double cst_midjd(int y,int m,int d){ return greg2jd(y,m,d,0,0,0.0)-UTC8DAY; }
+double civil_day_off(int tz_off){
+	return static_cast<double>(tz_off)/1440.0;
+}
 
-void utc2cst(double jd_utc,int&y,int&m,int&d){
+double civil_midjd(int y,int m,int d,int tz_off){
+	return greg2jd(y,m,d,0,0,0.0)-civil_day_off(tz_off);
+}
+
+void utc2civil(double jd_utc,int tz_off,int&y,int&m,int&d){
 	int hour=0;
 	int minute=0;
 	double second=0.0;
-	jd2greg(jd_utc+UTC8DAY,y,m,d,hour,minute,second);
+	jd2greg(jd_utc+civil_day_off(tz_off),y,m,d,hour,minute,second);
+}
+
+double cst_midjd(int y,int m,int d){ return greg2jd(y,m,d,0,0,0.0)-UTC8DAY; }
+
+void utc2cst(double jd_utc,int&y,int&m,int&d){
+	utc2civil(jd_utc,8*60,y,m,d);
+}
+
+std::string canonical_tz_text(const std::string&tz){
+	return fmt_tz(parse_tz(tz));
+}
+
+std::string lunar_day_rule_note(const std::string&lunar_day_tz){
+	return lunar::i18n::day_rule_note(canonical_tz_text(lunar_day_tz));
 }
 
 std::string lun_dlab(int day){
@@ -177,12 +203,12 @@ const YearEventsCache&load_year_events(QueryCache&cache,int year,int tz_off){
 	return inserted.first->second;
 }
 
-NearEvents comp_near(EphRead&eph,double jd_utc,int tz_off,
+NearEvents comp_near(EphRead&eph,double jd_utc,int tz_off,int lunar_day_tz_off,
 					 QueryCache*cache=nullptr){
 	int cst_year=0;
 	int cst_month=0;
 	int cst_day=0;
-	utc2cst(jd_utc,cst_year,cst_month,cst_day);
+	utc2civil(jd_utc,lunar_day_tz_off,cst_year,cst_month,cst_day);
 
 	std::set<int> years={cst_year-1,cst_year,cst_year+1};
 
@@ -220,12 +246,13 @@ NearEvents comp_near(EphRead&eph,double jd_utc,int tz_off,
 	return out;
 }
 
-LunDate res_lun(EphRead&eph,double jd_utc,QueryCache*cache=nullptr){
+LunDate res_lun(EphRead&eph,double jd_utc,int lunar_day_tz_off,
+				QueryCache*cache=nullptr){
 	int cst_year=0;
 	int cst_month=0;
 	int cst_day=0;
-	utc2cst(jd_utc,cst_year,cst_month,cst_day);
-	double qry_dutc=cst_midjd(cst_year,cst_month,cst_day);
+	utc2civil(jd_utc,lunar_day_tz_off,cst_year,cst_month,cst_day);
+	double qry_dutc=civil_midjd(cst_year,cst_month,cst_day,lunar_day_tz_off);
 
 	LunCal6 local_calc(eph);
 	LunCal6&calc=cache?cache->calc:local_calc;
@@ -237,9 +264,10 @@ LunDate res_lun(EphRead&eph,double jd_utc,QueryCache*cache=nullptr){
 	for(int y : {cst_year,cst_year-1,cst_year+1}){
 		const auto&months=calc.get_months(y);
 		for(const auto&m : months){
-			double start_day=
-				cst_midjd(m.start_dt.year,m.start_dt.month,m.start_dt.day);
-			double end_day=cst_midjd(m.end_dt.year,m.end_dt.month,m.end_dt.day);
+			double start_day=civil_midjd(
+				m.start_dt.year,m.start_dt.month,m.start_dt.day,lunar_day_tz_off);
+			double end_day=civil_midjd(
+				m.end_dt.year,m.end_dt.month,m.end_dt.day,lunar_day_tz_off);
 			if(qry_dutc>=start_day&&qry_dutc<end_day){
 				selected=m;
 				sel_sday=start_day;
@@ -260,7 +288,8 @@ LunDate res_lun(EphRead&eph,double jd_utc,QueryCache*cache=nullptr){
 	double cny_sday=std::numeric_limits<double>::quiet_NaN();
 	for(const auto&m : mths_year){
 		if(m.month_no==1&&!m.is_leap){
-			cny_sday=cst_midjd(m.start_dt.year,m.start_dt.month,m.start_dt.day);
+			cny_sday=civil_midjd(
+				m.start_dt.year,m.start_dt.month,m.start_dt.day,lunar_day_tz_off);
 			break;
 		}
 	}
@@ -296,15 +325,15 @@ LunDate res_lun(EphRead&eph,double jd_utc,QueryCache*cache=nullptr){
 }
 
 GregDate res_greg(EphRead&eph,int lunar_year,int month_no,int day,bool leap,
-				  QueryCache*cache=nullptr){
+				  int lunar_day_tz_off,QueryCache*cache=nullptr){
 	LunCal6 local_calc(eph);
 	LunCal6&calc=cache?cache->calc:local_calc;
 	auto find_cny=[&](int greg_year) -> double{
 		const auto&months=calc.get_months(greg_year);
 		for(const auto&m : months){
 			if(m.month_no==1&&!m.is_leap){
-				return cst_midjd(m.start_dt.year,m.start_dt.month,
-								 m.start_dt.day);
+				return civil_midjd(m.start_dt.year,m.start_dt.month,
+								 m.start_dt.day,lunar_day_tz_off);
 			}
 		}
 		throw std::runtime_error("failed to locate CNY boundary");
@@ -321,13 +350,15 @@ GregDate res_greg(EphRead&eph,int lunar_year,int month_no,int day,bool leap,
 	double end_day=0.0;
 	auto find_month=[&](const std::vector<LunarMonth>&months){
 		for(const auto&m : months){
-			double s=cst_midjd(m.start_dt.year,m.start_dt.month,m.start_dt.day);
+			double s=civil_midjd(
+				m.start_dt.year,m.start_dt.month,m.start_dt.day,lunar_day_tz_off);
 			if(s<cny_this||s>=cny_next){
 				continue;
 			}
 			if(m.month_no==month_no&&m.is_leap==leap){
 				start_day=s;
-				end_day=cst_midjd(m.end_dt.year,m.end_dt.month,m.end_dt.day);
+				end_day=civil_midjd(
+					m.end_dt.year,m.end_dt.month,m.end_dt.day,lunar_day_tz_off);
 				found=true;
 				return;
 			}
@@ -354,7 +385,7 @@ GregDate res_greg(EphRead&eph,int lunar_year,int month_no,int day,bool leap,
 	int gy=0;
 	int gm=0;
 	int gd=0;
-	utc2cst(tgt_dutc,gy,gm,gd);
+	utc2civil(tgt_dutc,lunar_day_tz_off,gy,gm,gd);
 
 	GregDate out;
 	out.year=gy;
@@ -685,7 +716,7 @@ std::vector<BatchLine> read_bat(bool from_stdin,const std::string&input_file){
 	return lines;
 }
 
-AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
+AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,int lunar_day_tz_off,
 				 const std::string&display_tz,const std::string&time_raw,
 				 const std::string&tz_in,bool inc_ev,bool calc_eot,
 				 double eot_lon_deg,double hli_lon_deg,
@@ -695,6 +726,7 @@ AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 	out.time_raw=time_raw;
 	out.tz_in=tz_in;
 	out.display_tz=display_tz;
+	out.lunar_day_tz=fmt_tz(lunar_day_tz_off);
 	out.jd_utc=jd_utc;
 	out.jd_tdb=TimeScale::utc_to_tdb(jd_utc);
 
@@ -713,7 +745,7 @@ AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 	out.ill_pct=out.ill_frac*100.0;
 	out.waxing=(out.lam_m_dot-out.lam_s_dot)>0.0;
 	out.phase_name=phase_elo(out.elong);
-	out.lunar_date=res_lun(eph,jd_utc,cache);
+	out.lunar_date=res_lun(eph,jd_utc,lunar_day_tz_off,cache);
 	out.moon_xg=calc_moon_xg(eph,jd_utc);
 
 	double lon_use=std::isfinite(hli_lon_deg)
@@ -753,7 +785,7 @@ AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 	lunar::i18n::localize_moon_xg(&out.moon_xg);
 	out.inc_ev=inc_ev;
 	if(inc_ev){
-		out.near_ev=comp_near(eph,jd_utc,tz_disp,cache);
+		out.near_ev=comp_near(eph,jd_utc,tz_disp,lunar_day_tz_off,cache);
 	}
 	out.has_eot=calc_eot;
 	if(calc_eot){
@@ -767,15 +799,17 @@ AtData at_fromjd(EphRead&eph,double jd_utc,int tz_disp,
 
 AtData at_ftxt(EphRead&eph,const std::string&time_raw,
 			   const std::string&input_tz,int tz_disp,
-			   const std::string&display_tz,bool inc_ev,bool calc_eot,
+			   const std::string&display_tz,int lunar_day_tz_off,
+			   bool inc_ev,bool calc_eot,
 			   double eot_lon_deg,double hli_lon_deg,
 			   const HliRuleSet*hli_rules=nullptr,
 			   QueryCache*cache=nullptr){
 	IsoTime parsed=parse_iso(time_raw,input_tz);
 	std::string tz_in=
 		parsed.has_tz?fmt_tz(parsed.tz_off):fmt_tz(parse_tz(input_tz));
-	return at_fromjd(eph,parsed.jd_utc,tz_disp,display_tz,time_raw,tz_in,
-					 inc_ev,calc_eot,eot_lon_deg,hli_lon_deg,hli_rules,cache);
+	return at_fromjd(eph,parsed.jd_utc,tz_disp,lunar_day_tz_off,display_tz,
+					 time_raw,tz_in,inc_ev,calc_eot,eot_lon_deg,hli_lon_deg,
+					 hli_rules,cache);
 }
 
 bool is_full_moon_ev(const EventRec&ev){
@@ -1697,6 +1731,8 @@ void wr_aijs(JsonWriter&w,const AtData&d){
 	w.value(d.tz_in);
 	w.key("display_tz");
 	w.value(d.display_tz);
+	w.key("lunar_day_tz");
+	w.value(d.lunar_day_tz);
 	w.key("jd_utc");
 	w.value(d.jd_utc);
 	w.key("jd_tdb");
@@ -1734,6 +1770,7 @@ void wr_atxt(std::ostream&os,const AtData&d,bool hdr_on){
 	os<<"input.time_raw="<<d.time_raw<<"\n";
 	os<<"input.input_tz="<<d.tz_in<<"\n";
 	os<<"input.display_tz="<<d.display_tz<<"\n";
+	os<<"input.lunar_day_tz="<<d.lunar_day_tz<<"\n";
 	os<<"input.jd_utc="<<format_num(d.jd_utc)<<"\n";
 	os<<"input.jd_tdb="<<format_num(d.jd_tdb)<<"\n";
 	os<<"input.utc_iso="<<d.utc_iso<<"\n";

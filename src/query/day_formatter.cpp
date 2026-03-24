@@ -54,13 +54,15 @@ void format_day_output(std::ostream&os,const DayResult&result,
 		JsonWriter w(os,json_pretty);
 		w.obj_begin();
 		write_meta(w,result.ephem,result.tz,
-				   {"type=day",lunar::i18n::day_rule_note()});
+				   {"type=day",lunar_day_rule_note(result.lunar_day_tz)});
 		w.key("input");
 		w.obj_begin();
 		w.key("date");
 		w.value(result.date_text);
 		w.key("smp_time");
 		w.value(result.at_time);
+		w.key("lunar_day_tz");
+		w.value(result.lunar_day_tz);
 		w.key("smp_jdutc");
 		w.value(result.at_data.jd_utc);
 		w.key("lon_deg");
@@ -328,6 +330,7 @@ void format_day_output(std::ostream&os,const DayResult&result,
 		os<<"tool=lunar format=txt type=day tz_display="<<result.tz<<"\n";
 		os<<"input.date="<<result.date_text<<"\n";
 		os<<"input.smp_time="<<result.at_time<<"\n";
+		os<<"input.lunar_day_tz="<<result.lunar_day_tz<<"\n";
 		os<<"input.lon_deg="<<format_num(result.hli_lon_deg)<<"\n";
 		os<<"input.astro="<<(result.inc_astro?"1":"0")<<"\n";
 		os<<"input.astro_mode="<<result.astro_mode_text<<"\n";
