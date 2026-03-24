@@ -34,6 +34,7 @@ struct ConvArgs{
 	bool has_in=false;
 
 	bool from_lunar=false;
+	bool has_lunar_input=false;
 	int lunar_year=0;
 	int lun_mno=0;
 	int lunar_day=0;

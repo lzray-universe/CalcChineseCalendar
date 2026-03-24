@@ -2861,11 +2861,6 @@ bool should_use_series_backend(const std::string&filepath){
 	if(is_series_ephem(filepath)||filepath.empty()){
 		return true;
 	}
-	std::error_code ec;
-	fs::path p(filepath);
-	if(!fs::exists(p,ec)||!fs::is_regular_file(p,ec)){
-		return true;
-	}
 	return false;
 }
 
@@ -2879,7 +2874,7 @@ const std::vector<int>&series_object_ids(){
 }
 
 EphRead::EphRead(const std::string&path){
-	filepath=path;
+	filepath=is_series_ephem(path)?kSeriesEphemToken:path;
 #if !LUNAR_ENABLE_SERIES_FALLBACK
 	if(filepath.empty()){
 		throw std::runtime_error("ephemeris path is empty");

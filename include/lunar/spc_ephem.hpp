@@ -24,7 +24,7 @@ inline constexpr bool series_fallback_enabled(){
 }
 
 inline bool is_series_ephem(const std::string&path){
-	return path==kSeriesEphemToken;
+	return path==kSeriesEphemToken||path=="series";
 }
 
 struct SpkFile;

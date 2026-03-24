@@ -13,6 +13,21 @@ namespace{
 
 bool is_digit(char c){ return std::isdigit(static_cast<unsigned char>(c))!=0; }
 
+bool is_leap_year(int year){
+	return (year%400==0)||(year%4==0&&year%100!=0);
+}
+
+int days_in_month(int year,int month){
+	static const int kDays[12]={31,28,31,30,31,30,31,31,30,31,30,31};
+	if(month<1||month>12){
+		throw std::invalid_argument("invalid date value");
+	}
+	if(month==2&&is_leap_year(year)){
+		return 29;
+	}
+	return kDays[month-1];
+}
+
 int parse_fix(const std::string&s,std::size_t pos,std::size_t count,
 			  const std::string&label){
 	if(pos+count>s.size()){
@@ -137,7 +152,7 @@ IsoTime parse_iso(const std::string&text,const std::string&default_tz){
 	int month=0;
 	int day=0;
 	std::size_t pos=parse_date_prefix(text,year,month,day);
-	if(month<1||month>12||day<1||day>31){
+	if(month<1||month>12||day<1||day>days_in_month(year,month)){
 		throw std::invalid_argument("invalid date value");
 	}
 

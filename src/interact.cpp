@@ -84,6 +84,14 @@ void strip_utf8_bom(std::string&line){
 	}
 }
 
+void append_cfg_line(std::string&text,const std::string&key,
+					 const std::string&value){
+	text+=key;
+	text.push_back('=');
+	text+=value;
+	text.push_back('\n');
+}
+
 bool load_cfg(InterCfg&cfg){
 	std::ifstream ifs(CFG_FILE);
 	if(!ifs){
@@ -134,26 +142,34 @@ bool load_cfg(InterCfg&cfg){
 }
 
 bool save_cfg(const InterCfg&cfg){
-	std::ofstream ofs(CFG_FILE,std::ios::binary);
+	std::string text;
+	text.reserve(256+cfg.bsp_dir.size()+cfg.def_bsp.size()+cfg.default_tz.size()+
+				 cfg.default_lang.size()+cfg.default_lunar_day_tz.size()+
+				 cfg.def_fmt.size()+cfg.hli_trad.size()+
+				 cfg.hli_year_boundary.size()+cfg.hli_month_boundary.size()+
+				 cfg.hli_leap_month_mode.size()+cfg.hli_day_boundary.size());
+	append_cfg_line(text,"bsp_dir",cfg.bsp_dir);
+	append_cfg_line(text,"def_bsp",cfg.def_bsp);
+	append_cfg_line(text,"bsp_list",join_bsp_list(cfg.bsp_list));
+	append_cfg_line(text,"default_tz",cfg.default_tz);
+	append_cfg_line(text,"default_lang",cfg.default_lang);
+	if(!cfg.default_lunar_day_tz.empty()){
+		append_cfg_line(text,"default_lunar_day_tz",cfg.default_lunar_day_tz);
+	}
+	append_cfg_line(text,"def_fmt",cfg.def_fmt);
+	append_cfg_line(text,"hli_trad",cfg.hli_trad);
+	append_cfg_line(text,"hli_year_boundary",cfg.hli_year_boundary);
+	append_cfg_line(text,"hli_month_boundary",cfg.hli_month_boundary);
+	append_cfg_line(text,"hli_leap_month_mode",cfg.hli_leap_month_mode);
+	append_cfg_line(text,"hli_day_boundary",cfg.hli_day_boundary);
+	append_cfg_line(text,"def_prety",cfg.def_prety?"1":"0");
+
+	std::ofstream ofs(CFG_FILE,std::ios::out|std::ios::binary|std::ios::trunc);
 	if(!ofs){
 		return false;
 	}
-	ofs<<"bsp_dir="<<cfg.bsp_dir<<"\n";
-	ofs<<"def_bsp="<<cfg.def_bsp<<"\n";
-	ofs<<"bsp_list="<<join_bsp_list(cfg.bsp_list)<<"\n";
-	ofs<<"default_tz="<<cfg.default_tz<<"\n";
-	ofs<<"default_lang="<<cfg.default_lang<<"\n";
-	if(!cfg.default_lunar_day_tz.empty()){
-		ofs<<"default_lunar_day_tz="<<cfg.default_lunar_day_tz<<"\n";
-	}
-	ofs<<"def_fmt="<<cfg.def_fmt<<"\n";
-	ofs<<"hli_trad="<<cfg.hli_trad<<"\n";
-	ofs<<"hli_year_boundary="<<cfg.hli_year_boundary<<"\n";
-	ofs<<"hli_month_boundary="<<cfg.hli_month_boundary<<"\n";
-	ofs<<"hli_leap_month_mode="<<cfg.hli_leap_month_mode<<"\n";
-	ofs<<"hli_day_boundary="<<cfg.hli_day_boundary<<"\n";
-	ofs<<"def_prety="<<(cfg.def_prety?"1":"0")<<"\n";
-	return true;
+	ofs.write(text.data(),static_cast<std::streamsize>(text.size()));
+	return ofs.good();
 }
 
 std::string default_lunar_day_tz_for_lang(const std::string&lang_code){

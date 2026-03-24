@@ -209,7 +209,7 @@ int run_cbcli(const ConvArgs&args){
 
 	auto parse_lun=[](const std::string&raw,int&y,int&m,int&d,bool&leap){
 		std::istringstream iss(raw);
-		std::string a,b,c,d4;
+		std::string a,b,c,d4,extra;
 		if(!(iss>>a>>b>>c)){
 			throw std::invalid_argument(
 				"expected: <lunar_year> <month_no> <day> [leap]");
@@ -226,6 +226,10 @@ int run_cbcli(const ConvArgs&args){
 			}else{
 				throw std::invalid_argument(
 					"invalid leap flag, expected 0/1/true/false");
+			}
+			if(iss>>extra){
+				throw std::invalid_argument(
+					"too many fields, expected: <lunar_year> <month_no> <day> [leap]");
 			}
 		}
 	};
@@ -623,14 +627,18 @@ int cmd_conv(const std::vector<std::string>&args){
 	const OptMap handlers={
 		{"--from-lunar",[&](const std::vector<std::string>&src,std::size_t&idx,
 							const std::string&){
-			 if(idx+3>=src.size()){
+			 c.from_lunar=true;
+			 if(idx+1>=src.size()||is_opt(src[idx+1])){
+				 return;
+			 }
+			 if(idx+3>=src.size()||is_opt(src[idx+2])||is_opt(src[idx+3])){
 				 throw std::invalid_argument(
 					 "--from-lunar requires: <year> <month_no> <day>");
 			 }
-			 c.from_lunar=true;
 			 c.lunar_year=parse_int(src[++idx],"lunar_year");
 			 c.lun_mno=parse_int(src[++idx],"lun_mno");
 			 c.lunar_day=parse_int(src[++idx],"lunar_day");
+			 c.has_lunar_input=true;
 		 }},
 		{"--stdin",[&](const std::vector<std::string>&,std::size_t&,
 					   const std::string&){ c.from_stdin=true; }},
@@ -700,7 +708,15 @@ int cmd_conv(const std::vector<std::string>&args){
 			"convert requires positional <dt_or_tm> when not using "
 			"--from-lunar");
 	}
+	if(c.from_lunar&&batch_mode&&c.has_lunar_input){
+		throw std::invalid_argument(
+			"do not pass inline lunar date when using --stdin/--file");
+	}
 	if(c.from_lunar&&!batch_mode){
+		if(!c.has_lunar_input){
+			throw std::invalid_argument(
+				"--from-lunar requires: <year> <month_no> <day>");
+		}
 		if(c.lun_mno<1||c.lun_mno>12){
 			throw std::invalid_argument("lunar month must be 1..12");
 		}
@@ -771,11 +787,16 @@ void use_conv(){
 			   "<day> [--leap 0|1]\n"
 			 <<"    [--tz ...] [--lunar-day-tz ...] [--format json|txt|jsonl] [--out <path>] "
 			   "[--pretty 0|1] [--quiet]\n"
+			 <<"  lunar convert <bsp> --from-lunar [--stdin|--file <path>]\n"
+			 <<"    [--tz ...] [--lunar-day-tz ...] [--format json|txt|jsonl] [--out <path>] "
+			   "[--pretty 0|1] [--quiet] [--jobs N] [--meta-once 0|1]\n"
 			 <<"Examples:\n"
 			 <<"  lunar convert D:\\de442.bsp 2026-02-18 --format txt\n"
 			 <<"  lunar convert D:\\de442.bsp 2025-06-01T00:00 --input-tz "
 			   "+08:00 --lunar-day-tz +09:00 --format json\n"
 			 <<"  lunar convert D:\\de442.bsp --file dates.txt --format jsonl\n"
+			 <<"  lunar convert D:\\de442.bsp --from-lunar --file lunar_dates.txt "
+			   "--format txt\n"
 			 <<"Notes:\n"
 			 <<"  --lunar-day-tz selects the civil-day boundary used for lunar "
 			   "date mapping; --tz only affects display.\n";

@@ -545,6 +545,17 @@ bool all_digits(const std::string&s){
 	return true;
 }
 
+void strip_utf8_bom(std::string&line){
+	if(line.size()>=3&&
+	   static_cast<unsigned char>(line[0])==0xEF&&
+	   static_cast<unsigned char>(line[1])==0xBB&&
+	   static_cast<unsigned char>(line[2])==0xBF){
+		line.erase(0,3);
+	}
+}
+
+int days_gm(int y,int m);
+
 EventRec mk_astro_rec(const AstroEvt&src,int tz_off){
 	EventRec out;
 	out.kind=src.kind;
@@ -600,7 +611,7 @@ std::tuple<int,int,int> parse_ymd(const std::string&s){
 	int y=parse_int(ytxt,"year");
 	int m=parse_int(mtxt,"month");
 	int d=parse_int(dtxt,"day");
-	if(m<1||m>12||d<1||d>31){
+	if(m<1||m>12||d<1||d>days_gm(y,m)){
 		throw std::invalid_argument("invalid date value: "+s);
 	}
 	return {y,m,d};
@@ -650,15 +661,25 @@ void parse_hms(const std::string&s,int&hh,int&mm,double&ss){
 	int t_h=0;
 	int t_m=0;
 	int t_s=0;
-	if(std::sscanf(s.c_str(),"%d:%d:%d",&t_h,&t_m,&t_s)==3){
+	int consumed=0;
+	bool parsed=false;
+	if(std::sscanf(s.c_str(),"%d:%d:%d%n",&t_h,&t_m,&t_s,&consumed)==3&&
+	   consumed==static_cast<int>(s.size())){
 		hh=t_h;
 		mm=t_m;
 		ss=static_cast<double>(t_s);
-	}else if(std::sscanf(s.c_str(),"%d:%d",&t_h,&t_m)==2){
+		parsed=true;
+	}
+	consumed=0;
+	if(!parsed&&
+	   std::sscanf(s.c_str(),"%d:%d%n",&t_h,&t_m,&consumed)==2&&
+	   consumed==static_cast<int>(s.size())){
 		hh=t_h;
 		mm=t_m;
 		ss=0.0;
-	}else{
+		parsed=true;
+	}
+	if(!parsed){
 		throw std::invalid_argument("invalid time, expected HH:MM[:SS]");
 	}
 	if(hh<0||hh>23||mm<0||mm>59||ss<0.0||ss>=60.0){
@@ -702,9 +723,14 @@ std::vector<BatchLine> read_bat(bool from_stdin,const std::string&input_file){
 	}
 	std::string raw;
 	int line_no=0;
+	bool first_line=true;
 	while(std::getline(*in,raw)){
 		++line_no;
 		std::string trimmed=raw;
+		if(first_line){
+			strip_utf8_bom(trimmed);
+			first_line=false;
+		}
 		while(!trimmed.empty()&&(trimmed.back()=='\r'||trimmed.back()=='\n')){
 			trimmed.pop_back();
 		}

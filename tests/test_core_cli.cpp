@@ -2,6 +2,8 @@
 
 #include<cmath>
 #include<filesystem>
+#include<fstream>
+#include<stdexcept>
 #include<sstream>
 #include<string>
 #include<vector>
@@ -27,6 +29,17 @@ lunar::core::DayComputeOptions make_day_opt(const std::string&date_text){
 	return opt;
 }
 
+void write_bin_text(const std::filesystem::path&path,const std::string&text){
+	std::ofstream ofs(path,std::ios::binary);
+	if(!ofs){
+		throw std::runtime_error("failed to open file: "+path.string());
+	}
+	ofs.write(text.data(),static_cast<std::streamsize>(text.size()));
+	if(!ofs){
+		throw std::runtime_error("failed to write file: "+path.string());
+	}
+}
+
 }
 
 TEST(CoreDay, IlluminationStaysInRange){
@@ -36,6 +49,23 @@ TEST(CoreDay, IlluminationStaysInRange){
 	DayResult day=lunar::core::compute_day(make_day_opt("2025-06-01"));
 	EXPECT_GE(day.at_data.ill_pct,0.0);
 	EXPECT_LE(day.at_data.ill_pct,100.0);
+}
+
+TEST(CoreDay, RejectsTrailingGarbageInAtTime){
+	lunar::core::DayComputeOptions opt=make_day_opt("2025-06-01");
+	opt.at_time="12:34oops";
+	EXPECT_THROW(lunar::core::compute_day(opt),std::invalid_argument);
+
+	opt.at_time="12:34:56xyz";
+	EXPECT_THROW(lunar::core::compute_day(opt),std::invalid_argument);
+}
+
+TEST(CoreDay, RejectsInvalidCalendarDate){
+	lunar::core::DayComputeOptions opt=make_day_opt("2025-02-31");
+	EXPECT_THROW(lunar::core::compute_day(opt),std::invalid_argument);
+
+	opt.date_text="2024-02-30";
+	EXPECT_THROW(lunar::core::compute_day(opt),std::invalid_argument);
 }
 
 TEST(CalendarSeries, YearHasTermsAndPhases){
@@ -231,6 +261,124 @@ TEST(CliConvert, LunarDayTzChangesCivilDateMapping){
 	std::error_code ec;
 	std::filesystem::remove(out_8,ec);
 	std::filesystem::remove(out_9,ec);
+}
+
+TEST(CliConvert, RejectsInvalidIsoCalendarDate){
+	EXPECT_THROW(
+		run_cli_args({"convert",test_ephem(),"2025-02-31T12:00:00+08:00","--quiet"}),
+		std::invalid_argument);
+	EXPECT_THROW(
+		run_cli_args({"at",test_ephem(),"2024-02-30T12:00:00+08:00","--quiet"}),
+		std::invalid_argument);
+}
+
+TEST(CliConvert, BatchFileAcceptsUtf8Bom){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path in_path=make_temp_path("convert_bom_in",".txt");
+	const std::filesystem::path out_path=make_temp_path("convert_bom_out",".txt");
+	write_bin_text(in_path,
+				   "\xEF\xBB\xBF""2025-06-01T12:00:00+08:00\r\n");
+
+	std::vector<std::string> args={
+		"convert",test_ephem(),
+		"--file",in_path.string(),
+		"--format","txt",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args));
+	const std::string txt=read_file_text(out_path);
+	EXPECT_NE(txt.find("1\tok\t2025-06-01T12:00:00+08:00\tgreg2lun\t"),
+			  std::string::npos);
+	EXPECT_EQ(txt.find("invalid datetime"),std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(in_path,ec);
+	std::filesystem::remove(out_path,ec);
+}
+
+TEST(CliConvert, BatchFromLunarFileWorksWithoutInlineDate){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path in_path=
+		make_temp_path("convert_lunar_batch_in",".txt");
+	const std::filesystem::path out_path=
+		make_temp_path("convert_lunar_batch_out",".txt");
+	write_bin_text(in_path,"2026 1 1\r\n");
+
+	std::vector<std::string> args={
+		"convert",test_ephem(),
+		"--from-lunar",
+		"--file",in_path.string(),
+		"--format","txt",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args));
+	const std::string txt=read_file_text(out_path);
+	EXPECT_NE(txt.find("1\tok\t2026 1 1\tlun2greg\t"),std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(in_path,ec);
+	std::filesystem::remove(out_path,ec);
+}
+
+TEST(CliConvert, BatchFromLunarRejectsExtraFields){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path in_path=
+		make_temp_path("convert_lunar_extra_in",".txt");
+	const std::filesystem::path out_path=
+		make_temp_path("convert_lunar_extra_out",".txt");
+	write_bin_text(in_path,"2026 1 1 leap extra\r\n");
+
+	std::vector<std::string> args={
+		"convert",test_ephem(),
+		"--from-lunar",
+		"--file",in_path.string(),
+		"--format","txt",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(1,run_cli_args(args));
+	const std::string txt=read_file_text(out_path);
+	EXPECT_NE(txt.find("too many fields, expected: <lunar_year> <month_no> <day> [leap]"),
+			  std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(in_path,ec);
+	std::filesystem::remove(out_path,ec);
+}
+
+TEST(CliDay, MissingExplicitBspPathDoesNotSilentlyFallback){
+	EXPECT_THROW(
+		run_cli_args({"day","definitely_missing_12345.bsp","2025-06-01","--quiet"}),
+		std::runtime_error);
+}
+
+TEST(CliDay, SeriesAliasWorksAsExplicitEphem){
+#if !LUNAR_ENABLE_SERIES_FALLBACK
+	GTEST_SKIP()<<"requires series fallback";
+#else
+	const std::filesystem::path out_path=make_temp_path("day_series_alias",".txt");
+	std::vector<std::string> args={
+		"day","series","2025-06-01",
+		"--format","txt",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args));
+	const std::string txt=read_file_text(out_path);
+	EXPECT_EQ(txt_value(txt,"input.date"),"2025-06-01");
+	EXPECT_FALSE(txt_value(txt,"data.phase_name").empty());
+
+	std::error_code ec;
+	std::filesystem::remove(out_path,ec);
+#endif
 }
 
 TEST(CliInfo, SeriesEphemerisInfoWritesText){
