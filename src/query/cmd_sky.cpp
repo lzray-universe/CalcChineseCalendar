@@ -1,5 +1,7 @@
 namespace{
 
+std::string csv_quote(const std::string&s);
+
 std::string csv_num_or_empty(double value){
 	return std::isfinite(value)?format_num(value):"";
 }
