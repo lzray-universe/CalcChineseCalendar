@@ -5,14 +5,38 @@ CalcChineseCalendar 是一个优先使用 JPL DE BSP 星历、在缺失 BSP 时�
 - 命令行工具 `lunar`
 - 动态库 `lunar_dll`（导出 C API）
 - 面向 C++ 的可复用计算接口（`lunar::core`）
+<div align="center">
 
-[![CI](https://github.com/lzray-universe/CalcChineseCalendar/actions/workflows/CI.yml/badge.svg)](https://github.com/lzray-universe/CalcChineseCalendar/actions/workflows/CI.yml)
+  <p>
+    <a href="https://github.com/lzray-universe/CalcChineseCalendar/actions/workflows/CI.yml">
+      <img src="https://github.com/lzray-universe/CalcChineseCalendar/actions/workflows/CI.yml/badge.svg" alt="CI">
+    </a>
+    <img src="https://img.shields.io/github/v/release/lzray-universe/CalcChineseCalendar" alt="Release">
+    <img src="https://img.shields.io/github/last-commit/lzray-universe/CalcChineseCalendar" alt="Last commit">
+  </p>
 
-[![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Ftokei.kojix2.net%2Fbadge%2Fgithub%2Flzray-universe%2FCalcChineseCalendar%2Flines)](https://tokei.kojix2.net/github/lzray-universe/CalcChineseCalendar)
+  <p>
+    <a href="https://tokei.kojix2.net/github/lzray-universe/CalcChineseCalendar">
+      <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Ftokei.kojix2.net%2Fbadge%2Fgithub%2Flzray-universe%2FCalcChineseCalendar%2Flines" alt="Lines of Code">
+    </a>
+    <img src="https://img.shields.io/github/repo-size/lzray-universe/CalcChineseCalendar" alt="Repo size">
+    <a href="LICENSE">
+      <img src="https://img.shields.io/github/license/lzray-universe/CalcChineseCalendar" alt="License">
+    </a>
+    <a href="https://deepwiki.com/lzray-universe/CalcChineseCalendar">
+      <img src="https://deepwiki.com/badge.svg" alt="DeepWiki">
+    </a>
+  </p>
 
-[![License](https://img.shields.io/github/license/lzray-universe/CalcChineseCalendar)](LICENSE)
+  <p>
+    <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Windows">
+    <img src="https://img.shields.io/badge/platform-Linux-green" alt="Linux">
+    <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="macOS">
+    <img src="https://img.shields.io/badge/platform-WebAssembly-orange" alt="WebAssembly">
+  </p>
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lzray-universe/CalcChineseCalendar)
+</div>
+
 ## 1. 功能概览
 
 - 农历月枚举：`months`
