@@ -3,6 +3,7 @@
 #include<algorithm>
 #include<cctype>
 #include<cmath>
+#include<ctime>
 #include<filesystem>
 #include<limits>
 #include<optional>
@@ -50,6 +51,10 @@ std::string trim_copy(const std::string&s){
 		--end;
 	}
 	return s.substr(beg,end-beg);
+}
+
+bool missing_opt_value_token(const std::string&s){
+	return s=="-h"||s=="--help"||s.rfind("--",0)==0;
 }
 
 bool ends_with_bsp(const std::string&s){
@@ -122,6 +127,19 @@ void add_unique_existing(std::vector<std::string>&out,
 	}
 }
 
+double current_jd_utc(){
+	const std::time_t now=std::time(nullptr);
+	std::tm utc_tm{};
+#if defined(_WIN32)
+	gmtime_s(&utc_tm,&now);
+#else
+	gmtime_r(&now,&utc_tm);
+#endif
+	return greg2jd(utc_tm.tm_year+1900,utc_tm.tm_mon+1,utc_tm.tm_mday,
+				   utc_tm.tm_hour,utc_tm.tm_min,
+				   static_cast<double>(utc_tm.tm_sec));
+}
+
 std::optional<std::pair<int,int>> parse_ym(const std::string&s){
 	std::size_t pos=s.find('-');
 	if(pos==std::string::npos){
@@ -161,7 +179,7 @@ std::optional<std::string> find_opt_val(const std::vector<std::string>&args,
 	for(std::size_t i=0;i<args.size();++i){
 		const std::string&arg=args[i];
 		if(arg==opt){
-			if(i+1<args.size()){
+			if(i+1<args.size()&&!missing_opt_value_token(args[i+1])){
 				return args[i+1];
 			}
 			return std::nullopt;
@@ -249,14 +267,17 @@ std::optional<std::pair<double,double>> infer_jd_interval(
 				return std::make_pair(std::min(f.jd_utc,t.jd_utc),
 									  std::max(f.jd_utc,t.jd_utc));
 			}
-			if(command=="search"&&from){
-				IsoTime f=parse_iso(*from,default_tz);
+			if(command=="search"){
+				double jd_from=current_jd_utc();
+				if(from){
+					jd_from=parse_iso(*from,default_tz).jd_utc;
+				}
 				int count=1;
 				if(auto c=find_opt_val(args,"--count")){
 					count=std::max(1,std::stoi(*c));
 				}
 				double span=std::max(30.0,static_cast<double>(count)*45.0);
-				return std::make_pair(f.jd_utc,f.jd_utc+span);
+				return std::make_pair(jd_from,jd_from+span);
 			}
 			return std::nullopt;
 		}
@@ -507,6 +528,9 @@ std::vector<std::string> prep_cmd_args(const std::string&command,
 		}
 		if(arg.rfind("--bsp=",0)==0){
 			explicit_bsp=arg.substr(6);
+			if(explicit_bsp.empty()){
+				throw std::invalid_argument("missing value for option: --bsp");
+			}
 			continue;
 		}
 		stripped.push_back(arg);

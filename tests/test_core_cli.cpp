@@ -1,8 +1,10 @@
 #include "test_common.hpp"
 
 #include<cmath>
+#include<ctime>
 #include<filesystem>
 #include<fstream>
+#include<iomanip>
 #include<stdexcept>
 #include<sstream>
 #include<string>
@@ -38,6 +40,41 @@ void write_bin_text(const std::filesystem::path&path,const std::string&text){
 	if(!ofs){
 		throw std::runtime_error("failed to write file: "+path.string());
 	}
+}
+
+class ScopedCwd{
+public:
+	explicit ScopedCwd(const std::filesystem::path&path):
+		old_(std::filesystem::current_path()){
+		std::filesystem::current_path(path);
+	}
+
+	~ScopedCwd(){ std::filesystem::current_path(old_); }
+
+private:
+	std::filesystem::path old_;
+};
+
+std::filesystem::path make_temp_dir(const char*stem){
+	const std::filesystem::path dir=make_temp_path(stem,"");
+	std::filesystem::create_directories(dir);
+	return dir;
+}
+
+std::string current_utc_iso_text(){
+	const std::time_t now=std::time(nullptr);
+	std::tm utc_tm{};
+#if defined(_WIN32)
+	gmtime_s(&utc_tm,&now);
+#else
+	gmtime_r(&now,&utc_tm);
+#endif
+	std::ostringstream oss;
+	oss<<std::setfill('0')<<std::setw(4)<<utc_tm.tm_year+1900<<"-"
+	   <<std::setw(2)<<utc_tm.tm_mon+1<<"-"<<std::setw(2)<<utc_tm.tm_mday
+	   <<"T"<<std::setw(2)<<utc_tm.tm_hour<<":"<<std::setw(2)<<utc_tm.tm_min
+	   <<":"<<std::setw(2)<<utc_tm.tm_sec<<"Z";
+	return oss.str();
 }
 
 }
@@ -354,6 +391,18 @@ TEST(CliConvert, BatchFromLunarRejectsExtraFields){
 	std::filesystem::remove(out_path,ec);
 }
 
+TEST(CliConvert, MissingFileValueIsRejectedBeforeOpen){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	try{
+		(void)run_cli_args({"convert",test_ephem(),"--file","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),"missing value for option: --file");
+	}
+}
+
 TEST(CliDay, MissingExplicitBspPathDoesNotSilentlyFallback){
 	EXPECT_THROW(
 		run_cli_args({"day","definitely_missing_12345.bsp","2025-06-01","--quiet"}),
@@ -401,6 +450,243 @@ TEST(CliInfo, SeriesEphemerisInfoWritesText){
 	std::filesystem::remove(out_path,ec);
 }
 
+TEST(CliGlobal, HelpTokenIsNotConsumedAsLangValue){
+	try{
+		(void)run_cli_args({"--lang","--help"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),"missing value for option: --lang");
+	}
+}
+
+TEST(CliGlobal, HelpTokenIsNotConsumedAsEclipseMethodValue){
+	try{
+		(void)run_cli_args({"--eclipse-method","--help"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),
+				  "missing value for option: --eclipse-method");
+	}
+}
+
+TEST(CliGlobal, HelpTokenIsNotConsumedAsBspValue){
+	try{
+		(void)run_cli_args(
+			{"next","--bsp","--help","--from","2025-01-01","--count","1","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),"missing value for option: --bsp");
+	}
+}
+
+TEST(CliGlobal, EmptyBspEqualsValueIsRejected){
+	try{
+		(void)run_cli_args(
+			{"next","--bsp=","--from","2025-01-01","--count","1","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),"missing value for option: --bsp");
+	}
+}
+
+TEST(CliGlobal, EmptyLangEqualsValueIsRejected){
+	try{
+		(void)run_cli_args({"--lang=","--version"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),"missing value for option: --lang");
+	}
+}
+
+TEST(CliGlobal, EmptyEclipseMethodEqualsValueIsRejected){
+	try{
+		(void)run_cli_args({"--eclipse-method=","--version"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),
+				  "missing value for option: --eclipse-method");
+	}
+}
+
+TEST(CliNext, MissingFromValueIsRejectedBeforeOptionParsing){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	try{
+		(void)run_cli_args({"next",test_ephem(),"--from","--count","1","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),"missing value for option: --from");
+	}
+}
+
+TEST(CliNext, HelpTokenIsNotConsumedAsFromValue){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	try{
+		(void)run_cli_args({"next",test_ephem(),"--from","-h","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),"missing value for option: --from");
+	}
+}
+
+TEST(CliNext, MissingFromValueWithoutExplicitBspKeepsSameError){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path dir=make_temp_dir("next_missing_from_auto_bsp");
+	write_bin_text(dir/"lun_cfg.txt","def_bsp="+test_ephem()+"\n");
+	{
+		ScopedCwd cwd(dir);
+		try{
+			(void)run_cli_args({"next","--from","--count","1","--quiet"});
+			FAIL()<<"expected invalid_argument";
+		}catch(const std::invalid_argument&ex){
+			EXPECT_EQ(std::string(ex.what()),"missing value for option: --from");
+		}
+	}
+
+	std::error_code ec;
+	std::filesystem::remove_all(dir,ec);
+}
+
+TEST(CliNext, EclipseKindsActuallyReturnEclipseEvents){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path out_path=make_temp_path("next_eclipse",".txt");
+	std::vector<std::string> args={
+		"next",test_ephem(),
+		"--from","2025-01-01T00:00:00+08:00",
+		"--count","1",
+		"--kinds","lunar_eclipse",
+		"--format","txt",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args));
+	const std::string txt=read_file_text(out_path);
+	EXPECT_NE(txt.find("lunar_eclipse\t"),std::string::npos);
+	EXPECT_NE(txt.find("ecl_type"),std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(out_path,ec);
+}
+
+TEST(CliSearch, UsesConfigDefaultsAndMatchesExactPhaseCode){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path dir=make_temp_dir("search_cfg_case");
+	const std::filesystem::path out_path=dir/"search.out";
+	write_bin_text(dir/"lun_cfg.txt","default_tz=Z\ndef_fmt=json\ndef_prety=0\n");
+	{
+		ScopedCwd cwd(dir);
+		std::vector<std::string> args={
+			"search",test_ephem(),"next full_moon",
+			"--count","1",
+			"--out",out_path.string(),
+			"--quiet"
+		};
+		ASSERT_EQ(0,run_cli_args(args));
+	}
+	const std::string txt=read_file_text(out_path);
+	EXPECT_FALSE(txt.empty());
+	EXPECT_EQ(txt.front(),'{');
+	EXPECT_NE(txt.find("\"tz_display\":\"Z\""),std::string::npos);
+	EXPECT_NE(txt.find("\"code\":\"full_moon\""),std::string::npos);
+	EXPECT_EQ(txt.find("\"code\":\"fst_qtr\""),std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove_all(dir,ec);
+}
+
+TEST(CliSearch, DefaultFromUsesCurrentUtcAndReportsSearchType){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path out_auto=make_temp_path("search_auto_now",".json");
+	const std::filesystem::path out_explicit=
+		make_temp_path("search_explicit_now",".json");
+	const std::string now_utc=current_utc_iso_text();
+
+	std::vector<std::string> auto_args={
+		"search",test_ephem(),"next solar_term",
+		"--count","1",
+		"--format","json",
+		"--out",out_auto.string(),
+		"--quiet"
+	};
+	std::vector<std::string> explicit_args={
+		"search",test_ephem(),"next solar_term",
+		"--from",now_utc,
+		"--count","1",
+		"--format","json",
+		"--out",out_explicit.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(auto_args));
+	ASSERT_EQ(0,run_cli_args(explicit_args));
+
+	const std::string auto_txt=read_file_text(out_auto);
+	const std::string explicit_txt=read_file_text(out_explicit);
+	EXPECT_EQ(auto_txt,explicit_txt);
+	EXPECT_NE(auto_txt.find("\"type=search\""),std::string::npos);
+	EXPECT_EQ(auto_txt.find("\"type=next\""),std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(out_auto,ec);
+	std::filesystem::remove(out_explicit,ec);
+}
+
+TEST(CliSearch, NaturalLanguageEclipseAliasWorks){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path out_path=make_temp_path("search_lunar_eclipse",".txt");
+	std::vector<std::string> args={
+		"search",test_ephem(),"next lunar eclipse",
+		"--from","2025-01-01T00:00:00+08:00",
+		"--count","1",
+		"--format","txt",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args));
+	const std::string txt=read_file_text(out_path);
+	EXPECT_NE(txt.find("lunar_eclipse\t"),std::string::npos);
+	EXPECT_EQ(txt.find("solar_term\t"),std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(out_path,ec);
+}
+
+TEST(CliSearch, UnknownTargetIsRejected){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	try{
+		(void)run_cli_args({"search",test_ephem(),"next nonsense","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),"unsupported search query: next nonsense");
+	}
+}
+
+TEST(CliSearch, RejectsNonPositiveCount){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	try{
+		(void)run_cli_args({"search",test_ephem(),"next full_moon","--count","0","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),"--count must be >=1");
+	}
+}
+
 TEST(CliSky, PickQueryListsSolarSystemTargetsFirst){
 	if(!has_test_ephem()){
 		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
@@ -443,6 +729,89 @@ TEST(CliSky, PickQueryListsSolarSystemTargetsFirst){
 
 	std::error_code ec;
 	std::filesystem::remove(out_path,ec);
+}
+
+TEST(CliDay, MissingTzValueIsRejectedBeforeOptionParsing){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	try{
+		(void)run_cli_args({"day",test_ephem(),"2025-06-01","--tz","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),"missing value for option: --tz");
+	}
+}
+
+TEST(CliEclipse, RejectsNonPositiveSampleMinutes){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	try{
+		(void)run_cli_args(
+			{"eclipse",test_ephem(),"--near","2025-09-07","--sample-min","0","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),"--sample-min must be > 0");
+	}
+}
+
+TEST(CliEclipse, PointHeightRequiresPointCoordinates){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	try{
+		(void)run_cli_args(
+			{"eclipse",test_ephem(),"--near","2025-09-07","--point-height","10","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),
+				  "--point-height/--point-refine require --point-lat and --point-lon");
+	}
+}
+
+TEST(CliEclipse, PointRefineRequiresPointCoordinates){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	try{
+		(void)run_cli_args(
+			{"eclipse",test_ephem(),"--near","2025-09-07","--point-refine","0","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(std::string(ex.what()),
+				  "--point-height/--point-refine require --point-lat and --point-lon");
+	}
+}
+
+TEST(CliEclipse, GridStepRequiresGlobalVisibility){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	try{
+		(void)run_cli_args(
+			{"eclipse",test_ephem(),"--near","2025-09-07","--grid-lat-step","5","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(
+			std::string(ex.what()),
+			"--global-format/--grid-lat-step/--grid-lon-step require --global-vis 1 or --format geojson");
+	}
+}
+
+TEST(CliEclipse, GlobalFormatRequiresGlobalVisibility){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	try{
+		(void)run_cli_args(
+			{"eclipse",test_ephem(),"--near","2025-09-07","--global-format","geojson","--quiet"});
+		FAIL()<<"expected invalid_argument";
+	}catch(const std::invalid_argument&ex){
+		EXPECT_EQ(
+			std::string(ex.what()),
+			"--global-format/--grid-lat-step/--grid-lon-step require --global-vis 1 or --format geojson");
+	}
 }
 
 TEST(CliSky, EnglishOutputLocalizesNamesAndRegion){

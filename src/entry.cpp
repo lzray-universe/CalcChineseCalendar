@@ -14,6 +14,18 @@
 
 namespace{
 
+std::string req_global_opt_value(const std::vector<std::string>&args,
+								 std::size_t&i,const std::string&opt){
+	if(i+1>=args.size()){
+		throw std::invalid_argument("missing value for option: "+opt);
+	}
+	++i;
+	if(args[i]=="-h"||args[i]=="--help"||args[i].rfind("--",0)==0){
+		throw std::invalid_argument("missing value for option: "+opt);
+	}
+	return args[i];
+}
+
 std::vector<std::string> parse_global_opts(const std::vector<std::string>&args,
 										   const std::string&default_lang){
 	LunarEclipseCalcMethod method=LunarEclipseCalcMethod::Modern;
@@ -27,12 +39,8 @@ std::vector<std::string> parse_global_opts(const std::vector<std::string>&args,
 	for(std::size_t i=0;i<args.size();++i){
 		const std::string&arg=args[i];
 		if(arg=="--eclipse-method"){
-			if(i+1>=args.size()){
-				throw std::invalid_argument(
-					"--eclipse-method requires: modern|legacy");
-			}
 			LunarEclipseCalcMethod parsed=LunarEclipseCalcMethod::Modern;
-			const std::string&value=args[++i];
+			const std::string&value=req_global_opt_value(args,i,arg);
 			if(!parse_lunar_eclipse_calc_method(value,&parsed)){
 				throw std::invalid_argument(
 					"invalid --eclipse-method: "+value+
@@ -44,6 +52,10 @@ std::vector<std::string> parse_global_opts(const std::vector<std::string>&args,
 		if(arg.rfind(prefix,0)==0){
 			LunarEclipseCalcMethod parsed=LunarEclipseCalcMethod::Modern;
 			std::string value=arg.substr(prefix.size());
+			if(value.empty()){
+				throw std::invalid_argument(
+					"missing value for option: --eclipse-method");
+			}
 			if(!parse_lunar_eclipse_calc_method(value,&parsed)){
 				throw std::invalid_argument(
 					"invalid --eclipse-method: "+value+
@@ -53,10 +65,7 @@ std::vector<std::string> parse_global_opts(const std::vector<std::string>&args,
 			continue;
 		}
 		if(arg=="--lang"){
-			if(i+1>=args.size()){
-				throw std::invalid_argument("--lang requires: zh|zht|en|ja|ko");
-			}
-			const std::string&value=args[++i];
+			const std::string&value=req_global_opt_value(args,i,arg);
 			if(!lunar::i18n::try_parse_lang(value,&lang)){
 				throw std::invalid_argument(
 					"invalid --lang: "+value+" (expected zh|zht|en|ja|ko)");
@@ -65,6 +74,9 @@ std::vector<std::string> parse_global_opts(const std::vector<std::string>&args,
 		}
 		if(arg.rfind(lang_prefix,0)==0){
 			std::string value=arg.substr(lang_prefix.size());
+			if(value.empty()){
+				throw std::invalid_argument("missing value for option: --lang");
+			}
 			if(!lunar::i18n::try_parse_lang(value,&lang)){
 				throw std::invalid_argument(
 					"invalid --lang: "+value+" (expected zh|zht|en|ja|ko)");

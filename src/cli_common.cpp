@@ -51,6 +51,9 @@ std::string req_val(const std::vector<std::string>&args,std::size_t&idx,
 		throw std::invalid_argument("missing value for option: "+opt);
 	}
 	++idx;
+	if(args[idx]=="-h"||args[idx]=="--help"||args[idx].rfind("--",0)==0){
+		throw std::invalid_argument("missing value for option: "+opt);
+	}
 	return args[idx];
 }
 

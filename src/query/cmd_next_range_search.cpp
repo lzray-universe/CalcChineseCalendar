@@ -1,3 +1,142 @@
+namespace{
+
+struct SearchQuerySpec{
+	std::string kinds;
+	std::string code;
+};
+
+double current_jd_utc(){
+	const std::time_t now=std::time(nullptr);
+	std::tm utc_tm{};
+#if defined(_WIN32)
+	gmtime_s(&utc_tm,&now);
+#else
+	gmtime_r(&now,&utc_tm);
+#endif
+	return greg2jd(utc_tm.tm_year+1900,utc_tm.tm_mon+1,utc_tm.tm_mday,
+				   utc_tm.tm_hour,utc_tm.tm_min,
+				   static_cast<double>(utc_tm.tm_sec));
+}
+
+std::vector<EventRec> collect_next_events(EphRead&eph,double jd_utc_from,
+										  int count,const EvtFilt&filter,
+										  int tz_off,bool quiet,
+										  const std::string&code_filter=""){
+	if(count<1){
+		throw std::invalid_argument("--count must be >=1");
+	}
+	int cst_year=0;
+	int cst_month=0;
+	int cst_day=0;
+	utc2cst(jd_utc_from,cst_year,cst_month,cst_day);
+
+	int span=1;
+	std::vector<EventRec> picked;
+	while(span<=8){
+		std::set<int> years;
+		for(int y=cst_year-span;y<=cst_year+span;++y){
+			years.insert(y);
+		}
+		std::vector<EventRec> all=
+			col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr,filter.inc_ecl);
+		std::vector<EventRec> filtered=
+			filt_evs(all,filter,jd_utc_from,
+					 std::numeric_limits<double>::infinity(),false,true);
+		if(!code_filter.empty()){
+			filtered.erase(
+				std::remove_if(filtered.begin(),filtered.end(),
+							   [&](const EventRec&ev){
+								   return ev.code!=code_filter;
+							   }),
+				filtered.end());
+		}
+		std::sort(
+			filtered.begin(),filtered.end(),
+			[](const EventRec&a,const EventRec&b){ return a.jd_utc<b.jd_utc; });
+		if(static_cast<int>(filtered.size())>=count||span==8){
+			if(static_cast<int>(filtered.size())>count){
+				filtered.resize(static_cast<std::size_t>(count));
+			}
+			picked=std::move(filtered);
+			break;
+		}
+		++span;
+	}
+	return picked;
+}
+
+void write_event_output(std::ostream&os,const std::string&format,
+						const std::string&ephem,const std::string&tz,bool pretty,
+						const std::vector<EventRec>&events,
+						const std::string&type,EphRead&eph,bool calc_eclipse,
+						int tz_off){
+	const FmtMap fmt_handlers={
+		{"json",[&](){
+			 wr_eljs(os,ephem,tz,pretty,events,type,eph,calc_eclipse,tz_off);
+		 }},
+		{"txt",[&](){
+			 wr_eltxt(os,tz,events,type,&eph,calc_eclipse,tz_off);
+		 }},
+		{"csv",[&](){ wr_elcsv(os,events,&eph,calc_eclipse,tz_off); }},
+		{"jsonl",[&](){
+			 wr_eljsl(os,ephem,tz,events,type,eph,calc_eclipse,tz_off);
+		 }},
+		{"ics",[&](){ wr_elics(os,ephem,"lunar-"+type,events); }},
+	};
+	run_fmt(fmt_handlers,format,type);
+}
+
+SearchQuerySpec resolve_search_query(const std::string&token){
+	static const std::unordered_map<std::string,SearchQuerySpec> kSpecs={
+		{"full_moon",{"lunar_phase","full_moon"}},
+		{"new_moon",{"lunar_phase","new_moon"}},
+		{"fst_qtr",{"lunar_phase","fst_qtr"}},
+		{"lst_qtr",{"lunar_phase","lst_qtr"}},
+		{"solar_term",{"solar_term",""}},
+		{"lunar_phase",{"lunar_phase",""}},
+		{"lunar_eclipse",{"lunar_eclipse",""}},
+		{"lunar-eclipse",{"lunar_eclipse",""}},
+		{"solar_eclipse",{"solar_eclipse",""}},
+		{"solar-eclipse",{"solar_eclipse",""}},
+		{"eclipse",{"lunar_eclipse,solar_eclipse",""}},
+		{"total_eclipse",{"lunar_eclipse","total"}},
+		{"partial_eclipse",{"lunar_eclipse","partial"}},
+		{"penumbral_eclipse",{"lunar_eclipse","penumbral"}},
+		{"total_solar_eclipse",{"solar_eclipse","total"}},
+		{"annular_eclipse",{"solar_eclipse","annular"}},
+		{"hybrid_eclipse",{"solar_eclipse","hybrid"}},
+		{"partial_solar_eclipse",{"solar_eclipse","partial"}},
+	};
+	auto it=kSpecs.find(token);
+	if(it==kSpecs.end()){
+		return {};
+	}
+	return it->second;
+}
+
+std::string normalize_search_key(const std::string&query){
+	std::istringstream iss(to_low(query));
+	std::string head;
+	if(!(iss>>head)||head!="next"){
+		throw std::invalid_argument(
+			"search currently supports query starting with 'next ...'");
+	}
+	std::string token;
+	std::string key;
+	while(iss>>token){
+		if(!key.empty()){
+			key.push_back('_');
+		}
+		key+=token;
+	}
+	if(key.empty()){
+		throw std::invalid_argument("search requires a target after 'next'");
+	}
+	return key;
+}
+
+}
+
 int cmd_next(const std::vector<std::string>&args){
 	if(args.size()==1&&(args[0]=="-h"||args[0]=="--help")){
 		use_next();
@@ -67,55 +206,18 @@ int cmd_next(const std::vector<std::string>&args){
 
 	IsoTime parsed=parse_iso(from_time,cfg.default_tz);
 	EvtFilt filter=parse_ef(kinds);
+	if(filter.inc_ecl){
+		calc_eclipse=true;
+	}
 	int tz_off=parse_tz(tz);
 
 	EphRead eph(ephem);
-	int cst_year=0,cst_month=0,cst_day=0;
-	utc2cst(parsed.jd_utc,cst_year,cst_month,cst_day);
-	int span=1;
-	std::vector<EventRec> picked;
-	while(span<=8){
-		std::set<int> years;
-		for(int y=cst_year-span;y<=cst_year+span;++y){
-			years.insert(y);
-		}
-		std::vector<EventRec> all=
-			col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr);
-		std::vector<EventRec> filtered=
-			filt_evs(all,filter,parsed.jd_utc,
-					 std::numeric_limits<double>::infinity(),false,true);
-		std::sort(
-			filtered.begin(),filtered.end(),
-			[](const EventRec&a,const EventRec&b){ return a.jd_utc<b.jd_utc; });
-		if(static_cast<int>(filtered.size())>=count||span==8){
-			if(static_cast<int>(filtered.size())>count){
-				filtered.resize(static_cast<std::size_t>(count));
-			}
-			picked=std::move(filtered);
-			break;
-		}
-		++span;
-	}
+	std::vector<EventRec> picked=
+		collect_next_events(eph,parsed.jd_utc,count,filter,tz_off,quiet);
 
 	OutTgt out=open_out(out_path);
-	const FmtMap fmt_handlers={
-		{"json",[&](){
-			 wr_eljs(*out.stream,ephem,tz,pretty,picked,"next",eph,calc_eclipse,
-					 tz_off);
-		 }},
-		{"txt",[&](){
-			 wr_eltxt(*out.stream,tz,picked,"next",&eph,calc_eclipse,tz_off);
-		 }},
-		{"csv",[&](){
-			 wr_elcsv(*out.stream,picked,&eph,calc_eclipse,tz_off);
-		 }},
-		{"jsonl",[&](){
-			 wr_eljsl(*out.stream,ephem,tz,picked,"next",eph,calc_eclipse,
-					  tz_off);
-		 }},
-		{"ics",[&](){ wr_elics(*out.stream,ephem,"lunar-next",picked); }},
-	};
-	run_fmt(fmt_handlers,format,"next");
+	write_event_output(*out.stream,format,ephem,tz,pretty,picked,"next",eph,
+					   calc_eclipse,tz_off);
 	note_out(out_path,quiet);
 	return 0;
 }
@@ -227,14 +329,19 @@ int cmd_search(const std::vector<std::string>&args){
 		throw std::invalid_argument("search requires: <bsp> <query>");
 	}
 
+	InterCfg cfg=load_def();
 	std::string ephem=args[0];
 	std::string query=args[1];
-	std::string from_time="2025-01-01T00:00:00+08:00";
+	std::string from_time;
 	int count=1;
-	std::string format="txt";
-	std::string tz="+08:00";
+	std::string format=to_low(cfg.def_fmt);
+	if(format!="txt"&&format!="json"&&format!="csv"&&format!="ics"&&
+	   format!="jsonl"){
+		format="txt";
+	}
+	std::string tz=cfg.default_tz;
 	std::string out_path;
-	bool pretty=true;
+	bool pretty=cfg.def_prety;
 	bool quiet=false;
 	bool calc_eclipse=false;
 	const OptMap handlers={
@@ -245,6 +352,9 @@ int cmd_search(const std::vector<std::string>&args){
 		{"--count",[&](const std::vector<std::string>&src,std::size_t&idx,
 					   const std::string&opt){
 			 count=parse_int(req_val(src,idx,opt),"--count");
+			 if(count<1){
+				 throw std::invalid_argument("--count must be >=1");
+			 }
 		 }},
 		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
 						const std::string&opt){
@@ -271,63 +381,31 @@ int cmd_search(const std::vector<std::string>&args){
 		apply_opt(handlers,args,i,opt,"search");
 	}
 
-	std::istringstream iss(to_low(query));
-	std::string a,b,c;
-	iss>>a>>b>>c;
-	if(a!="next"){
-		throw std::invalid_argument(
-			"search currently supports query starting with 'next ...'");
-	}
+	chk_fmt(format,{"json","txt","csv","ics","jsonl"},"search");
 
-	std::vector<std::string> next_args;
-	next_args.push_back(ephem);
-	next_args.push_back("--from");
-	next_args.push_back(from_time);
-	next_args.push_back("--count");
-	next_args.push_back(std::to_string(count));
-	next_args.push_back("--format");
-	next_args.push_back(format);
-	next_args.push_back("--tz");
-	next_args.push_back(tz);
-	if(!out_path.empty()){
-		next_args.push_back("--out");
-		next_args.push_back(out_path);
+	const std::string key=normalize_search_key(query);
+	SearchQuerySpec spec=resolve_search_query(key);
+	if(spec.kinds.empty()){
+		throw std::invalid_argument("unsupported search query: "+query);
 	}
-	next_args.push_back("--pretty");
-	next_args.push_back(pretty?"1":"0");
-	if(quiet){
-		next_args.push_back("--quiet");
+	std::string kinds=spec.kinds;
+	double jd_utc_from=current_jd_utc();
+	if(!from_time.empty()){
+		jd_utc_from=parse_iso(from_time,cfg.default_tz).jd_utc;
 	}
-	if(calc_eclipse){
-		next_args.push_back("--eclipse");
-		next_args.push_back("1");
+	EvtFilt filter=parse_ef(kinds);
+	if(filter.inc_ecl){
+		calc_eclipse=true;
 	}
+	int tz_off=parse_tz(tz);
+	EphRead eph(ephem);
+	std::vector<EventRec> picked=collect_next_events(
+		eph,jd_utc_from,count,filter,tz_off,quiet,spec.code);
 
-	const std::unordered_map<std::string,std::string> kind_hints={
-		{"full_moon","lunar_phase"},
-		{"new_moon","lunar_phase"},
-		{"fst_qtr","lunar_phase"},
-		{"lst_qtr","lunar_phase"},
-		{"solar_term","solar_term"},
-		{"lunar_phase","lunar_phase"},
-		{"lunar_eclipse","lunar_eclipse"},
-		{"lunar-eclipse","lunar_eclipse"},
-		{"solar_eclipse","solar_eclipse"},
-		{"solar-eclipse","solar_eclipse"},
-		{"eclipse","lunar_eclipse,solar_eclipse"},
-		{"total_eclipse","lunar_eclipse"},
-		{"partial_eclipse","lunar_eclipse"},
-		{"penumbral_eclipse","lunar_eclipse"},
-		{"total_solar_eclipse","solar_eclipse"},
-		{"annular_eclipse","solar_eclipse"},
-		{"hybrid_eclipse","solar_eclipse"},
-		{"partial_solar_eclipse","solar_eclipse"},
-	};
-	auto it=kind_hints.find(b);
-	if(it!=kind_hints.end()){
-		next_args.push_back("--kinds");
-		next_args.push_back(it->second);
-	}
-	return cmd_next(next_args);
+	OutTgt out=open_out(out_path);
+	write_event_output(*out.stream,format,ephem,tz,pretty,picked,"search",eph,
+					   calc_eclipse,tz_off);
+	note_out(out_path,quiet);
+	return 0;
 }
 

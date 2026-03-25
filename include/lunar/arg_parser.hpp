@@ -62,9 +62,12 @@ public:
 	static std::string require_value(const std::vector<std::string>&args,
 									 std::size_t&idx,const std::string&opt){
 		if(idx+1>=args.size()){
-			throw std::invalid_argument("missing value for "+opt);
+			throw std::invalid_argument("missing value for option: "+opt);
 		}
 		++idx;
+		if(args[idx]=="-h"||args[idx]=="--help"||args[idx].rfind("--",0)==0){
+			throw std::invalid_argument("missing value for option: "+opt);
+		}
 		return args[idx];
 	}
 

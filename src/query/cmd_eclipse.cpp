@@ -28,11 +28,16 @@ int cmd_eclipse(const std::vector<std::string>&args){
 	double point_height_m=0.0;
 	bool has_point_lat=false;
 	bool has_point_lon=false;
+	bool has_point_height=false;
+	bool point_refine_set=false;
 
 	bool global_vis=false;
 	std::string global_format="json";
 	double grid_lat_step=10.0;
 	double grid_lon_step=10.0;
+	bool global_format_set=false;
+	bool grid_lat_step_set=false;
+	bool grid_lon_step_set=false;
 
 	const OptMap handlers={
 		{"--kind",[&](const std::vector<std::string>&src,std::size_t&idx,
@@ -54,6 +59,7 @@ int cmd_eclipse(const std::vector<std::string>&args){
 		{"--point-refine",[&](const std::vector<std::string>&src,std::size_t&idx,
 							  const std::string&opt){
 			 point_refine=parse_bool01(req_val(src,idx,opt),opt);
+			 point_refine_set=true;
 		 }},
 		{"--point-lat",[&](const std::vector<std::string>&src,std::size_t&idx,
 						   const std::string&opt){
@@ -68,6 +74,7 @@ int cmd_eclipse(const std::vector<std::string>&args){
 		{"--point-height",[&](const std::vector<std::string>&src,std::size_t&idx,
 							  const std::string&opt){
 			 point_height_m=parse_double(req_val(src,idx,opt),opt);
+			 has_point_height=true;
 		 }},
 		{"--global-vis",[&](const std::vector<std::string>&src,std::size_t&idx,
 							const std::string&opt){
@@ -80,14 +87,17 @@ int cmd_eclipse(const std::vector<std::string>&args){
 		{"--global-format",[&](const std::vector<std::string>&src,
 							   std::size_t&idx,const std::string&opt){
 			 global_format=to_low(req_val(src,idx,opt));
+			 global_format_set=true;
 		 }},
 		{"--grid-lat-step",[&](const std::vector<std::string>&src,
 							   std::size_t&idx,const std::string&opt){
 			 grid_lat_step=parse_double(req_val(src,idx,opt),opt);
+			 grid_lat_step_set=true;
 		 }},
 		{"--grid-lon-step",[&](const std::vector<std::string>&src,
 							   std::size_t&idx,const std::string&opt){
 			 grid_lon_step=parse_double(req_val(src,idx,opt),opt);
+			 grid_lon_step_set=true;
 		 }},
 		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
 					const std::string&opt){ tz=req_val(src,idx,opt); }},
@@ -116,9 +126,16 @@ int cmd_eclipse(const std::vector<std::string>&args){
 	if(kind_opt!="lunar"&&kind_opt!="solar"){
 		throw std::invalid_argument("--kind must be lunar or solar");
 	}
+	if(!(sample_minutes>0.0)){
+		throw std::invalid_argument("--sample-min must be > 0");
+	}
 	if(has_point_lat!=has_point_lon){
 		throw std::invalid_argument(
 			"point visibility requires both --point-lat and --point-lon");
+	}
+	if((has_point_height||point_refine_set)&&!has_point_lat){
+		throw std::invalid_argument(
+			"--point-height/--point-refine require --point-lat and --point-lon");
 	}
 	if(global_format!="json"&&global_format!="geojson"){
 		throw std::invalid_argument("--global-format must be json or geojson");
@@ -126,6 +143,16 @@ int cmd_eclipse(const std::vector<std::string>&args){
 	chk_fmt(format,{"json","txt","geojson"},"eclipse");
 	if(format=="geojson"){
 		global_vis=true;
+	}
+	if((global_format_set||grid_lat_step_set||grid_lon_step_set)&&!global_vis){
+		throw std::invalid_argument(
+			"--global-format/--grid-lat-step/--grid-lon-step require --global-vis 1 or --format geojson");
+	}
+	if(grid_lat_step_set&&!(grid_lat_step>0.0)){
+		throw std::invalid_argument("--grid-lat-step must be > 0");
+	}
+	if(grid_lon_step_set&&!(grid_lon_step>0.0)){
+		throw std::invalid_argument("--grid-lon-step must be > 0");
 	}
 
 	int y=0;
