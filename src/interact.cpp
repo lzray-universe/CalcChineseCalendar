@@ -794,6 +794,51 @@ void run_dint(const std::string&ephem){
 	ask_line(done_back_msg());
 }
 
+void run_zint(const std::string&ephem){
+	std::vector<std::string> args={ephem};
+	std::string mode=ask_line(itx("prompt.zodiac_mode"));
+	if(mode=="2"||mode=="year"){
+		std::string year=ask_line(itx("prompt.zodiac_year"));
+		if(year.empty()){
+			throw std::invalid_argument(itx("err.empty_required","--year"));
+		}
+		args.push_back("--year");
+		args.push_back(year);
+	}else{
+		std::string time_raw=ask_line(itx("prompt.zodiac_time"));
+		if(time_raw.empty()){
+			throw std::invalid_argument(itx("err.empty_required","--time"));
+		}
+		args.push_back("--time");
+		args.push_back(time_raw);
+		std::string input_tz=ask_line(itx("prompt.zodiac_input_tz"));
+		if(!input_tz.empty()){
+			args.push_back("--input-tz");
+			args.push_back(input_tz);
+		}
+	}
+	std::string display_tz=ask_line(itx("prompt.zodiac_display_tz"));
+	if(!display_tz.empty()){
+		args.push_back("--tz");
+		args.push_back(display_tz);
+	}
+	std::string fmt=ask_line(itx("prompt.format_txt_json_csv"));
+	if(fmt=="2"||fmt=="json"){
+		args.push_back("--format");
+		args.push_back("json");
+	}else if(fmt=="3"||fmt=="csv"){
+		args.push_back("--format");
+		args.push_back("csv");
+	}
+	std::string out=ask_line(itx("prompt.out_file"));
+	if(!out.empty()){
+		args.push_back("--out");
+		args.push_back(out);
+	}
+	cmd_zodiac(args);
+	ask_line(done_back_msg());
+}
+
 void run_nint(const std::string&ephem){
 	std::string from=
 		ask_line(lunar::i18n::pick(
@@ -1191,19 +1236,20 @@ void int_mode(){
 		std::cout<<"[1] "<<itx("menu.months")<<" (months)\n";
 		std::cout<<"[2] "<<itx("menu.calendar")<<" (calendar)\n";
 		std::cout<<"[3] "<<itx("menu.at")<<" (at)\n";
-		std::cout<<"[4] "<<itx("menu.convert")<<" (convert)\n";
-		std::cout<<"[5] "<<itx("menu.day")<<" (day)\n";
-		std::cout<<"[6] "<<itx("menu.next")<<" (next)\n";
-		std::cout<<"[7] "<<itx("menu.festival")<<" (festival)\n";
-		std::cout<<"[8] "<<itx("menu.info")<<" (info)\n";
-		std::cout<<"[9] "<<itx("menu.monthview")<<" (monthview)\n";
-		std::cout<<"[10] "<<itx("menu.range")<<" (range)\n";
-		std::cout<<"[11] "<<itx("menu.search")<<" (search)\n";
-		std::cout<<"[12] "<<itx("menu.eclipse")<<" (eclipse)\n";
-		std::cout<<"[13] "<<itx("menu.almanac")<<" (almanac)\n";
-		std::cout<<"[14] "<<itx("menu.config")<<" (config)\n";
-		std::cout<<"[15] "<<itx("menu.completion")<<" (completion)\n";
-		std::cout<<"[16] "<<itx("menu.sky")<<" (sky)\n";
+		std::cout<<"[4] "<<itx("menu.zodiac")<<" (zodiac)\n";
+		std::cout<<"[5] "<<itx("menu.convert")<<" (convert)\n";
+		std::cout<<"[6] "<<itx("menu.day")<<" (day)\n";
+		std::cout<<"[7] "<<itx("menu.next")<<" (next)\n";
+		std::cout<<"[8] "<<itx("menu.festival")<<" (festival)\n";
+		std::cout<<"[9] "<<itx("menu.info")<<" (info)\n";
+		std::cout<<"[10] "<<itx("menu.monthview")<<" (monthview)\n";
+		std::cout<<"[11] "<<itx("menu.range")<<" (range)\n";
+		std::cout<<"[12] "<<itx("menu.search")<<" (search)\n";
+		std::cout<<"[13] "<<itx("menu.eclipse")<<" (eclipse)\n";
+		std::cout<<"[14] "<<itx("menu.almanac")<<" (almanac)\n";
+		std::cout<<"[15] "<<itx("menu.config")<<" (config)\n";
+		std::cout<<"[16] "<<itx("menu.completion")<<" (completion)\n";
+		std::cout<<"[17] "<<itx("menu.sky")<<" (sky)\n";
 		std::cout<<"[d] "<<itx("menu.switch_bsp")<<"\n";
 		std::cout<<"[l] "<<itx("menu.lang")<<"\n";
 		std::cout<<"[h] "<<itx("menu.help")<<"\n";
@@ -1217,30 +1263,32 @@ void int_mode(){
 		}else if(choice=="3"){
 			run_with_err("at",[&](){ int_at(ephem); });
 		}else if(choice=="4"){
-			run_with_err("convert",[&](){ int_conv(ephem); });
+			run_with_err("zodiac",[&](){ run_zint(ephem); });
 		}else if(choice=="5"){
-			run_with_err("day",[&](){ run_dint(ephem); });
+			run_with_err("convert",[&](){ int_conv(ephem); });
 		}else if(choice=="6"){
-			run_with_err("next",[&](){ run_nint(ephem); });
+			run_with_err("day",[&](){ run_dint(ephem); });
 		}else if(choice=="7"){
-			run_with_err("festival",[&](){ run_fint(ephem); });
+			run_with_err("next",[&](){ run_nint(ephem); });
 		}else if(choice=="8"){
-			run_with_err("info",[&](){ run_iint(ephem); });
+			run_with_err("festival",[&](){ run_fint(ephem); });
 		}else if(choice=="9"){
-			run_with_err("monthview",[&](){ run_mvint(ephem); });
+			run_with_err("info",[&](){ run_iint(ephem); });
 		}else if(choice=="10"){
-			run_with_err("range",[&](){ run_rint(ephem); });
+			run_with_err("monthview",[&](){ run_mvint(ephem); });
 		}else if(choice=="11"){
-			run_with_err("search",[&](){ run_sint(ephem); });
+			run_with_err("range",[&](){ run_rint(ephem); });
 		}else if(choice=="12"){
-			run_with_err("eclipse",[&](){ run_eint(ephem); });
+			run_with_err("search",[&](){ run_sint(ephem); });
 		}else if(choice=="13"){
-			run_with_err("almanac",[&](){ run_aint(ephem); });
+			run_with_err("eclipse",[&](){ run_eint(ephem); });
 		}else if(choice=="14"){
-			run_with_err("config",[&](){ run_cfgint(cfg); });
+			run_with_err("almanac",[&](){ run_aint(ephem); });
 		}else if(choice=="15"){
-			run_with_err("completion",[&](){ run_pint(); });
+			run_with_err("config",[&](){ run_cfgint(cfg); });
 		}else if(choice=="16"){
+			run_with_err("completion",[&](){ run_pint(); });
+		}else if(choice=="17"){
 			run_with_err("sky",[&](){ run_skyint(ephem); });
 		}else if(choice=="d"||choice=="D"){
 			std::string new_ephem=init_bspq(cfg);

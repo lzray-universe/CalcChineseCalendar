@@ -148,6 +148,9 @@ int run_cli_args(const std::vector<std::string>&args){
 	if(first=="convert"){
 		return cmd_conv(tail_for(first));
 	}
+	if(first=="zodiac"){
+		return cmd_zodiac(tail_for(first));
+	}
 	if(first=="sky"){
 		return cmd_sky(tail_for(first));
 	}

@@ -117,6 +117,7 @@ set(LUNAR_CORE_SOURCES
     src/app_long.cpp
     src/rt_solver.cpp
     src/calendar.cpp
+    src/solar_zodiac.cpp
     src/almanac.cpp
     src/lunar_eclipse.cpp
     src/solar_eclipse.cpp

@@ -45,6 +45,9 @@ std::string tr_event_name(const std::string&kind,const std::string&code,
 
 std::string tr_body_name(int id);
 
+std::string tr_solar_zodiac_name(const std::string&code,
+								 const std::string&fallback="");
+
 std::string tr_star_name(const StarRecord&st);
 
 std::string tr_star_name_text(const std::string&text);

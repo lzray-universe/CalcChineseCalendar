@@ -127,6 +127,38 @@ const RegionText* find_region_text(const std::string&text){
 	return nullptr;
 }
 
+struct SolarZodiacText{
+	const char*code;
+	const char*zh;
+	const char*en;
+	const char*ja;
+	const char*ko;
+	const char*zht;
+};
+
+const SolarZodiacText*find_solar_zodiac_text(const std::string&code){
+	static const std::array<SolarZodiacText,12> kTexts={{
+		{"aries","白羊座","Aries","牡羊座","양자리","牡羊座"},
+		{"taurus","金牛座","Taurus","牡牛座","황소자리","金牛座"},
+		{"gemini","双子座","Gemini","双子座","쌍둥이자리","雙子座"},
+		{"cancer","巨蟹座","Cancer","蟹座","게자리","巨蟹座"},
+		{"leo","狮子座","Leo","獅子座","사자자리","獅子座"},
+		{"virgo","处女座","Virgo","乙女座","처녀자리","處女座"},
+		{"libra","天秤座","Libra","天秤座","천칭자리","天秤座"},
+		{"scorpio","天蝎座","Scorpio","蠍座","전갈자리","天蠍座"},
+		{"sagittarius","射手座","Sagittarius","射手座","사수자리","射手座"},
+		{"capricorn","摩羯座","Capricorn","山羊座","염소자리","摩羯座"},
+		{"aquarius","水瓶座","Aquarius","水瓶座","물병자리","水瓶座"},
+		{"pisces","双鱼座","Pisces","魚座","물고기자리","雙魚座"},
+	}};
+	for(const auto&item : kTexts){
+		if(code==item.code){
+			return &item;
+		}
+	}
+	return nullptr;
+}
+
 }
 
 std::string tr_body_name(int id){
@@ -170,6 +202,15 @@ std::string tr_star_name(const StarRecord&st){
 			return pick_clean(st.ko,st.zh,st.en,st.id);
 	}
 	return pick_clean(st.zh,st.en,st.id,nullptr);
+}
+
+std::string tr_solar_zodiac_name(const std::string&code,
+								 const std::string&fallback){
+	const SolarZodiacText*text=find_solar_zodiac_text(code);
+	if(text==nullptr){
+		return fallback;
+	}
+	return pick(text->zh,text->en,text->ja,text->ko,text->zht);
 }
 
 std::string tr_star_name_text(const std::string&text){

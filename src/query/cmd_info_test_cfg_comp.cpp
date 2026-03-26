@@ -397,7 +397,7 @@ int cmd_comp(const std::vector<std::string>&args){
 				 <<"  COMPREPLY=()\n"
 				 <<"  cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
 				 <<"  local cmds=\"months calendar year event download at "
-				   "convert sky day monthview next range search eclipse festival "
+				   "convert zodiac sky day monthview next range search eclipse festival "
 				   "almanac info config completion\"\n"
 				 <<"  if [[ ${COMP_CWORD} -eq 1 ]]; then\n"
 				 <<"    COMPREPLY=( $(compgen -W \"${cmds}\" -- \"${cur}\") )\n"
@@ -410,7 +410,7 @@ int cmd_comp(const std::vector<std::string>&args){
 				   "--height --eot-lon --near --stage --sample-min --point-lat "
 				   "--point-lon --point-height --point-refine --global-vis "
 				   "--global --global-format --grid-lat-step --grid-lon-step "
-				   "--lang --trad --year-boundary --month-boundary "
+				   "--lang --year --trad --year-boundary --month-boundary "
 				   "--leap-month-mode --day-boundary\"\n"
 				 <<"  COMPREPLY=( $(compgen -W \"${opts}\" -- \"${cur}\") )\n"
 				 <<"}\n"
@@ -420,7 +420,7 @@ int cmd_comp(const std::vector<std::string>&args){
 	if(shell=="fish"){
 		std::cout<<"complete -c lunar -f\n"
 				 <<"complete -c lunar -n '__fish_use_subcommand' -a 'months "
-				   "calendar year event download at convert sky day monthview next "
+				   "calendar year event download at convert zodiac sky day monthview next "
 				   "range search eclipse festival almanac info config "
 				   "completion'\n";
 		return 0;
@@ -432,7 +432,7 @@ int cmd_comp(const std::vector<std::string>&args){
 			<<"  param($wordToComplete, $commandAst, $cursorPosition)\n"
 			<<"  $cmds = "
 			  "'months','calendar','year','event','download','at','convert','"
-			  "sky','day','monthview','next','range','search','eclipse','festival',"
+			  "zodiac','sky','day','monthview','next','range','search','eclipse','festival',"
 			  "'almanac','info','config','completion'\n"
 			<<"  $cmds | Where-Object { $_ -like \"$wordToComplete*\" } | "
 			  "ForEach-Object {\n"

@@ -79,6 +79,25 @@ void use_search(){
 		  "2025-01-01 --format json\n";
 }
 
+void use_zodiac(){
+	std::cout
+		<<"Usage:\n"
+		<<"  lunar zodiac <bsp> --time <time>\n"
+		<<"    [--input-tz ...] [--tz ...] [--format json|txt|csv] "
+		  "[--out ...] [--pretty 0|1] [--quiet]\n"
+		<<"  lunar zodiac <bsp> --year <year>\n"
+		<<"    [--tz ...] [--format json|txt|csv] [--out ...] "
+		  "[--pretty 0|1] [--quiet]\n"
+		<<"Examples:\n"
+		<<"  lunar zodiac D:\\de442.bsp --time 2025-03-20T18:01:00+08:00\n"
+		<<"  lunar zodiac D:\\de442.bsp --year 2025 --format csv\n"
+		<<"Notes:\n"
+		<<"  Solar zodiac uses apparent geocentric solar ecliptic longitude "
+		  "with light-time correction.\n"
+		<<"  In --year mode, --tz defines both the display timezone and the "
+		  "civil-year window used for duration clipping.\n";
+}
+
 void use_eclipse(){
 	std::cout
 		<<"Usage:\n"

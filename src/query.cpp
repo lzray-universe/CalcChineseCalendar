@@ -11,6 +11,7 @@
 #include "query/day_formatter.cpp"
 #include "query/cmd_day_mview.cpp"
 #include "query/cmd_next_range_search.cpp"
+#include "query/cmd_zodiac.cpp"
 #include "query/cmd_eclipse.cpp"
 #include "query/cmd_fest_alm.cpp"
 #include "query/spk_coverage.cpp"

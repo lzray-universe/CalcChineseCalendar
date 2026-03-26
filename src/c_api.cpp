@@ -379,6 +379,10 @@ int LUNAR_CALL lunar_cmd_conv(int argc,const char*const*argv){
 	return guard([&](){ return run_cmd(cmd_conv,argc,argv); });
 }
 
+int LUNAR_CALL lunar_cmd_zodiac(int argc,const char*const*argv){
+	return guard([&](){ return run_cmd(cmd_zodiac,argc,argv); });
+}
+
 int LUNAR_CALL lunar_cmd_day(int argc,const char*const*argv){
 	return guard([&](){ return run_cmd(cmd_day,argc,argv); });
 }
@@ -471,6 +475,13 @@ int LUNAR_CALL lunar_use_at(void){
 int LUNAR_CALL lunar_use_conv(void){
 	return guard([](){
 		use_conv();
+		return 0;
+	});
+}
+
+int LUNAR_CALL lunar_use_zodiac(void){
+	return guard([](){
+		use_zodiac();
 		return 0;
 	});
 }
