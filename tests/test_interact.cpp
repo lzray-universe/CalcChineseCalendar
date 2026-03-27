@@ -192,7 +192,7 @@ TEST(InteractMode, SkyMenuRunsAndPrintsSelectedTarget){
 			   "default_tz=+08:00\n");
 	{
 		ScopedCwd cwd(dir);
-		ScopedCin input("\n16\n"
+		ScopedCin input("\n17\n"
 						"2025-06-01T20:00:00+08:00\n"
 						"\n"
 						"\n"
