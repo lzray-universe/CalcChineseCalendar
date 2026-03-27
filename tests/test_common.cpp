@@ -23,6 +23,17 @@ std::string test_bsp_from_env(){
 	return raw;
 }
 
+std::string repo_local_bsp(){
+	for(const char*name : {"de442.bsp","de440s.bsp"}){
+		const std::filesystem::path path=name;
+		std::error_code ec;
+		if(std::filesystem::exists(path,ec)&&!ec){
+			return path.string();
+		}
+	}
+	return "";
+}
+
 }
 
 std::string test_ephem(){
@@ -39,6 +50,18 @@ std::string test_ephem(){
 
 bool has_test_ephem(){
 	return !test_ephem().empty();
+}
+
+std::string reference_bsp(){
+	const std::string env_bsp=test_bsp_from_env();
+	if(!env_bsp.empty()){
+		return env_bsp;
+	}
+	return repo_local_bsp();
+}
+
+bool has_reference_bsp(){
+	return !reference_bsp().empty();
 }
 
 std::filesystem::path make_temp_path(const char*stem,const char*ext){

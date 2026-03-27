@@ -5,6 +5,8 @@
 
 std::string test_ephem();
 bool has_test_ephem();
+std::string reference_bsp();
+bool has_reference_bsp();
 
 std::filesystem::path make_temp_path(const char*stem,const char*ext);
 
