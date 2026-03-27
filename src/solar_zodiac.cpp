@@ -40,8 +40,8 @@ std::vector<SolarZodiacBoundary> build_boundaries(EphRead&eph,int year_from,
 		return a.jd_utc<b.jd_utc;
 	});
 	out.erase(std::unique(out.begin(),out.end(),
-						  [](const SolarZodiacBoundary&a,
-							 const SolarZodiacBoundary&b){
+					  [](const SolarZodiacBoundary&a,
+						 const SolarZodiacBoundary&b){
 			return a.sign_index==b.sign_index&&
 				   std::fabs(a.jd_utc-b.jd_utc)<=JD_EPSILON;
 		}),
@@ -110,11 +110,6 @@ SolarZodiacPoint calc_solar_zodiac_at(EphRead&eph,double jd_utc){
 	auto sun=app.sun_calc(out.jd_tdb);
 	out.sun_lam_rad=sun.first;
 	out.sun_lam_deg=sun.first*180.0/PI;
-	out.sign_index=solar_zodiac_index(out.sun_lam_rad);
-
-	const auto&def=solar_zodiac_def(out.sign_index);
-	out.sign_code=def.code;
-	out.term_code=def.term_code;
 
 	int year=0;
 	int month=0;
@@ -130,17 +125,48 @@ SolarZodiacPoint calc_solar_zodiac_at(EphRead&eph,double jd_utc){
 	const SolarZodiacBoundary&prev=boundaries[interval.first];
 	const SolarZodiacBoundary&next=boundaries[interval.second];
 
+	out.sign_index=prev.sign_index;
+	out.sign_code=prev.sign_code;
+	out.term_code=prev.term_code;
 	out.sign_start_jd_utc=prev.jd_utc;
 	out.sign_end_jd_utc=next.jd_utc;
 	out.span_sec=(out.sign_end_jd_utc-out.sign_start_jd_utc)*SEC_DAY;
 	out.elapsed_sec=(jd_utc-out.sign_start_jd_utc)*SEC_DAY;
 	out.remain_sec=(out.sign_end_jd_utc-jd_utc)*SEC_DAY;
 
+	const auto&def=solar_zodiac_def(out.sign_index);
 	double offset=norm2pi(out.sun_lam_rad-def.start_lambda_rad);
 	if(offset>kSignWidth&&offset-kSignWidth<=1e-12){
 		offset=kSignWidth;
 	}
 	out.sign_offset_rad=offset;
+	out.sign_offset_deg=offset*180.0/PI;
+	return out;
+}
+
+SolarZodiacYearSummary calc_solar_zodiac_year(EphRead&eph,int year,int tz_off){
+	SolarZodiacYearSummary out;
+	out.year=year;
+	out.tz_off=tz_off;
+	out.year_start_jd_utc=year_start_jd_utc(year,tz_off);
+	out.year_end_jd_utc=year_start_jd_utc(year+1,tz_off);
+
+	std::vector<SolarZodiacBoundary> boundaries=
+		build_boundaries(eph,year-1,year+1);
+	for(std::size_t i=0;i+1<boundaries.size();++i){
+		const SolarZodiacBoundary&cur=boundaries[i];
+		const SolarZodiacBoundary&next=boundaries[i+1];
+		if(next.jd_utc<=out.year_start_jd_utc+JD_EPSILON){
+			continue;
+		}
+		if(cur.jd_utc>=out.year_end_jd_utc-JD_EPSILON){
+			break;
+		}
+
+		double in_year_start=std::max(cur.jd_utc,out.year_start_jd_utc);
+		double in_year_end=std::min(next.jd_utc,out.year_end_jd_utc);
+		if(in_year_end-in_year_start<=JD_EPSILON){
+			continue;
 		}
 
 		SolarZodiacYearInterval item;
