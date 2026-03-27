@@ -121,6 +121,11 @@ struct MoonOrient{
 	double w_rad=std::numeric_limits<double>::quiet_NaN();
 };
 
+Vec3 unit_from_ra_dec(double ra_rad,double dec_rad){
+	double c=std::cos(dec_rad);
+	return Vec3(c*std::cos(ra_rad),c*std::sin(ra_rad),std::sin(dec_rad));
+}
+
 MoonOrient moon_orient_iau(double jd_tdb){
 	double d=jd_tdb-2451545.0;
 	double T=d/36525.0;
@@ -185,17 +190,14 @@ Mat3 m_inertial_to_moon_fixed(double ra_rad,double dec_rad,double w_rad){
 	return m;
 }
 
-bool fill_libration(const Vec3&moon_eq,double jd_tdb,EclipseLibration*out){
+bool fill_libration(const Vec3&moon_geo,const Vec3&moon_eq,double jd_tdb,
+					EclipseLibration*out){
 	if(out==nullptr){
 		return false;
 	}
-	double rn=moon_eq.norm();
-	if(!(rn>0.0)){
-		return false;
-	}
-
-	EqSph moon_sph=vec_to_eqsph(moon_eq);
-	if(!std::isfinite(moon_sph.ra)||!std::isfinite(moon_sph.dec)){
+	double geo_n=moon_geo.norm();
+	double eq_n=moon_eq.norm();
+	if(!(geo_n>0.0)||!(eq_n>0.0)){
 		return false;
 	}
 
@@ -204,16 +206,25 @@ bool fill_libration(const Vec3&moon_eq,double jd_tdb,EclipseLibration*out){
 		return false;
 	}
 	Mat3 to_fix=m_inertial_to_moon_fixed(o.ra_rad,o.dec_rad,o.w_rad);
-	Vec3 to_earth=(-1.0/rn)*moon_eq;
+	Vec3 to_earth=(-1.0/geo_n)*moon_geo;
 	Vec3 eb=to_fix*to_earth;
 
 	double l=std::atan2(eb.y,eb.x)*kDegPerRad;
 	double b=std::asin(clamp_unit(eb.z))*kDegPerRad;
 
-	double da=norm_pm_pi(o.ra_rad-moon_sph.ra);
-	double y=std::cos(o.dec_rad)*std::sin(da);
-	double x=std::sin(o.dec_rad)*std::cos(moon_sph.dec)-
-			 std::cos(o.dec_rad)*std::sin(moon_sph.dec)*std::cos(da);
+	Mat3 eq=eq_true_mat(jd_tdb);
+	Vec3 pole_eq=eq*unit_from_ra_dec(o.ra_rad,o.dec_rad);
+	EqSph moon_sph=vec_to_eqsph(moon_eq);
+	EqSph pole_sph=vec_to_eqsph(pole_eq);
+	if(!std::isfinite(moon_sph.ra)||!std::isfinite(moon_sph.dec)||
+	   !std::isfinite(pole_sph.ra)||!std::isfinite(pole_sph.dec)){
+		return false;
+	}
+
+	double da=norm_pm_pi(pole_sph.ra-moon_sph.ra);
+	double y=std::cos(pole_sph.dec)*std::sin(da);
+	double x=std::sin(pole_sph.dec)*std::cos(moon_sph.dec)-
+			 std::cos(pole_sph.dec)*std::sin(moon_sph.dec)*std::cos(da);
 	double c=std::atan2(y,x)*kDegPerRad;
 
 	out->l_deg=l;
@@ -1207,7 +1218,7 @@ bool calc_lunar_eclipse(EphRead&eph,double jd_tdb_near_full_moon,
 	Vec3 moon_eq=eq*g_max.m;
 	fill_geo_coord(sun_eq,kRsKm,&ans.sun_geo);
 	fill_geo_coord(moon_eq,kRmKm,&ans.moon_geo);
-	fill_libration(moon_eq,ans.jd_tdb_max,&ans.lib);
+	fill_libration(g_max.m,moon_eq,ans.jd_tdb_max,&ans.lib);
 
 	fill_point_meta(eph,ans.jd_tdb_p1,false,&ans.p1_meta);
 	fill_point_meta(eph,ans.jd_tdb_u1,false,&ans.u1_meta);

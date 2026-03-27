@@ -20,6 +20,7 @@ add_executable(lunar_tests
     test_common.cpp
     test_core_cli.cpp
     test_eclipse.cpp
+    test_solar_zodiac.cpp
     test_almanac_i18n.cpp
     test_interact.cpp
 )

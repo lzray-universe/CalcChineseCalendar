@@ -1,4 +1,5 @@
 #include "lunar/spc_ephem.hpp"
+#include "lunar/frames.hpp"
 
 #include<array>
 #include<algorithm>
@@ -2750,6 +2751,33 @@ std::shared_ptr<SpkFile>acq_kernel(const std::string&filepath){
 
 #if LUNAR_ENABLE_SERIES_FALLBACK
 
+Mat3 transpose_mat(const Mat3&m){
+	Mat3 out;
+	for(int i=0;i<3;++i){
+		for(int j=0;j<3;++j){
+			out.m[i][j]=m.m[j][i];
+		}
+	}
+	return out;
+}
+
+const Mat3&series_ecl_rot(){
+	static const Mat3 kRot=[](){
+		// The series fallback returns J2000 ecliptic rectangular coordinates,
+		// while the rest of the ephemeris pipeline expects near-ICRF J2000
+		// equatorial vectors before precession/nutation is applied.
+		const double eps0=PrecNut::mean_obl(2451545.0);
+		return transpose_mat(CoordTf::bias_mat())*CoordTf::R1(-eps0);
+	}();
+	return kRot;
+}
+
+StateAu rotate_series_state(const StateAu&state,const Mat3&rot){
+	Vec3 pos=rot*Vec3(state.px,state.py,state.pz);
+	Vec3 vel=rot*Vec3(state.vx,state.vy,state.vz);
+	return {pos.x,pos.y,pos.z,vel.x,vel.y,vel.z};
+}
+
 bool code_to_vsop_body(int code,vsop87a::Body&body){
 	switch(code){
 		case 199:
@@ -2793,20 +2821,24 @@ StateAu eval_vsop_state(int code,double jd_tdb){
 	double xyz[3]={0.0,0.0,0.0};
 	double vxyz[3]={0.0,0.0,0.0};
 	vsop87a::EvaluateXYZ(body,jd_tdb,xyz,vxyz);
-	return {xyz[0],xyz[1],xyz[2],vxyz[0],vxyz[1],vxyz[2]};
+	return rotate_series_state(
+		{xyz[0],xyz[1],xyz[2],vxyz[0],vxyz[1],vxyz[2]},
+		series_ecl_rot());
 }
 
 StateAu eval_elp_moon_geo(double jd_tdb){
 	elpmpp02::StateVector state;
 	elpmpp02::Evaluate(elpmpp02::CorrectionSet::DE405,jd_tdb,state);
-	return {
-		state.position_km[0]/AU_KM,
-		state.position_km[1]/AU_KM,
-		state.position_km[2]/AU_KM,
-		state.velocity_km_per_day[0]/AU_KM,
-		state.velocity_km_per_day[1]/AU_KM,
-		state.velocity_km_per_day[2]/AU_KM,
-	};
+	return rotate_series_state(
+		{
+			state.position_km[0]/AU_KM,
+			state.position_km[1]/AU_KM,
+			state.position_km[2]/AU_KM,
+			state.velocity_km_per_day[0]/AU_KM,
+			state.velocity_km_per_day[1]/AU_KM,
+			state.velocity_km_per_day[2]/AU_KM,
+		},
+		series_ecl_rot());
 }
 
 StateAu series_abs_state(int target,double jd_tdb){

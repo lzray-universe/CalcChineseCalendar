@@ -153,6 +153,7 @@ SolarZodiacYearSummary calc_solar_zodiac_year(EphRead&eph,int year,int tz_off){
 
 	std::vector<SolarZodiacBoundary> boundaries=
 		build_boundaries(eph,year-1,year+1);
+<<<<<<< Updated upstream
 	for(std::size_t i=0;i+1<boundaries.size();++i){
 		const SolarZodiacBoundary&cur=boundaries[i];
 		const SolarZodiacBoundary&next=boundaries[i+1];
@@ -166,6 +167,18 @@ SolarZodiacYearSummary calc_solar_zodiac_year(EphRead&eph,int year,int tz_off){
 		double in_year_start=std::max(cur.jd_utc,out.year_start_jd_utc);
 		double in_year_end=std::min(next.jd_utc,out.year_end_jd_utc);
 		if(in_year_end-in_year_start<=JD_EPSILON){
+=======
+	if(boundaries.size()<2){
+		throw std::runtime_error("failed to build solar zodiac boundaries");
+	}
+
+	for(std::size_t i=0;i+1<boundaries.size();++i){
+		const SolarZodiacBoundary&cur=boundaries[i];
+		const SolarZodiacBoundary&next=boundaries[i+1];
+		double in_year_start=std::max(cur.jd_utc,out.year_start_jd_utc);
+		double in_year_end=std::min(next.jd_utc,out.year_end_jd_utc);
+		if(in_year_end-in_year_start<=1e-12){
+>>>>>>> Stashed changes
 			continue;
 		}
 
