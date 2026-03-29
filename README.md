@@ -45,6 +45,7 @@ CalcChineseCalendar 是一个优先使用 JPL DE BSP 星历、在缺失 BSP 时�
 - 星历下载：`download`
 - 时刻查询与批处理：`at`
 - 公历/农历互转与批处理：`convert`
+- 太阳星座与观测天空位置：`zodiac`、`sky`
 - 单日/单月视图：`day`、`monthview`
 - 事件检索：`next`、`range`、`search`
 - 日月食：`eclipse`
@@ -273,7 +274,13 @@ lunar <bsp> <years> [months options...]
 - `bsp_list`
 - `default_tz`
 - `default_lang`
+- `default_lunar_day_tz`
 - `def_fmt`
+- `hli_trad`
+- `hli_year_boundary`
+- `hli_month_boundary`
+- `hli_leap_month_mode`
+- `hli_day_boundary`
 - `def_prety`
 
 ### 6.2 命令
@@ -288,7 +295,10 @@ lunar config set <key> <value>
 - `bsp_list` 支持逗号或分号分隔。
 - `def_bsp` 设置后若不在 `bsp_list` 中，会自动追加。
 - `default_lang` 仅允许 `zh|zht|en|ja|ko`。
+- `default_lunar_day_tz` 用于覆盖农历判日日界时区；留空时会按语言默认值自动推断（当前 `ja/ko -> +09:00`，其余为 `+08:00`）。
 - `def_fmt` 允许 `txt|json|csv|jsonl|ics`。
+- `hli_trad`、`hli_year_boundary`、`hli_month_boundary`、`hli_leap_month_mode`、`hli_day_boundary` 会作为 `day` / `almanac` 的默认黄历规则。
+- 上述 `hli_*` 键支持写回稳定英文 key；除 `hli_trad` 外，也支持用 `default` 恢复内建默认。
 - `def_prety` 用 `0|1`。
 
 ## 7. 时间格式与时区规则
@@ -452,6 +462,8 @@ lunar day <bsp> <YYYY-MM-DD>
 - `--astro-height` 只能在已给经纬度时使用。
 - 逻辑实现走 `lunar::core::compute_day` + `lunar::core::format_day_output`。
 - 默认 `tz/format/pretty` 来自配置。
+- 还支持黄历规则补充参数：`--lunar-day-tz`、`--trad`、`--year-boundary`、`--month-boundary`、`--leap-month-mode`、`--day-boundary`。
+- `--trad/--year-boundary/--month-boundary/--leap-month-mode/--day-boundary` 也接受常见 ASCII 别名。
 
 ### 9.9 monthview
 
@@ -466,6 +478,7 @@ lunar monthview <bsp> <YYYY-MM>
 
 - `--astro-lat` 与 `--astro-lon` 必须同时出现。
 - 默认 `tz/format/pretty` 来自配置。
+- 还支持 `--lunar-day-tz ...`，用于显式覆盖农历判日日界时区。
 
 ### 9.10 next
 
@@ -542,6 +555,10 @@ lunar festival <bsp> <year>
 
 默认 `tz/format/pretty` 来自配置。
 
+补充：
+
+- 还支持 `--lunar-day-tz ...`，用于显式覆盖农历判日日界时区。
+
 ### 9.15 almanac
 
 ```bash
@@ -550,6 +567,11 @@ lunar almanac <bsp> <YYYY-MM-DD>
 ```
 
 默认 `tz/format/pretty` 来自配置。
+
+补充：
+
+- 还支持 `--lunar-day-tz`、`--trad`、`--year-boundary`、`--month-boundary`、`--leap-month-mode`、`--day-boundary`。
+- `--trad xieji`、`--trad old_almanac` 等常见别名都可用；各类 boundary / mode 参数也接受稳定英文 key 与常见 ASCII 别名。
 
 ### 9.16 info
 
@@ -576,6 +598,45 @@ lunar completion bash|zsh|fish|powershell
 ```
 
 脚本输出到 stdout，可自行重定向到文件。
+
+### 9.19 zodiac
+
+```bash
+lunar zodiac <bsp> --time <time>
+  [--input-tz ...] [--tz ...]
+  [--format json|txt|csv] [--out ...] [--pretty 0|1] [--quiet]
+
+lunar zodiac <bsp> --year <year>
+  [--tz ...]
+  [--format json|txt|csv] [--out ...] [--pretty 0|1] [--quiet]
+```
+
+说明：
+
+- 这两个命令当前仍通过位置参数 `<bsp>` 指定星历，不走前文 `day/range/...` 那套自动补 BSP 语义。
+- `--time` 与 `--year` 二选一。
+- `--input-tz` 仅在 `--time` 模式下有效。
+- `--time` 模式输出当前时刻所属太阳星座、黄经区间边界、已过时长与剩余时长。
+- `--year` 模式输出该显示时区下公历年的 12 段星座区间摘要，以及每段在该年窗口内的截取时长。
+- 太阳星座按地心太阳视黄经计算，已含光行时修正。
+
+### 9.20 sky
+
+```bash
+lunar sky <bsp> <time> --lat <deg> --lon <deg>
+lunar sky <bsp> --time <time> --lat <deg> --lon <deg>
+  [--height <m>] [--input-tz ...] [--tz ...]
+  [--mode all|pick] [--pick sun,moon,Spica,HR5056,...]
+  [--format json|txt|csv] [--out ...] [--pretty 0|1] [--quiet]
+```
+
+说明：
+
+- 当前仍通过位置参数 `<bsp>` 指定星历。
+- 输出为指定时刻、指定观测点的 topocentric apparent position。
+- `--lat` 与 `--lon` 必须同时提供。
+- `--mode pick` 时可用 `--pick` 指定输出子集，例如 `sun,moon,Spica`。
+- 太阳系目标会排在星表恒星之前输出。
 
 ## 10. 交互模式
 
@@ -611,6 +672,11 @@ lunar completion bash|zsh|fish|powershell
 - `l` 切换语言
 - `h` 帮助
 - `q` 退出
+
+补充：
+
+- 当前交互菜单已新增 `4 zodiac` 与 `17 sky`。
+- 因 `zodiac` 插入在 `convert` 之前，旧列表中 `convert` 到 `completion` 的序号整体顺延一位。
 
 ## 11. i18n（中简/中繁/英/日/韩）
 
@@ -679,9 +745,14 @@ lunar::core::format_day_output(std::cout, result, "json", true);
 
 已提供包装：
 
-- `month cal year event dl at conv day mview next range search fest alm info test cfg comp`
+- `month cal year event dl at conv zodiac day mview next range search fest alm info cfg comp`
 
 说明：`eclipse` 当前未单独导出 `lunar_cmd_eclipse`，可通过 `lunar_run` 调用。
+
+补充：
+
+- 现已额外导出 `zodiac` 包装：`lunar_cmd_zodiac`、`lunar_use_zodiac`。
+- `sky` 目前仍建议通过 `lunar_run` 调用。
 
 ### 13.4 返回码
 
@@ -726,6 +797,12 @@ lunar day 2025-06-01 --bsp ./de440s.bsp --format txt
 
 # 区间事件
 lunar range --from 2025-01-01 --to 2025-12-31 --format json --kinds solar_term,lunar_phase
+
+# 太阳星座
+lunar zodiac ./de442.bsp --time 2025-03-20T18:01:00+08:00 --format json
+
+# 指定地点观星
+lunar sky ./de442.bsp --time 2025-06-01T20:00 --input-tz +08:00 --lat 31.23 --lon 121.47 --mode pick --pick sun,moon,Spica
 
 # 食计算
 lunar eclipse --near 2025-09-07 --kind lunar --global-vis 1 --global-format geojson --format json
@@ -788,6 +865,20 @@ lunar eclipse --near 2025-09-07 --kind lunar --global-vis 1 --global-format geoj
 | `az_deg` | `sky` | 方位角，单位度。 |
 | `alt_deg` | `sky` | 高度角，单位度。 |
 | `mag_v` | `sky` | 视星等（V 波段）。 |
+| `region` | `sky` | 星官或所属区域名称。 |
+| `is_solar_system` | `sky` | 是否为太阳系目标。 |
+| `is_juxing` | `sky` | 是否为聚星条目。 |
+| `sun_lam_deg` | `zodiac` | 太阳视黄经，单位度。 |
+| `sign_index` / `sign_order` | `zodiac` | 星座零基序号 / 从 1 开始的显示序号。 |
+| `sign_code` / `sign_name` | `zodiac` | 稳定星座代号 / 当前语言名称。 |
+| `term_code` | `zodiac` | 与该星座起点对应的节气代号。 |
+| `start_lambda_deg` / `end_lambda_deg` | `zodiac` | 该星座黄经区间边界，单位度。 |
+| `sign_offset_deg` | `zodiac.point` | 当前时刻在本星座区间内已推进的黄经偏移，单位度。 |
+| `elapsed_sec` / `remain_sec` / `span_sec` | `zodiac.point` | 已过 / 剩余 / 总时长，单位秒。 |
+| `interval_count` | `zodiac.year` | 年摘要中的区间数量，通常为 12。 |
+| `in_year_start_loc_iso` / `in_year_end_loc_iso` | `zodiac.year` | 该星座区间在当前显示时区对应公历年窗口内的本地起止时间。 |
+| `in_year_dur_sec` / `in_year_dur_days` | `zodiac.year` | 该区间落入该公历年窗口内的持续时间。 |
+| `clipped_start` / `clipped_end` | `zodiac.year` | 区间起点 / 终点是否被年窗口裁剪。 |
 | `sd_deg` | `eclipse` | 视半径角，单位度。 |
 | `ehp_deg` | `eclipse` | 赤道地平视差，单位度。 |
 
@@ -966,7 +1057,9 @@ lunar eclipse --near 2025-09-07 --kind lunar --global-vis 1 --global-format geoj
 | `cli_month` / `cli_cal` / `cli_year` / `cli_event` / `cli_dl` | `include/lunar/cli.hpp` | 旧式 CLI 参数结构体入口。 |
 | `cli_at` / `cli_conv` | `include/lunar/cli_query.hpp` | `at` / `convert` 的旧式 CLI 参数结构体入口。 |
 | `cmd_month` / `cmd_cal` / `cmd_year` / `cmd_event` / `cmd_dl` | `include/lunar/cli.hpp` | 直接接收字符串数组的命令入口。 |
-| `cmd_at` / `cmd_conv` / `cmd_sky` / `cmd_day` / `cmd_mview` / `cmd_next` / `cmd_range` / `cmd_search` / `cmd_eclipse` / `cmd_fest` / `cmd_alm` / `cmd_info` / `cmd_cfg` / `cmd_comp` | `include/lunar/cli_query.hpp` | 各子命令的直接入口。 |
+| `cmd_at` / `cmd_conv` / `cmd_zodiac` / `cmd_sky` / `cmd_day` / `cmd_mview` / `cmd_next` / `cmd_range` / `cmd_search` / `cmd_eclipse` / `cmd_fest` / `cmd_alm` / `cmd_info` / `cmd_cfg` / `cmd_comp` | `include/lunar/cli_query.hpp` | 各子命令的直接入口。 |
+| `lunar::calc_sky_pos` | `include/lunar/star.hpp` | 计算指定时刻、指定观测点的天空位置列表。 |
+| `calc_solar_zodiac_at` / `calc_solar_zodiac_year` | `include/lunar/solar_zodiac.hpp` | 计算单时刻太阳星座或全年星座区间摘要。 |
 | `lunar::core::compute_day` | `include/lunar/core.hpp` | 计算某一天的农历、黄历、月相、事件与可选天象信息。 |
 | `lunar::core::format_day_output` | `include/lunar/day_formatter.hpp` | 把 `DayResult` 输出成 `json/txt/csv/jsonl`。 |
 | `lunar::core::compute_ganzhi` | `include/lunar/core.hpp` | 计算单个时刻的年、月、日干支摘要。 |
@@ -1024,6 +1117,10 @@ lunar eclipse --near 2025-09-07 --kind lunar --global-vis 1 --global-format geoj
 | `MoonXg` | `region`、`star_id`、`star_name`、`sep_deg` | 月亮星官归属结果。 |
 | `AstroObs` | `has_site`、`lat_deg`、`lon_deg`、`h_m` | 天象观测地点。 |
 | `SkyPos` | `kind`、`code`、`name`、`region`、`mag_v`、`ra_deg`、`dec_deg`、`az_deg`、`alt_deg` | 天体天空位置输出记录。 |
+| `SolarZodiacDef` | `index`、`code`、`term_code`、`start_lambda_rad`、`end_lambda_rad` | 单个太阳星座的固定黄经区间定义。 |
+| `SolarZodiacPoint` | `sun_lam_deg`、`sign_index`、`sign_code`、`term_code`、`sign_start_jd_utc`、`sign_end_jd_utc`、`elapsed_sec`、`remain_sec` | 单时刻太阳星座结果。 |
+| `SolarZodiacYearInterval` | `sign_index`、`sign_code`、`term_code`、`in_year_start_jd_utc`、`in_year_end_jd_utc`、`in_year_dur_sec`、`clipped_start`、`clipped_end` | 全年模式下单个星座区间摘要。 |
+| `SolarZodiacYearSummary` | `year`、`tz_off`、`year_start_jd_utc`、`year_end_jd_utc`、`intervals` | 全年太阳星座汇总结果。 |
 | `AstroEvt` | `kind`、`code`、`name`、`jd_utc`、`detail` | 天象事件记录。 |
 
 ### 18.5 食相关结构体
