@@ -104,16 +104,6 @@ void write_meta(JsonWriter&w,const std::string&ephem,
 	w.obj_end();
 }
 
-bool is_full_moon_ev(const EventRec&ev){
-	return ev.kind=="lunar_phase"&&ev.code=="full_moon";
-}
-
-double full_moon_dist_km(EphRead&eph,double jd_utc){
-	double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
-	Vec3 r=raw_vec(eph.get_pos(eph.MOON,eph.EARTH,jd_tdb));
-	return r.norm()*AU_KM;
-}
-
 std::vector<LunarEclipse> bld_eclipses(EphRead&eph,const YearResult&yr){
 	std::vector<LunarEclipse> out;
 	out.reserve(yr.lun_phase.size());

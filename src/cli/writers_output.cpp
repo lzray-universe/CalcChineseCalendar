@@ -179,52 +179,12 @@ void wr_ejdoc(std::ostream&os,const EventRec&event,const std::string&ephem,
 	os<<"\n";
 }
 
-std::string csv_quote(const std::string&s){
-	bool need_q=false;
-	for(char c : s){
-		if(c==','||c=='"'||c=='\n'||c=='\r'){
-			need_q=true;
-			break;
-		}
-	}
-	if(!need_q){
-		return s;
-	}
-	std::string out="\"";
-	for(char c : s){
-		if(c=='"'){
-			out+="\"\"";
-		}else{
-			out.push_back(c);
-		}
-	}
-	out.push_back('"');
-	return out;
-}
-
-IcsEvent ev_toics(const EventRec&ev){
-	IcsEvent out;
-	std::ostringstream uid;
-	uid<<"lunar-"<<ev.kind<<"-"<<ev.code<<"-"<<std::setprecision(12)<<ev.jd_utc;
-	out.uid=uid.str();
-	out.summary=ev.name;
-	std::ostringstream desc;
-	desc<<"kind="<<ev.kind<<"; code="<<ev.code
-		<<"; jd_utc="<<std::setprecision(17)<<ev.jd_utc;
-	if(std::isfinite(ev.jd_tdb)){
-		desc<<"; jd_tdb="<<ev.jd_tdb;
-	}
-	out.desc=desc.str();
-	out.jd_utc=ev.jd_utc;
-	return out;
-}
-
 void wr_eics(std::ostream&os,const std::string&ephem,const std::string&cal_name,
 			 const std::vector<EventRec>&events){
 	std::vector<IcsEvent> ics_events;
 	ics_events.reserve(events.size());
 	for(const auto&ev : events){
-		ics_events.push_back(ev_toics(ev));
+		ics_events.push_back(event_to_ics(ev,true));
 	}
 	write_ics(os,"lunar-cli//"+tool_ver(),cal_name,ics_events);
 }

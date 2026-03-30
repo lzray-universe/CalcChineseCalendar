@@ -1,28 +1,5 @@
 namespace{
 
-std::string csv_quote(const std::string&s){
-	bool need_quote=false;
-	for(char c : s){
-		if(c==','||c=='"'||c=='\n'||c=='\r'){
-			need_quote=true;
-			break;
-		}
-	}
-	if(!need_quote){
-		return s;
-	}
-	std::string out="\"";
-	for(char c : s){
-		if(c=='"'){
-			out+="\"\"";
-		}else{
-			out.push_back(c);
-		}
-	}
-	out.push_back('"');
-	return out;
-}
-
 void wr_eljs(std::ostream&os,const std::string&ephem,const std::string&tz,
 			 bool pretty,const std::vector<EventRec>&events,
 			 const std::string&type,EphRead&eph,bool calc_eclipse=false,

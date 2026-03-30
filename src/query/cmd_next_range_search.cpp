@@ -5,6 +5,40 @@ struct SearchQuerySpec{
 	std::string code;
 };
 
+struct EvOpt{
+	std::string type;
+	std::string ephem;
+	std::string def_tz;
+	std::string tz;
+	std::string format;
+	std::string out_path;
+	bool pretty=false;
+	bool quiet=false;
+	bool calc_ecl=false;
+};
+
+struct NextOpt : EvOpt{
+	std::string from_time;
+	int count=1;
+	std::string kinds="solar_term,lunar_phase,lunar_eclipse,solar_eclipse";
+};
+
+struct RangeOpt : EvOpt{
+	std::string from_time;
+	std::string to_time;
+	std::string kinds="solar_term,lunar_phase,lunar_eclipse,solar_eclipse";
+};
+
+struct SearchOpt : EvOpt{
+	std::string query;
+	std::string from_time;
+	int count=1;
+};
+
+struct EvRes{
+	std::vector<EventRec> rows;
+};
+
 double current_jd_utc(){
 	const std::time_t now=std::time(nullptr);
 	std::tm utc_tm{};
@@ -65,25 +99,25 @@ std::vector<EventRec> collect_next_events(EphRead&eph,double jd_utc_from,
 	return picked;
 }
 
-void write_event_output(std::ostream&os,const std::string&format,
-						const std::string&ephem,const std::string&tz,bool pretty,
-						const std::vector<EventRec>&events,
-						const std::string&type,EphRead&eph,bool calc_eclipse,
-						int tz_off){
-	const FmtMap fmt_handlers={
+void write_ev(std::ostream&os,const EvOpt&opt,const std::vector<EventRec>&rows){
+	const int tz_off=parse_tz(opt.tz);
+	EphRead eph(opt.ephem);
+	const FmtMap fmts={
 		{"json",[&](){
-			 wr_eljs(os,ephem,tz,pretty,events,type,eph,calc_eclipse,tz_off);
+			 wr_eljs(os,opt.ephem,opt.tz,opt.pretty,rows,opt.type,eph,
+					 opt.calc_ecl,tz_off);
 		 }},
 		{"txt",[&](){
-			 wr_eltxt(os,tz,events,type,&eph,calc_eclipse,tz_off);
+			 wr_eltxt(os,opt.tz,rows,opt.type,&eph,opt.calc_ecl,tz_off);
 		 }},
-		{"csv",[&](){ wr_elcsv(os,events,&eph,calc_eclipse,tz_off); }},
+		{"csv",[&](){ wr_elcsv(os,rows,&eph,opt.calc_ecl,tz_off); }},
 		{"jsonl",[&](){
-			 wr_eljsl(os,ephem,tz,events,type,eph,calc_eclipse,tz_off);
+			 wr_eljsl(os,opt.ephem,opt.tz,rows,opt.type,eph,opt.calc_ecl,
+					  tz_off);
 		 }},
-		{"ics",[&](){ wr_elics(os,ephem,"lunar-"+type,events); }},
+		{"ics",[&](){ wr_elics(os,opt.ephem,"lunar-"+opt.type,rows); }},
 	};
-	run_fmt(fmt_handlers,format,type);
+	run_fmt(fmts,opt.format,opt.type);
 }
 
 SearchQuerySpec resolve_search_query(const std::string&token){
@@ -135,6 +169,220 @@ std::string normalize_search_key(const std::string&query){
 	return key;
 }
 
+EvOpt mk_ev_opt(const InterCfg&cfg,const std::string&ephem,
+				const std::string&type,const std::string&format){
+	EvOpt opt;
+	opt.type=type;
+	opt.ephem=ephem;
+	opt.def_tz=cfg.default_tz;
+	opt.tz=cfg.default_tz;
+	opt.format=to_low(format);
+	opt.pretty=cfg.def_prety;
+	if(opt.format!="txt"&&opt.format!="json"&&opt.format!="csv"&&
+	   opt.format!="ics"&&opt.format!="jsonl"){
+		opt.format="txt";
+	}
+	return opt;
+}
+
+NextOpt parse_next(const std::vector<std::string>&args){
+	if(args.empty()){
+		throw std::invalid_argument(
+			"next requires: <bsp> --from <time> --count N");
+	}
+	InterCfg cfg=load_def();
+	NextOpt opt;
+	static_cast<EvOpt&>(opt)=mk_ev_opt(cfg,args[0],"next",cfg.def_fmt);
+	const OptMap handlers={
+		{"--from",[&](const std::vector<std::string>&src,std::size_t&i,
+					  const std::string&tag){
+			 opt.from_time=req_val(src,i,tag);
+		 }},
+		{"--count",[&](const std::vector<std::string>&src,std::size_t&i,
+					   const std::string&tag){
+			 opt.count=parse_int(req_val(src,i,tag),"--count");
+		 }},
+		{"--kinds",[&](const std::vector<std::string>&src,std::size_t&i,
+					   const std::string&tag){ opt.kinds=req_val(src,i,tag); }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&i,
+					const std::string&tag){ opt.tz=req_val(src,i,tag); }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&i,
+						const std::string&tag){
+			 opt.format=to_low(req_val(src,i,tag));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&i,
+					 const std::string&tag){ opt.out_path=req_val(src,i,tag); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&i,
+						const std::string&tag){
+			 opt.pretty=parse_bool01(req_val(src,i,tag),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ opt.quiet=true; }},
+		{"--eclipse",[&](const std::vector<std::string>&src,std::size_t&i,
+						 const std::string&tag){
+			 opt.calc_ecl=parse_bool01(req_val(src,i,tag),tag);
+		 }},
+	};
+	for(std::size_t i=1;i<args.size();++i){
+		apply_opt(handlers,args,i,args[i],"next");
+	}
+	if(opt.from_time.empty()){
+		throw std::invalid_argument("next requires --from <time>");
+	}
+	if(opt.count<1){
+		throw std::invalid_argument("--count must be >=1");
+	}
+	chk_fmt(opt.format,{"json","txt","csv","ics","jsonl"},"next");
+	return opt;
+}
+
+RangeOpt parse_range(const std::vector<std::string>&args){
+	if(args.empty()){
+		throw std::invalid_argument(
+			"range requires: <bsp> --from <time> --to <time>");
+	}
+	InterCfg cfg=load_def();
+	RangeOpt opt;
+	static_cast<EvOpt&>(opt)=mk_ev_opt(cfg,args[0],"range",cfg.def_fmt);
+	const OptMap handlers={
+		{"--from",[&](const std::vector<std::string>&src,std::size_t&i,
+					  const std::string&tag){
+			 opt.from_time=req_val(src,i,tag);
+		 }},
+		{"--to",[&](const std::vector<std::string>&src,std::size_t&i,
+					const std::string&tag){ opt.to_time=req_val(src,i,tag); }},
+		{"--kinds",[&](const std::vector<std::string>&src,std::size_t&i,
+					   const std::string&tag){ opt.kinds=req_val(src,i,tag); }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&i,
+					const std::string&tag){ opt.tz=req_val(src,i,tag); }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&i,
+						const std::string&tag){
+			 opt.format=to_low(req_val(src,i,tag));
+		 }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&i,
+					 const std::string&tag){ opt.out_path=req_val(src,i,tag); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&i,
+						const std::string&tag){
+			 opt.pretty=parse_bool01(req_val(src,i,tag),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ opt.quiet=true; }},
+		{"--eclipse",[&](const std::vector<std::string>&src,std::size_t&i,
+						 const std::string&tag){
+			 opt.calc_ecl=parse_bool01(req_val(src,i,tag),tag);
+		 }},
+	};
+	for(std::size_t i=1;i<args.size();++i){
+		apply_opt(handlers,args,i,args[i],"range");
+	}
+	if(opt.from_time.empty()||opt.to_time.empty()){
+		throw std::invalid_argument(
+			"range requires --from <time> and --to <time>");
+	}
+	chk_fmt(opt.format,{"json","txt","csv","ics","jsonl"},"range");
+	return opt;
+}
+
+SearchOpt parse_search(const std::vector<std::string>&args){
+	if(args.size()<2){
+		throw std::invalid_argument("search requires: <bsp> <query>");
+	}
+	InterCfg cfg=load_def();
+	SearchOpt opt;
+	static_cast<EvOpt&>(opt)=mk_ev_opt(cfg,args[0],"search",cfg.def_fmt);
+	opt.query=args[1];
+	const OptMap handlers={
+		{"--from",[&](const std::vector<std::string>&src,std::size_t&i,
+					  const std::string&tag){
+			 opt.from_time=req_val(src,i,tag);
+		 }},
+		{"--count",[&](const std::vector<std::string>&src,std::size_t&i,
+					   const std::string&tag){
+			 opt.count=parse_int(req_val(src,i,tag),"--count");
+		 }},
+		{"--format",[&](const std::vector<std::string>&src,std::size_t&i,
+						const std::string&tag){
+			 opt.format=to_low(req_val(src,i,tag));
+		 }},
+		{"--tz",[&](const std::vector<std::string>&src,std::size_t&i,
+					const std::string&tag){ opt.tz=req_val(src,i,tag); }},
+		{"--out",[&](const std::vector<std::string>&src,std::size_t&i,
+					 const std::string&tag){ opt.out_path=req_val(src,i,tag); }},
+		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&i,
+						const std::string&tag){
+			 opt.pretty=parse_bool01(req_val(src,i,tag),"--pretty");
+		 }},
+		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
+					   const std::string&){ opt.quiet=true; }},
+		{"--eclipse",[&](const std::vector<std::string>&src,std::size_t&i,
+						 const std::string&tag){
+			 opt.calc_ecl=parse_bool01(req_val(src,i,tag),tag);
+		 }},
+	};
+	for(std::size_t i=2;i<args.size();++i){
+		apply_opt(handlers,args,i,args[i],"search");
+	}
+	if(opt.count<1){
+		throw std::invalid_argument("--count must be >=1");
+	}
+	chk_fmt(opt.format,{"json","txt","csv","ics","jsonl"},"search");
+	return opt;
+}
+
+EvRes run_next(NextOpt&opt){
+	EvRes res;
+	IsoTime parsed=parse_iso(opt.from_time,opt.def_tz);
+	EvtFilt filter=parse_ef(opt.kinds);
+	if(filter.inc_ecl){
+		opt.calc_ecl=true;
+	}
+	int tz_off=parse_tz(opt.tz);
+	EphRead eph(opt.ephem);
+	res.rows=collect_next_events(eph,parsed.jd_utc,opt.count,filter,tz_off,
+								 opt.quiet);
+	return res;
+}
+
+EvRes run_range(RangeOpt&opt){
+	EvRes res;
+	IsoTime from_par=parse_iso(opt.from_time,opt.def_tz);
+	IsoTime to_par=parse_iso(opt.to_time,opt.def_tz);
+	if(to_par.jd_utc<from_par.jd_utc){
+		throw std::invalid_argument("--to must be >= --from");
+	}
+	EvtFilt filter=parse_ef(opt.kinds);
+	if(filter.inc_ecl){
+		opt.calc_ecl=true;
+	}
+	int tz_off=parse_tz(opt.tz);
+	EphRead eph(opt.ephem);
+	res.rows=load_evs(eph,from_par.jd_utc,to_par.jd_utc,filter,tz_off,
+					  opt.quiet,false);
+	return res;
+}
+
+EvRes run_search(SearchOpt&opt){
+	EvRes res;
+	const std::string key=normalize_search_key(opt.query);
+	SearchQuerySpec spec=resolve_search_query(key);
+	if(spec.kinds.empty()){
+		throw std::invalid_argument("unsupported search query: "+opt.query);
+	}
+	double jd_utc_from=current_jd_utc();
+	if(!opt.from_time.empty()){
+		jd_utc_from=parse_iso(opt.from_time,opt.def_tz).jd_utc;
+	}
+	EvtFilt filter=parse_ef(spec.kinds);
+	if(filter.inc_ecl){
+		opt.calc_ecl=true;
+	}
+	int tz_off=parse_tz(opt.tz);
+	EphRead eph(opt.ephem);
+	res.rows=collect_next_events(eph,jd_utc_from,opt.count,filter,tz_off,
+								 opt.quiet,spec.code);
+	return res;
+}
+
 }
 
 int cmd_next(const std::vector<std::string>&args){
@@ -142,83 +390,11 @@ int cmd_next(const std::vector<std::string>&args){
 		use_next();
 		return 0;
 	}
-	if(args.empty()){
-		throw std::invalid_argument(
-			"next requires: <bsp> --from <time> --count N");
-	}
-	InterCfg cfg=load_def();
-	std::string ephem=args[0];
-	std::string from_time;
-	int count=1;
-	std::string kinds="solar_term,lunar_phase,lunar_eclipse,solar_eclipse";
-	std::string tz=cfg.default_tz;
-	std::string format=to_low(cfg.def_fmt);
-	if(format!="txt"&&format!="json"&&format!="csv"&&format!="ics"&&
-	   format!="jsonl"){
-		format="txt";
-	}
-	std::string out_path;
-	bool pretty=cfg.def_prety;
-	bool quiet=false;
-	bool calc_eclipse=false;
-	const OptMap handlers={
-		{"--from",[&](const std::vector<std::string>&src,std::size_t&idx,
-					  const std::string&opt){
-			 from_time=req_val(src,idx,opt);
-		 }},
-		{"--count",[&](const std::vector<std::string>&src,std::size_t&idx,
-					   const std::string&opt){
-			 count=parse_int(req_val(src,idx,opt),"--count");
-			 if(count<1){
-				 throw std::invalid_argument("--count must be >=1");
-			 }
-		 }},
-		{"--kinds",[&](const std::vector<std::string>&src,std::size_t&idx,
-					   const std::string&opt){ kinds=req_val(src,idx,opt); }},
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
-					const std::string&opt){ tz=req_val(src,idx,opt); }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
-						const std::string&opt){
-			 format=to_low(req_val(src,idx,opt));
-		 }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
-					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
-						const std::string&opt){
-			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ quiet=true; }},
-		{"--eclipse",[&](const std::vector<std::string>&src,std::size_t&idx,
-						 const std::string&opt){
-			 calc_eclipse=parse_bool01(req_val(src,idx,opt),opt);
-		 }},
-	};
-
-	for(std::size_t i=1;i<args.size();++i){
-		const std::string&opt=args[i];
-		apply_opt(handlers,args,i,opt,"next");
-	}
-	if(from_time.empty()){
-		throw std::invalid_argument("next requires --from <time>");
-	}
-	chk_fmt(format,{"json","txt","csv","ics","jsonl"},"next");
-
-	IsoTime parsed=parse_iso(from_time,cfg.default_tz);
-	EvtFilt filter=parse_ef(kinds);
-	if(filter.inc_ecl){
-		calc_eclipse=true;
-	}
-	int tz_off=parse_tz(tz);
-
-	EphRead eph(ephem);
-	std::vector<EventRec> picked=
-		collect_next_events(eph,parsed.jd_utc,count,filter,tz_off,quiet);
-
-	OutTgt out=open_out(out_path);
-	write_event_output(*out.stream,format,ephem,tz,pretty,picked,"next",eph,
-					   calc_eclipse,tz_off);
-	note_out(out_path,quiet);
+	NextOpt opt=parse_next(args);
+	EvRes res=run_next(opt);
+	OutTgt out=open_out(opt.out_path);
+	write_ev(*out.stream,opt,res.rows);
+	note_out(opt.out_path,opt.quiet);
 	return 0;
 }
 
@@ -227,96 +403,11 @@ int cmd_range(const std::vector<std::string>&args){
 		use_range();
 		return 0;
 	}
-	if(args.empty()){
-		throw std::invalid_argument(
-			"range requires: <bsp> --from <time> --to <time>");
-	}
-	InterCfg cfg=load_def();
-	std::string ephem=args[0];
-	std::string from_time;
-	std::string to_time;
-	std::string kinds="solar_term,lunar_phase,lunar_eclipse,solar_eclipse";
-	std::string tz=cfg.default_tz;
-	std::string format=to_low(cfg.def_fmt);
-	if(format!="txt"&&format!="json"&&format!="csv"&&format!="ics"&&
-	   format!="jsonl"){
-		format="txt";
-	}
-	std::string out_path;
-	bool pretty=cfg.def_prety;
-	bool quiet=false;
-	bool calc_eclipse=false;
-	const OptMap handlers={
-		{"--from",[&](const std::vector<std::string>&src,std::size_t&idx,
-					  const std::string&opt){
-			 from_time=req_val(src,idx,opt);
-		 }},
-		{"--to",[&](const std::vector<std::string>&src,std::size_t&idx,
-					const std::string&opt){ to_time=req_val(src,idx,opt); }},
-		{"--kinds",[&](const std::vector<std::string>&src,std::size_t&idx,
-					   const std::string&opt){ kinds=req_val(src,idx,opt); }},
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
-					const std::string&opt){ tz=req_val(src,idx,opt); }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
-						const std::string&opt){
-			 format=to_low(req_val(src,idx,opt));
-		 }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
-					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
-						const std::string&opt){
-			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
-		 }},
-		{"--eclipse",[&](const std::vector<std::string>&src,std::size_t&idx,
-						 const std::string&opt){
-			 calc_eclipse=parse_bool01(req_val(src,idx,opt),opt);
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ quiet=true; }},
-	};
-
-	for(std::size_t i=1;i<args.size();++i){
-		const std::string&opt=args[i];
-		apply_opt(handlers,args,i,opt,"range");
-	}
-	if(from_time.empty()||to_time.empty()){
-		throw std::invalid_argument(
-			"range requires --from <time> and --to <time>");
-	}
-	chk_fmt(format,{"json","txt","csv","ics","jsonl"},"range");
-	IsoTime from_par=parse_iso(from_time,cfg.default_tz);
-	IsoTime to_parsed=parse_iso(to_time,cfg.default_tz);
-	if(to_parsed.jd_utc<from_par.jd_utc){
-		throw std::invalid_argument("--to must be >= --from");
-	}
-
-	EvtFilt filter=parse_ef(kinds);
-	if(filter.inc_ecl){
-		calc_eclipse=true;
-	}
-	int tz_off=parse_tz(tz);
-	EphRead eph(ephem);
-	std::vector<EventRec> picked=load_evs(eph,from_par.jd_utc,to_parsed.jd_utc,
-										  filter,tz_off,quiet,false);
-
-	OutTgt out=open_out(out_path);
-	const FmtMap fmt_handlers={
-		{"json",[&](){
-			 wr_eljs(*out.stream,ephem,tz,pretty,picked,"range",eph,calc_eclipse,
-					 tz_off);
-		 }},
-		{"txt",[&](){
-			 wr_eltxt(*out.stream,tz,picked,"range",&eph,calc_eclipse,tz_off);
-		 }},
-		{"csv",[&](){ wr_elcsv(*out.stream,picked,&eph,calc_eclipse,tz_off); }},
-		{"jsonl",[&](){
-			 wr_eljsl(*out.stream,ephem,tz,picked,"range",eph,calc_eclipse,
-					  tz_off);
-		 }},
-		{"ics",[&](){ wr_elics(*out.stream,ephem,"lunar-range",picked); }},
-	};
-	run_fmt(fmt_handlers,format,"range");
-	note_out(out_path,quiet);
+	RangeOpt opt=parse_range(args);
+	EvRes res=run_range(opt);
+	OutTgt out=open_out(opt.out_path);
+	write_ev(*out.stream,opt,res.rows);
+	note_out(opt.out_path,opt.quiet);
 	return 0;
 }
 
@@ -325,87 +416,10 @@ int cmd_search(const std::vector<std::string>&args){
 		use_search();
 		return 0;
 	}
-	if(args.size()<2){
-		throw std::invalid_argument("search requires: <bsp> <query>");
-	}
-
-	InterCfg cfg=load_def();
-	std::string ephem=args[0];
-	std::string query=args[1];
-	std::string from_time;
-	int count=1;
-	std::string format=to_low(cfg.def_fmt);
-	if(format!="txt"&&format!="json"&&format!="csv"&&format!="ics"&&
-	   format!="jsonl"){
-		format="txt";
-	}
-	std::string tz=cfg.default_tz;
-	std::string out_path;
-	bool pretty=cfg.def_prety;
-	bool quiet=false;
-	bool calc_eclipse=false;
-	const OptMap handlers={
-		{"--from",[&](const std::vector<std::string>&src,std::size_t&idx,
-					  const std::string&opt){
-			 from_time=req_val(src,idx,opt);
-		 }},
-		{"--count",[&](const std::vector<std::string>&src,std::size_t&idx,
-					   const std::string&opt){
-			 count=parse_int(req_val(src,idx,opt),"--count");
-			 if(count<1){
-				 throw std::invalid_argument("--count must be >=1");
-			 }
-		 }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
-						const std::string&opt){
-			 format=to_low(req_val(src,idx,opt));
-		 }},
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&idx,
-					const std::string&opt){ tz=req_val(src,idx,opt); }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
-					 const std::string&opt){ out_path=req_val(src,idx,opt); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
-						const std::string&opt){
-			 pretty=parse_bool01(req_val(src,idx,opt),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ quiet=true; }},
-		{"--eclipse",[&](const std::vector<std::string>&src,std::size_t&idx,
-						 const std::string&opt){
-			 calc_eclipse=parse_bool01(req_val(src,idx,opt),opt);
-		 }},
-	};
-
-	for(std::size_t i=2;i<args.size();++i){
-		const std::string&opt=args[i];
-		apply_opt(handlers,args,i,opt,"search");
-	}
-
-	chk_fmt(format,{"json","txt","csv","ics","jsonl"},"search");
-
-	const std::string key=normalize_search_key(query);
-	SearchQuerySpec spec=resolve_search_query(key);
-	if(spec.kinds.empty()){
-		throw std::invalid_argument("unsupported search query: "+query);
-	}
-	std::string kinds=spec.kinds;
-	double jd_utc_from=current_jd_utc();
-	if(!from_time.empty()){
-		jd_utc_from=parse_iso(from_time,cfg.default_tz).jd_utc;
-	}
-	EvtFilt filter=parse_ef(kinds);
-	if(filter.inc_ecl){
-		calc_eclipse=true;
-	}
-	int tz_off=parse_tz(tz);
-	EphRead eph(ephem);
-	std::vector<EventRec> picked=collect_next_events(
-		eph,jd_utc_from,count,filter,tz_off,quiet,spec.code);
-
-	OutTgt out=open_out(out_path);
-	write_event_output(*out.stream,format,ephem,tz,pretty,picked,"search",eph,
-					   calc_eclipse,tz_off);
-	note_out(out_path,quiet);
+	SearchOpt opt=parse_search(args);
+	EvRes res=run_search(opt);
+	OutTgt out=open_out(opt.out_path);
+	write_ev(*out.stream,opt,res.rows);
+	note_out(opt.out_path,opt.quiet);
 	return 0;
 }
-

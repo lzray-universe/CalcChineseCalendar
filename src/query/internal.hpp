@@ -44,3 +44,5 @@
 #include "lunar/core.hpp"
 #include "lunar/day_formatter.hpp"
 
+#include "src/output_common.hpp"
+

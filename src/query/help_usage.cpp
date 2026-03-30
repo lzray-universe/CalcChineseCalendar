@@ -1,3 +1,56 @@
+void use_at(){
+	std::cout
+		<<"Usage:\n"
+		<<"  lunar at <bsp> <time>\n"
+		<<"  lunar at <bsp> --time <time>\n"
+		<<"  lunar at <bsp> --stdin\n"
+		<<"  lunar at <bsp> --file <path>\n"
+		<<"    [--input-tz Z|+08:00|-05:00] [--tz Z|+08:00|-05:00]\n"
+		<<"    [--lunar-day-tz Z|+08:00|-05:00]\n"
+		<<"    [--format json|txt|jsonl] [--out <path>] [--pretty 0|1] "
+		  "[--quiet] [--events 0|1] [--eot-lon <deg>] [--trad "
+		  "folk|ziping|purple|xieji]\n"
+		<<"    [--year-boundary lichun|lunar_new_year|dongzhi] "
+		  "[--month-boundary solar_term|lunar_first_day]\n"
+		<<"    [--leap-month-mode ignore|inherit_previous|split_midway|"
+		  "shift_to_next] [--day-boundary hour23|hour0]\n"
+		<<"    [--jobs N] [--meta-once 0|1]\n"
+		<<"Time formats:\n"
+		<<"  YYYY-MM-DD\n"
+		<<"  YYYY-MM-DDTHH:MM\n"
+		<<"  YYYY-MM-DDTHH:MM:SS[.sss]\n"
+		<<"  optional timezone suffix: Z or +HH:MM/-HH:MM\n"
+		<<"Examples:\n"
+		<<"  lunar at D:\\de442.bsp 2025-06-01T00:00:00+08:00 --format json\n"
+		<<"  lunar at D:\\de442.bsp --time 2025-06-01T00:00 --input-tz +08:00 "
+		  "--tz Z --lunar-day-tz +09:00\n"
+		<<"  lunar at D:\\de442.bsp 2025-01-31T12:00:00+08:00 --trad ziping\n"
+		<<"  lunar at D:\\de442.bsp 2025-06-01T00:00:00+08:00 --eot-lon "
+		  "116.391\n"
+		<<"  lunar at D:\\de442.bsp --file times.txt --format jsonl "
+		  "--meta-once 1\n"
+		<<"Notes:\n"
+		<<"  --input-tz only parses input without timezone suffix; --tz only "
+		  "affects display.\n"
+		<<"  --lunar-day-tz controls which civil-day boundary is used for lunar "
+		  "date mapping.\n"
+		<<"  --eot-lon uses east-positive degrees; output is apparent - mean "
+		  "solar time.\n";
+}
+
+void use_conv(){
+	std::cout<<"Usage:\n"
+			 <<"  lunar convert <bsp> <dt_or_tm>\n"
+			 <<"  lunar convert <bsp> --from-lunar <year> <month_no> <day> "
+			   "[--leap 0|1]\n"
+			 <<"  lunar convert <bsp> --stdin\n"
+			 <<"  lunar convert <bsp> --file <path>\n"
+			 <<"    [--input-tz Z|+08:00|-05:00] [--tz Z|+08:00|-05:00]\n"
+			 <<"    [--lunar-day-tz Z|+08:00|-05:00]\n"
+			 <<"    [--format json|txt|jsonl] [--out <path>] [--pretty 0|1] "
+			   "[--quiet] [--jobs N] [--meta-once 0|1]\n";
+}
+
 void use_day(){
 	std::cout
 		<<"Usage:\n"

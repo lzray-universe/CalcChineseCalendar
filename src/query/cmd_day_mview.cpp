@@ -1,286 +1,295 @@
-int cmd_day(const std::vector<std::string>&args){
-	if(args.size()==1&&(args[0]=="-h"||args[0]=="--help")){
-		use_day();
-		return 0;
-	}
+namespace{
+
+struct DayCmd{
+	lunar::core::DayComputeOptions run;
+	std::string format;
+	std::string out_path;
+	bool pretty=false;
+	bool quiet=false;
+};
+
+struct MvOpt{
+	std::string ephem;
+	std::string ym;
+	std::string tz;
+	std::string lunar_day_tz;
+	std::string format;
+	std::string out_path;
+	bool pretty=false;
+	bool quiet=false;
+	bool inc_astro=false;
+	std::string astro_mode_text="less";
+	std::string astro_pick_csv;
+	AstroObs astro_obs;
+};
+
+struct MvRow{
+	std::string greg_date;
+	std::string lun_label;
+	bool is_leap=false;
+	std::string lun_mlab;
+	double ill_pct=0.0;
+	std::string moon_xg_region;
+	std::string moon_xg_star;
+	double moon_xg_sep_deg=std::numeric_limits<double>::quiet_NaN();
+	std::string ev_sum;
+	std::string astro_ev_sum;
+};
+
+struct MvRes{
+	std::vector<MvRow> rows;
+	StarPick astro_pick;
+};
+
+DayCmd parse_day(const std::vector<std::string>&args){
 	if(args.size()<2){
 		throw std::invalid_argument("day requires: <bsp> <YYYY-MM-DD>");
 	}
-
 	InterCfg cfg=load_def();
-	std::string ephem=args[0];
-	std::string date_text=args[1];
-	std::string tz=cfg.default_tz;
-	std::string lunar_day_tz=resolve_lunar_day_tz(cfg);
-	std::string format=to_low(cfg.def_fmt);
-	if(format!="txt"&&format!="json"&&format!="csv"&&format!="jsonl"){
-		format="txt";
+	DayCmd cmd;
+	cmd.run.ephem=args[0];
+	cmd.run.date_text=args[1];
+	cmd.run.tz=cfg.default_tz;
+	cmd.run.lunar_day_tz=resolve_lunar_day_tz(cfg);
+	cmd.format=to_low(cfg.def_fmt);
+	if(cmd.format!="txt"&&cmd.format!="json"&&cmd.format!="csv"&&
+	   cmd.format!="jsonl"){
+		cmd.format="txt";
 	}
-	std::string out_path;
-	bool pretty=cfg.def_prety;
-	bool quiet=false;
-	std::string at_time="12:00:00";
-	bool inc_ev=true;
-	bool inc_astro=false;
-	std::string astro_mode_text="less";
-	std::string astro_pick_csv;
-	double astro_lat_deg=0.0;
-	double astro_lon_deg=0.0;
-	double astro_h_m=0.0;
-	bool has_astro_lat=false;
-	bool has_astro_lon=false;
-	bool has_astro_h=false;
-	double hli_lon_deg=120.0;
-	HliRuleSet hli_rules=hli_rules_from_cfg(cfg);
+	cmd.pretty=cfg.def_prety;
+	cmd.run.at_time="12:00:00";
+	cmd.run.include_events=true;
+	cmd.run.include_astro=false;
+	cmd.run.astro_mode_text="less";
+	cmd.run.hli_lon_deg=120.0;
+	cmd.run.hli_rules=hli_rules_from_cfg(cfg);
+
+	double astro_lat=0.0;
+	double astro_lon=0.0;
+	double astro_h=0.0;
+	bool has_lat=false;
+	bool has_lon=false;
+	bool has_h=false;
 	lunar::ArgParser parser;
-	parser.add_value("--tz",[&](const std::string&value){ tz=value; });
+	parser.add_value("--tz",[&](const std::string&v){ cmd.run.tz=v; });
 	parser.add_value("--lunar-day-tz",
-					 [&](const std::string&value){ lunar_day_tz=value; });
+					 [&](const std::string&v){ cmd.run.lunar_day_tz=v; });
 	parser.add_value("--format",
-					 [&format](const std::string&value){ format=to_low(value); });
-	parser.add_value("--out",[&](const std::string&value){ out_path=value; });
-	parser.add_value(
-		"--pretty",[&](const std::string&value){
-			pretty=parse_bool01(value,"--pretty");
-		});
-	parser.add_flag("--quiet",[&](){ quiet=true; });
-	parser.add_value("--at",[&](const std::string&value){ at_time=value; });
-	parser.add_value(
-		"--events",[&](const std::string&value){
-			inc_ev=parse_bool01(value,"--events");
-		});
-	parser.add_value(
-		"--lon",[&](const std::string&value){
-			hli_lon_deg=parse_double(value,"--lon");
-		});
-	parser.add_value("--trad",[&](const std::string&value){
-		HliProfileCode trad=HliProfileCode::Folk;
-		if(!parse_hli_profile(value,&trad)){
-			throw std::invalid_argument(
-				"invalid --trad: "+value+
-				" (expected folk|ziping|purple|xieji)");
-		}
-		hli_rules=make_hli_rule_set(trad);
+					 [&](const std::string&v){ cmd.format=to_low(v); });
+	parser.add_value("--out",[&](const std::string&v){ cmd.out_path=v; });
+	parser.add_value("--pretty",[&](const std::string&v){
+		cmd.pretty=parse_bool01(v,"--pretty");
 	});
-	parser.add_value("--year-boundary",[&](const std::string&value){
-		HliYearBoundary parsed=HliYearBoundary::LunarNewYear;
-		if(!parse_hli_year_boundary(value,&parsed)){
+	parser.add_flag("--quiet",[&](){ cmd.quiet=true; cmd.run.quiet=true; });
+	parser.add_value("--at",[&](const std::string&v){ cmd.run.at_time=v; });
+	parser.add_value("--events",[&](const std::string&v){
+		cmd.run.include_events=parse_bool01(v,"--events");
+	});
+	parser.add_value("--lon",[&](const std::string&v){
+		cmd.run.hli_lon_deg=parse_double(v,"--lon");
+	});
+	parser.add_value("--trad",[&](const std::string&v){
+		HliProfileCode trad=HliProfileCode::Folk;
+		if(!parse_hli_profile(v,&trad)){
 			throw std::invalid_argument(
-				"invalid --year-boundary: "+value+
+				"invalid --trad: "+v+" (expected folk|ziping|purple|xieji)");
+		}
+		cmd.run.hli_rules=make_hli_rule_set(trad);
+	});
+	parser.add_value("--year-boundary",[&](const std::string&v){
+		HliYearBoundary parsed=HliYearBoundary::LunarNewYear;
+		if(!parse_hli_year_boundary(v,&parsed)){
+			throw std::invalid_argument(
+				"invalid --year-boundary: "+v+
 				" (expected lichun|lunar_new_year|dongzhi)");
 		}
-		hli_rules.year_boundary=static_cast<int>(parsed);
+		cmd.run.hli_rules.year_boundary=static_cast<int>(parsed);
 	});
-	parser.add_value("--month-boundary",[&](const std::string&value){
+	parser.add_value("--month-boundary",[&](const std::string&v){
 		HliMonthBoundary parsed=HliMonthBoundary::LunarFirstDay;
-		if(!parse_hli_month_boundary(value,&parsed)){
+		if(!parse_hli_month_boundary(v,&parsed)){
 			throw std::invalid_argument(
-				"invalid --month-boundary: "+value+
+				"invalid --month-boundary: "+v+
 				" (expected solar_term|lunar_first_day)");
 		}
-		hli_rules.month_boundary=static_cast<int>(parsed);
+		cmd.run.hli_rules.month_boundary=static_cast<int>(parsed);
 	});
-	parser.add_value("--leap-month-mode",[&](const std::string&value){
+	parser.add_value("--leap-month-mode",[&](const std::string&v){
 		HliLeapMonthMode parsed=HliLeapMonthMode::InheritPrevious;
-		if(!parse_hli_leap_month_mode(value,&parsed)){
+		if(!parse_hli_leap_month_mode(v,&parsed)){
 			throw std::invalid_argument(
-				"invalid --leap-month-mode: "+value+
+				"invalid --leap-month-mode: "+v+
 				" (expected ignore|inherit_previous|split_midway|shift_to_next)");
 		}
-		hli_rules.leap_month_mode=static_cast<int>(parsed);
+		cmd.run.hli_rules.leap_month_mode=static_cast<int>(parsed);
 	});
-	parser.add_value("--day-boundary",[&](const std::string&value){
+	parser.add_value("--day-boundary",[&](const std::string&v){
 		HliDayBoundary parsed=HliDayBoundary::Hour23;
-		if(!parse_hli_day_boundary(value,&parsed)){
+		if(!parse_hli_day_boundary(v,&parsed)){
 			throw std::invalid_argument(
-				"invalid --day-boundary: "+value+
-				" (expected hour23|hour0)");
+				"invalid --day-boundary: "+v+" (expected hour23|hour0)");
 		}
-		hli_rules.day_boundary=static_cast<int>(parsed);
+		cmd.run.hli_rules.day_boundary=static_cast<int>(parsed);
 	});
-	parser.add_value(
-		"--astro",[&](const std::string&value){
-			inc_astro=parse_bool01(value,"--astro");
-		});
+	parser.add_value("--astro",[&](const std::string&v){
+		cmd.run.include_astro=parse_bool01(v,"--astro");
+	});
 	parser.add_value("--astro-mode",
-					 [&](const std::string&value){ astro_mode_text=value; });
+					 [&](const std::string&v){ cmd.run.astro_mode_text=v; });
 	parser.add_value("--astro-pick",
-					 [&](const std::string&value){ astro_pick_csv=value; });
-	parser.add_value(
-		"--astro-lat",[&](const std::string&value){
-			astro_lat_deg=parse_double(value,"--astro-lat");
-			has_astro_lat=true;
-		});
-	parser.add_value(
-		"--astro-lon",[&](const std::string&value){
-			astro_lon_deg=parse_double(value,"--astro-lon");
-			has_astro_lon=true;
-		});
-	parser.add_value(
-		"--astro-height",[&](const std::string&value){
-			astro_h_m=parse_double(value,"--astro-height");
-			has_astro_h=true;
-		});
+					 [&](const std::string&v){ cmd.run.astro_pick_csv=v; });
+	parser.add_value("--astro-lat",[&](const std::string&v){
+		astro_lat=parse_double(v,"--astro-lat");
+		has_lat=true;
+	});
+	parser.add_value("--astro-lon",[&](const std::string&v){
+		astro_lon=parse_double(v,"--astro-lon");
+		has_lon=true;
+	});
+	parser.add_value("--astro-height",[&](const std::string&v){
+		astro_h=parse_double(v,"--astro-height");
+		has_h=true;
+	});
 
 	for(std::size_t i=2;i<args.size();++i){
-		const std::string&opt=args[i];
-		if(opt=="-h"||opt=="--help"){
+		if(args[i]=="-h"||args[i]=="--help"){
 			use_day();
-			return 0;
+			cmd.format.clear();
+			return cmd;
 		}
 		if(!parser.parse_one(args,i,"day")){
-			throw std::invalid_argument("unknown option for day: "+opt);
+			throw std::invalid_argument("unknown option for day: "+args[i]);
 		}
 	}
-	if(has_astro_lat!=has_astro_lon){
+	if(has_lat!=has_lon){
 		throw std::invalid_argument(
 			"astro site requires both --astro-lat and --astro-lon");
 	}
-	if(has_astro_h&&!has_astro_lat){
+	if(has_h&&!has_lat){
 		throw std::invalid_argument(
 			"--astro-height requires --astro-lat and --astro-lon");
 	}
-	chk_fmt(format,{"json","txt","csv","jsonl"},"day");
-	lunar_day_tz=canonical_tz_text(lunar_day_tz);
-
-	lunar::core::DayComputeOptions opt;
-	opt.ephem=ephem;
-	opt.date_text=date_text;
-	opt.at_time=at_time;
-	opt.tz=tz;
-	opt.lunar_day_tz=lunar_day_tz;
-	opt.quiet=quiet;
-	opt.include_events=inc_ev;
-	opt.include_astro=inc_astro;
-	opt.astro_mode_text=astro_mode_text;
-	opt.astro_pick_csv=astro_pick_csv;
-	opt.hli_lon_deg=hli_lon_deg;
-	opt.hli_rules=normalize_hli_rule_set(hli_rules);
-	opt.has_astro_site=has_astro_lat;
-	if(has_astro_lat){
-		opt.astro_lat_deg=astro_lat_deg;
-		opt.astro_lon_deg=astro_lon_deg;
-		opt.astro_height_m=has_astro_h?astro_h_m:0.0;
+	chk_fmt(cmd.format,{"json","txt","csv","jsonl"},"day");
+	cmd.run.lunar_day_tz=canonical_tz_text(cmd.run.lunar_day_tz);
+	cmd.run.hli_rules=normalize_hli_rule_set(cmd.run.hli_rules);
+	cmd.run.has_astro_site=has_lat;
+	if(has_lat){
+		cmd.run.astro_lat_deg=astro_lat;
+		cmd.run.astro_lon_deg=astro_lon;
+		cmd.run.astro_height_m=has_h?astro_h:0.0;
 	}
-
-	DayResult day=lunar::core::compute_day(opt);
-	OutTgt out=open_out(out_path);
-	lunar::core::format_day_output(*out.stream,day,format,pretty);
-	note_out(out_path,quiet);
-	return 0;
+	return cmd;
 }
 
-int cmd_mview(const std::vector<std::string>&args){
-	if(args.size()==1&&(args[0]=="-h"||args[0]=="--help")){
-		use_mview();
-		return 0;
-	}
+DayResult run_day(const DayCmd&cmd){
+	return lunar::core::compute_day(cmd.run);
+}
+
+void write_day(std::ostream&os,const DayCmd&cmd,const DayResult&res){
+	lunar::core::format_day_output(os,res,cmd.format,cmd.pretty);
+}
+
+MvOpt parse_mview(const std::vector<std::string>&args){
 	if(args.size()<2){
 		throw std::invalid_argument("monthview requires: <bsp> <YYYY-MM>");
 	}
-
 	InterCfg cfg=load_def();
-	std::string ephem=args[0];
-	std::string ym=args[1];
-	std::string tz=cfg.default_tz;
-	std::string lunar_day_tz=resolve_lunar_day_tz(cfg);
-	std::string format=to_low(cfg.def_fmt);
-	if(format!="txt"&&format!="json"&&format!="csv"){
-		format="txt";
+	MvOpt opt;
+	opt.ephem=args[0];
+	opt.ym=args[1];
+	opt.tz=cfg.default_tz;
+	opt.lunar_day_tz=resolve_lunar_day_tz(cfg);
+	opt.format=to_low(cfg.def_fmt);
+	if(opt.format!="txt"&&opt.format!="json"&&opt.format!="csv"){
+		opt.format="txt";
 	}
-	std::string out_path;
-	bool pretty=cfg.def_prety;
-	bool quiet=false;
-	bool inc_astro=false;
-	std::string astro_mode_text="less";
-	std::string astro_pick_csv;
-	double astro_lat_deg=0.0;
-	double astro_lon_deg=0.0;
-	double astro_h_m=0.0;
-	bool has_astro_lat=false;
-	bool has_astro_lon=false;
-	bool has_astro_h=false;
+	opt.pretty=cfg.def_prety;
+
+	double astro_lat=0.0;
+	double astro_lon=0.0;
+	double astro_h=0.0;
+	bool has_lat=false;
+	bool has_lon=false;
+	bool has_h=false;
 	lunar::ArgParser parser;
-	parser.add_value("--tz",[&](const std::string&value){ tz=value; });
+	parser.add_value("--tz",[&](const std::string&v){ opt.tz=v; });
 	parser.add_value("--lunar-day-tz",
-					 [&](const std::string&value){ lunar_day_tz=value; });
+					 [&](const std::string&v){ opt.lunar_day_tz=v; });
 	parser.add_value("--format",
-					 [&format](const std::string&value){ format=to_low(value); });
-	parser.add_value("--out",[&](const std::string&value){ out_path=value; });
-	parser.add_value(
-		"--pretty",[&](const std::string&value){
-			pretty=parse_bool01(value,"--pretty");
-		});
-	parser.add_flag("--quiet",[&](){ quiet=true; });
-	parser.add_value(
-		"--astro",[&](const std::string&value){
-			inc_astro=parse_bool01(value,"--astro");
-		});
+					 [&](const std::string&v){ opt.format=to_low(v); });
+	parser.add_value("--out",[&](const std::string&v){ opt.out_path=v; });
+	parser.add_value("--pretty",[&](const std::string&v){
+		opt.pretty=parse_bool01(v,"--pretty");
+	});
+	parser.add_flag("--quiet",[&](){ opt.quiet=true; });
+	parser.add_value("--astro",[&](const std::string&v){
+		opt.inc_astro=parse_bool01(v,"--astro");
+	});
 	parser.add_value("--astro-mode",
-					 [&](const std::string&value){ astro_mode_text=value; });
+					 [&](const std::string&v){ opt.astro_mode_text=v; });
 	parser.add_value("--astro-pick",
-					 [&](const std::string&value){ astro_pick_csv=value; });
-	parser.add_value(
-		"--astro-lat",[&](const std::string&value){
-			astro_lat_deg=parse_double(value,"--astro-lat");
-			has_astro_lat=true;
-		});
-	parser.add_value(
-		"--astro-lon",[&](const std::string&value){
-			astro_lon_deg=parse_double(value,"--astro-lon");
-			has_astro_lon=true;
-		});
-	parser.add_value(
-		"--astro-height",[&](const std::string&value){
-			astro_h_m=parse_double(value,"--astro-height");
-			has_astro_h=true;
-		});
+					 [&](const std::string&v){ opt.astro_pick_csv=v; });
+	parser.add_value("--astro-lat",[&](const std::string&v){
+		astro_lat=parse_double(v,"--astro-lat");
+		has_lat=true;
+	});
+	parser.add_value("--astro-lon",[&](const std::string&v){
+		astro_lon=parse_double(v,"--astro-lon");
+		has_lon=true;
+	});
+	parser.add_value("--astro-height",[&](const std::string&v){
+		astro_h=parse_double(v,"--astro-height");
+		has_h=true;
+	});
 
 	for(std::size_t i=2;i<args.size();++i){
-		const std::string&opt=args[i];
-		if(opt=="-h"||opt=="--help"){
+		if(args[i]=="-h"||args[i]=="--help"){
 			use_mview();
-			return 0;
+			opt.format.clear();
+			return opt;
 		}
 		if(!parser.parse_one(args,i,"monthview")){
-			throw std::invalid_argument("unknown option for monthview: "+opt);
+			throw std::invalid_argument("unknown option for monthview: "+args[i]);
 		}
 	}
-	if(has_astro_lat!=has_astro_lon){
+	if(has_lat!=has_lon){
 		throw std::invalid_argument(
 			"astro site requires both --astro-lat and --astro-lon");
 	}
-	if(has_astro_h&&!has_astro_lat){
+	if(has_h&&!has_lat){
 		throw std::invalid_argument(
 			"--astro-height requires --astro-lat and --astro-lon");
 	}
-	chk_fmt(format,{"json","txt","csv"},"monthview");
-	lunar_day_tz=canonical_tz_text(lunar_day_tz);
+	chk_fmt(opt.format,{"json","txt","csv"},"monthview");
+	opt.lunar_day_tz=canonical_tz_text(opt.lunar_day_tz);
+	if(has_lat){
+		opt.astro_obs.has_site=true;
+		opt.astro_obs.lat_deg=astro_lat;
+		opt.astro_obs.lon_deg=astro_lon;
+		opt.astro_obs.h_m=has_h?astro_h:0.0;
+	}
+	return opt;
+}
+
+MvRes run_mview(const MvOpt&opt){
 	int year=0;
 	int month=0;
-	std::tie(year,month)=parse_ym(ym);
-
-	int tz_off=parse_tz(tz);
-	int lunar_day_tz_off=parse_tz(lunar_day_tz);
+	std::tie(year,month)=parse_ym(opt.ym);
+	int tz_off=parse_tz(opt.tz);
+	int lunar_day_tz_off=parse_tz(opt.lunar_day_tz);
 	int n_days=days_gm(year,month);
-	StarPick astro_pick;
-	if(inc_astro){
-		StarMode mode=parse_star_mode(astro_mode_text);
-		astro_pick=make_star_pick(mode,astro_pick_csv);
-	}
-	AstroObs astro_obs;
-	if(has_astro_lat){
-		astro_obs.has_site=true;
-		astro_obs.lat_deg=astro_lat_deg;
-		astro_obs.lon_deg=astro_lon_deg;
-		astro_obs.h_m=has_astro_h?astro_h_m:0.0;
-	}
-	EphRead eph(ephem);
-	QueryCache cache(eph);
 
+	MvRes res;
+	if(opt.inc_astro){
+		StarMode mode=parse_star_mode(opt.astro_mode_text);
+		res.astro_pick=make_star_pick(mode,opt.astro_pick_csv);
+	}
+
+	EphRead eph(opt.ephem);
+	QueryCache cache(eph);
 	std::set<int> years={year-1,year,year+1};
 	std::vector<EventRec> events=
-		col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr);
+		col_eyrs(eph,years,tz_off,opt.quiet?nullptr:&std::cerr);
 	std::map<int,std::vector<std::string>> day2ev;
 	for(const auto&ev : events){
 		int ey=0,em=0,ed=0;
@@ -289,115 +298,101 @@ int cmd_mview(const std::vector<std::string>&args){
 			day2ev[ed].push_back(ev.name);
 		}
 	}
+
 	std::map<int,std::vector<std::string>> day2astro;
-	if(inc_astro){
-		int n_year=year;
-		int n_month=month+1;
-		if(n_month>12){
-			n_month=1;
-			++n_year;
+	if(opt.inc_astro){
+		int ny=year;
+		int nm=month+1;
+		if(nm>12){
+			nm=1;
+			++ny;
 		}
-		double month_sutc=civil_midjd(year,month,1,lunar_day_tz_off);
-		double month_eutc=civil_midjd(n_year,n_month,1,lunar_day_tz_off);
+		double st=civil_midjd(year,month,1,lunar_day_tz_off);
+		double ed=civil_midjd(ny,nm,1,lunar_day_tz_off);
 		std::vector<AstroEvt> astro=
-			calc_astro_evt(eph,month_sutc,month_eutc,astro_pick,astro_obs);
+			calc_astro_evt(eph,st,ed,res.astro_pick,opt.astro_obs);
 		for(const auto&ev : astro){
-			int ey=0;
-			int em=0;
-			int ed=0;
-			utc2civil(ev.jd_utc,lunar_day_tz_off,ey,em,ed);
+			int ey=0,em=0,ed2=0;
+			utc2civil(ev.jd_utc,lunar_day_tz_off,ey,em,ed2);
 			if(ey==year&&em==month){
-				day2astro[ed].push_back(ev.name);
+				day2astro[ed2].push_back(ev.name);
 			}
 		}
 	}
 
-	struct Row{
-		std::string greg_date;
-		std::string lun_label;
-		bool is_leap=false;
-		std::string lun_mlab;
-		double ill_pct=0.0;
-		std::string moon_xg_region;
-		std::string moon_xg_star;
-		double moon_xg_sep_deg=std::numeric_limits<double>::quiet_NaN();
-		std::string ev_sum;
-		std::string astro_ev_sum;
-	};
-	std::vector<Row> rows;
-	rows.reserve(static_cast<std::size_t>(n_days));
-	for(int d=1;d<=n_days;++d){
-		double smp_jdutc=civil_midjd(year,month,d,lunar_day_tz_off)+0.5;
-		AtData atd=at_fromjd(eph,smp_jdutc,tz_off,lunar_day_tz_off,tz,
-							 ymd_str(year,month,d),lunar_day_tz,
-							 false,false,0.0,120.0,nullptr,&cache);
-		std::vector<std::string> ev_names;
-		auto it=day2ev.find(d);
-		if(it!=day2ev.end()){
-			ev_names=it->second;
-		}
-		std::vector<std::string> astro_names;
-		auto ita=day2astro.find(d);
-		if(ita!=day2astro.end()){
-			astro_names=ita->second;
-		}
-		rows.push_back(Row{ymd_str(year,month,d),atd.lunar_date.lun_label,
-						   atd.lunar_date.is_leap,atd.lunar_date.lun_mlab,
-						   atd.ill_pct,atd.moon_xg.region,atd.moon_xg.star_name,
-						   atd.moon_xg.sep_deg,join_pipe(ev_names),
-						   join_pipe(astro_names)});
+	res.rows.reserve(static_cast<std::size_t>(n_days));
+	for(int day=1;day<=n_days;++day){
+		double smp=civil_midjd(year,month,day,lunar_day_tz_off)+0.5;
+		AtData atd=at_fromjd(eph,smp,tz_off,lunar_day_tz_off,opt.tz,
+							 ymd_str(year,month,day),opt.lunar_day_tz,false,
+							 false,0.0,120.0,nullptr,&cache);
+		res.rows.push_back(MvRow{
+			ymd_str(year,month,day),
+			atd.lunar_date.lun_label,
+			atd.lunar_date.is_leap,
+			atd.lunar_date.lun_mlab,
+			atd.ill_pct,
+			atd.moon_xg.region,
+			atd.moon_xg.star_name,
+			atd.moon_xg.sep_deg,
+			join_pipe(day2ev[day]),
+			join_pipe(day2astro[day]),
+		});
 	}
+	return res;
+}
 
-	OutTgt out=open_out(out_path);
-	const FmtMap fmt_handlers={
+void write_mview(std::ostream&os,const MvOpt&opt,const MvRes&res){
+	const FmtMap fmts={
 		{"json",[&](){
-			 JsonWriter w(*out.stream,pretty);
+			 JsonWriter w(os,opt.pretty);
 			 w.obj_begin();
-			 write_meta(w,ephem,tz,{"type=monthview",lunar_day_rule_note(lunar_day_tz)});
+			 write_meta(w,opt.ephem,opt.tz,
+						{"type=monthview",lunar_day_rule_note(opt.lunar_day_tz)});
 			 w.key("input");
 			 w.obj_begin();
 			 w.key("month");
-			 w.value(ym);
+			 w.value(opt.ym);
 			 w.key("lunar_day_tz");
-			 w.value(lunar_day_tz);
+			 w.value(opt.lunar_day_tz);
 			 w.key("astro");
-			 w.value(inc_astro);
+			 w.value(opt.inc_astro);
 			 w.key("astro_mode");
-			 if(inc_astro){
-				 w.value(astro_mode_text);
+			 if(opt.inc_astro){
+				 w.value(opt.astro_mode_text);
 			 }else{
 				 w.null_val();
 			 }
 			 w.key("astro_pick");
-			 if(inc_astro&&astro_pick.mode==StarMode::Pick){
-				 w.value(astro_pick_csv);
+			 if(opt.inc_astro&&res.astro_pick.mode==StarMode::Pick){
+				 w.value(opt.astro_pick_csv);
 			 }else{
 				 w.null_val();
 			 }
 			 w.key("astro_site");
-			 w.value(astro_obs.has_site);
+			 w.value(opt.astro_obs.has_site);
 			 w.key("astro_lat_deg");
-			 if(astro_obs.has_site){
-				 w.value(astro_obs.lat_deg);
+			 if(opt.astro_obs.has_site){
+				 w.value(opt.astro_obs.lat_deg);
 			 }else{
 				 w.null_val();
 			 }
 			 w.key("astro_lon_deg");
-			 if(astro_obs.has_site){
-				 w.value(astro_obs.lon_deg);
+			 if(opt.astro_obs.has_site){
+				 w.value(opt.astro_obs.lon_deg);
 			 }else{
 				 w.null_val();
 			 }
 			 w.key("astro_height_m");
-			 if(astro_obs.has_site){
-				 w.value(astro_obs.h_m);
+			 if(opt.astro_obs.has_site){
+				 w.value(opt.astro_obs.h_m);
 			 }else{
 				 w.null_val();
 			 }
 			 w.obj_end();
 			 w.key("data");
 			 w.arr_begin();
-			 for(const auto&row : rows){
+			 for(const auto&row : res.rows){
 				 w.obj_begin();
 				 w.key("greg_date");
 				 w.value(row.greg_date);
@@ -423,47 +418,46 @@ int cmd_mview(const std::vector<std::string>&args){
 			 }
 			 w.arr_end();
 			 w.obj_end();
-			 *out.stream<<"\n";
+			 os<<"\n";
 		 }},
 		{"csv",[&](){
-			 *out.stream<<"greg_date,lun_label,is_leap,lun_m_"
-						  "label,ill_pct,moon_xg_region,moon_xg_star,"
-						  "moon_xg_sep_deg,ev_sum,astro_ev_sum\n";
-			 for(const auto&row : rows){
-				 *out.stream<<csv_quote(row.greg_date)<<","
-						   <<csv_quote(row.lun_label)<<","
-						   <<(row.is_leap?"1":"0")<<","
-						   <<csv_quote(row.lun_mlab)<<","
-						   <<format_num(row.ill_pct)<<","
-						   <<csv_quote(row.moon_xg_region)<<","
-						   <<csv_quote(row.moon_xg_star)<<","
-						   <<format_num(row.moon_xg_sep_deg)<<","
-						   <<csv_quote(row.ev_sum)<<","
-						   <<csv_quote(row.astro_ev_sum)<<"\n";
+			 os<<"greg_date,lun_label,is_leap,lun_m_label,ill_pct,"
+				  "moon_xg_region,moon_xg_star,moon_xg_sep_deg,ev_sum,"
+				  "astro_ev_sum\n";
+			 for(const auto&row : res.rows){
+				 os<<csv_quote(row.greg_date)<<","
+				   <<csv_quote(row.lun_label)<<","
+				   <<(row.is_leap?"1":"0")<<","
+				   <<csv_quote(row.lun_mlab)<<","
+				   <<format_num(row.ill_pct)<<","
+				   <<csv_quote(row.moon_xg_region)<<","
+				   <<csv_quote(row.moon_xg_star)<<","
+				   <<format_num(row.moon_xg_sep_deg)<<","
+				   <<csv_quote(row.ev_sum)<<","
+				   <<csv_quote(row.astro_ev_sum)<<"\n";
 			 }
 		 }},
 		{"txt",[&](){
-			 std::ostream&os=*out.stream;
-			 os<<"tool=lunar format=txt type=monthview tz_display="<<tz<<"\n";
-			 os<<"input.month="<<ym<<"\n";
-			 os<<"input.lunar_day_tz="<<lunar_day_tz<<"\n";
-			 os<<"input.astro="<<(inc_astro?"1":"0")<<"\n";
-			 os<<"input.astro_mode="<<astro_mode_text<<"\n";
-			 os<<"input.astro_pick="<<astro_pick_csv<<"\n";
-			 os<<"input.astro_site="<<(astro_obs.has_site?"1":"0")<<"\n";
+			 os<<"tool=lunar format=txt type=monthview tz_display="<<opt.tz<<"\n";
+			 os<<"input.month="<<opt.ym<<"\n";
+			 os<<"input.lunar_day_tz="<<opt.lunar_day_tz<<"\n";
+			 os<<"input.astro="<<(opt.inc_astro?"1":"0")<<"\n";
+			 os<<"input.astro_mode="<<opt.astro_mode_text<<"\n";
+			 os<<"input.astro_pick="<<opt.astro_pick_csv<<"\n";
+			 os<<"input.astro_site="<<(opt.astro_obs.has_site?"1":"0")<<"\n";
 			 os<<"input.astro_lat_deg="
-			   <<(astro_obs.has_site?format_num(astro_obs.lat_deg):"null")
+			   <<(opt.astro_obs.has_site?format_num(opt.astro_obs.lat_deg):"null")
 			   <<"\n";
 			 os<<"input.astro_lon_deg="
-			   <<(astro_obs.has_site?format_num(astro_obs.lon_deg):"null")
+			   <<(opt.astro_obs.has_site?format_num(opt.astro_obs.lon_deg):"null")
 			   <<"\n";
 			 os<<"input.astro_height_m="
-			   <<(astro_obs.has_site?format_num(astro_obs.h_m):"null")
+			   <<(opt.astro_obs.has_site?format_num(opt.astro_obs.h_m):"null")
 			   <<"\n";
-			 os<<"greg_date\tlunar_date_label\tis_leap\tlunar_month_"
-				 "label\till_pct\tmoon_xg_region\tmoon_xg_star\tmoon_xg_sep_"
-				 "deg\tevents_summary\tastro_events_summary\n";
-			 for(const auto&row : rows){
+			 os<<"greg_date\tlunar_date_label\tis_leap\tlunar_month_label\t"
+				 "ill_pct\tmoon_xg_region\tmoon_xg_star\tmoon_xg_sep_deg\t"
+				 "events_summary\tastro_events_summary\n";
+			 for(const auto&row : res.rows){
 				 os<<row.greg_date<<"\t"<<row.lun_label<<"\t"
 				   <<(row.is_leap?"1":"0")<<"\t"<<row.lun_mlab<<"\t"
 				   <<format_num(row.ill_pct)<<"\t"<<row.moon_xg_region<<"\t"
@@ -472,8 +466,39 @@ int cmd_mview(const std::vector<std::string>&args){
 			 }
 		 }},
 	};
-	run_fmt(fmt_handlers,format,"monthview");
-	note_out(out_path,quiet);
+	run_fmt(fmts,opt.format,"monthview");
+}
+
+}
+
+int cmd_day(const std::vector<std::string>&args){
+	if(args.size()==1&&(args[0]=="-h"||args[0]=="--help")){
+		use_day();
+		return 0;
+	}
+	DayCmd cmd=parse_day(args);
+	if(cmd.format.empty()){
+		return 0;
+	}
+	DayResult res=run_day(cmd);
+	OutTgt out=open_out(cmd.out_path);
+	write_day(*out.stream,cmd,res);
+	note_out(cmd.out_path,cmd.quiet);
 	return 0;
 }
 
+int cmd_mview(const std::vector<std::string>&args){
+	if(args.size()==1&&(args[0]=="-h"||args[0]=="--help")){
+		use_mview();
+		return 0;
+	}
+	MvOpt opt=parse_mview(args);
+	if(opt.format.empty()){
+		return 0;
+	}
+	MvRes res=run_mview(opt);
+	OutTgt out=open_out(opt.out_path);
+	write_mview(*out.stream,opt,res);
+	note_out(opt.out_path,opt.quiet);
+	return 0;
+}
