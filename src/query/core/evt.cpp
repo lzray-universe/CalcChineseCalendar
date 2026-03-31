@@ -1,5 +1,74 @@
+#include "src/common/exec.hpp"
+
+#include<iterator>
+
 // Event serializers, event collection, filters, and ICS output.
 namespace{
+
+struct YearEvtCtx{
+	EphRead* eph=nullptr;
+	SolLunCal solver;
+
+	explicit YearEvtCtx(EphRead&src)
+		: eph(&src),solver(src){}
+};
+
+std::vector<EventRec> bld_year_events(YearEvtCtx&ctx,int year,int tz_off,
+									  const EvtFilt&filter){
+	YearResult yr=ctx.solver.compute_year(year,nullptr);
+	std::vector<EventRec> out;
+	if(filter.inc_st){
+		std::vector<EventRec> solar=bld_stev(yr,tz_off);
+		out.insert(out.end(),solar.begin(),solar.end());
+	}
+	if(filter.inc_lph){
+		std::vector<EventRec> phase=bld_lpev(yr,tz_off);
+		out.insert(out.end(),phase.begin(),phase.end());
+	}
+	if(filter.inc_lecl){
+		std::vector<EventRec> lecl=
+			bld_lunar_eclipse_events(*ctx.eph,yr,tz_off);
+		out.insert(out.end(),lecl.begin(),lecl.end());
+	}
+	if(filter.inc_secl){
+		std::vector<EventRec> secl=
+			bld_solar_eclipse_events(*ctx.eph,yr,tz_off);
+		out.insert(out.end(),secl.begin(),secl.end());
+	}
+	return out;
+}
+
+EvtFilt mk_evt_flt(bool inc_eclipse){
+	EvtFilt filter;
+	filter.inc_ecl=inc_eclipse;
+	filter.inc_lecl=inc_eclipse;
+	filter.inc_secl=inc_eclipse;
+	return filter;
+}
+
+std::set<int> add_years(std::set<int>&loaded,int year_lo,int year_hi){
+	std::set<int> out;
+	for(int year=year_lo;year<=year_hi;++year){
+		if(loaded.insert(year).second){
+			out.insert(year);
+		}
+	}
+	return out;
+}
+
+void merge_evs(std::vector<EventRec>&dst,std::vector<EventRec> src){
+	if(src.empty()){
+		return;
+	}
+	const std::size_t split=dst.size();
+	dst.insert(dst.end(),
+			   std::make_move_iterator(src.begin()),
+			   std::make_move_iterator(src.end()));
+	std::inplace_merge(dst.begin(),dst.begin()+static_cast<std::ptrdiff_t>(split),
+					   dst.end(),[](const EventRec&a,const EventRec&b){
+		return a.jd_utc<b.jd_utc;
+	});
+}
 
 void wr_ejson(JsonWriter&w,const EventRec&ev,EphRead&eph,bool calc_eclipse=false,
 			  int tz_off=0){
@@ -54,30 +123,43 @@ void wr_nslot(JsonWriter&w,const NearEvt&ev,EphRead&eph){
 }
 
 std::vector<EventRec> col_eyrs(EphRead&eph,const std::set<int>&years,int tz_off,
-							   std::ostream*log,bool inc_eclipse=false){
-	SolLunCal solver(eph);
-	std::vector<EventRec> events;
+							   std::ostream*log,const EvtFilt&filter){
+	const std::vector<int> year_list(years.begin(),years.end());
 	const bool show_progress=(log!=nullptr&&years.size()>1);
-	for(int y : years){
-		if(show_progress){
+	if(show_progress){
+		for(int y : year_list){
 			log_year_progress(log,y);
 		}
-		YearResult yr=solver.compute_year(y,nullptr);
-		std::vector<EventRec> solar=bld_stev(yr,tz_off);
-		std::vector<EventRec> phase=bld_lpev(yr,tz_off);
-		events.insert(events.end(),solar.begin(),solar.end());
-		events.insert(events.end(),phase.begin(),phase.end());
-		if(inc_eclipse){
-			std::vector<EventRec> lecl=bld_lunar_eclipse_events(eph,yr,tz_off);
-			std::vector<EventRec> secl=bld_solar_eclipse_events(eph,yr,tz_off);
-			events.insert(events.end(),lecl.begin(),lecl.end());
-			events.insert(events.end(),secl.begin(),secl.end());
-		}
+	}
+	std::vector<std::vector<EventRec>> groups(year_list.size());
+	lunar::exec::for_each_index(
+		year_list.size(),0,
+		[&](){ return YearEvtCtx(eph); },
+		[&](YearEvtCtx&ctx,std::size_t idx){
+			groups[idx]=
+				bld_year_events(ctx,year_list[idx],tz_off,filter);
+		});
+
+	std::size_t total=0;
+	for(const auto&group : groups){
+		total+=group.size();
+	}
+	std::vector<EventRec> events;
+	events.reserve(total);
+	for(auto&group : groups){
+		events.insert(events.end(),
+					  std::make_move_iterator(group.begin()),
+					  std::make_move_iterator(group.end()));
 	}
 	std::sort(events.begin(),events.end(),[](const EventRec&a,const EventRec&b){
 		return a.jd_utc<b.jd_utc;
 	});
 	return events;
+}
+
+std::vector<EventRec> col_eyrs(EphRead&eph,const std::set<int>&years,int tz_off,
+							   std::ostream*log,bool inc_eclipse=false){
+	return col_eyrs(eph,years,tz_off,log,mk_evt_flt(inc_eclipse));
 }
 
 EvtFilt parse_ef(const std::string&text){

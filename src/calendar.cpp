@@ -1,5 +1,7 @@
 #include "lunar/calendar.hpp"
 
+#include "src/common/exec.hpp"
+
 #include<algorithm>
 #include<cmath>
 #include<fstream>
@@ -302,17 +304,20 @@ SolLunCal::run_roots(const std::vector<RootTask>&tasks){
 		return {results,errors};
 	}
 
-	for(std::size_t idx=0;idx<tasks.size();++idx){
-		const auto&task=tasks[idx];
-		try{
-			results[idx]=newton(task.kind,task.jd_initial,task.target,
-								task.eps_days,task.max_iter);
-		}catch(const std::exception&ex){
-			errors[idx]=ex.what();
-		}catch(...){
-			errors[idx]="unknown error";
-		}
-	}
+	lunar::exec::for_each_index(
+		tasks.size(),0,
+		[this](){ return SolLunCal(eph); },
+		[&](SolLunCal&worker,std::size_t idx){
+			const auto&task=tasks[idx];
+			try{
+				results[idx]=worker.newton(task.kind,task.jd_initial,task.target,
+										   task.eps_days,task.max_iter);
+			}catch(const std::exception&ex){
+				errors[idx]=ex.what();
+			}catch(...){
+				errors[idx]="unknown error";
+			}
+		});
 
 	return {results,errors};
 }

@@ -11,9 +11,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(LUNAR_ENABLE_DIMENSION_TYPES "Enable compile-time tagged physical vectors" ON)
 option(LUNAR_ENABLE_SERIES_FALLBACK "Enable VSOP87A/ELPMPP02 fallback when BSP is unavailable" ON)
+option(LUNAR_ENABLE_THREADS "Enable internal multithreading" ON)
 option(LUNAR_BUILD_TESTS "Build GoogleTest-based test targets" ${BUILD_TESTING})
 option(LUNAR_ENABLE_IPO "Enable link-time/interprocedural optimization for release-like builds" ON)
 option(LUNAR_ENABLE_FAST_MATH "Enable faster but less strict floating-point optimizations" OFF)
+
+if(LUNAR_ENABLE_THREADS)
+    find_package(Threads REQUIRED)
+endif()
 
 if(LUNAR_ENABLE_IPO AND NOT EMSCRIPTEN)
     check_ipo_supported(RESULT LUNAR_IPO_SUPPORTED OUTPUT LUNAR_IPO_OUTPUT LANGUAGES C CXX)
@@ -162,7 +167,11 @@ target_include_directories(lunar_core PUBLIC
 target_compile_definitions(lunar_core PUBLIC
     LUNAR_ENABLE_DIMENSION_TYPES=$<BOOL:${LUNAR_ENABLE_DIMENSION_TYPES}>
     LUNAR_ENABLE_SERIES_FALLBACK=$<BOOL:${LUNAR_ENABLE_SERIES_FALLBACK}>
+    LUNAR_ENABLE_THREADS=$<BOOL:${LUNAR_ENABLE_THREADS}>
 )
+if(LUNAR_ENABLE_THREADS)
+    target_link_libraries(lunar_core PUBLIC Threads::Threads)
+endif()
 if(EMSCRIPTEN)
     target_compile_options(lunar_core PUBLIC
         ${LUNAR_EMSCRIPTEN_COMPILE_OPTIONS}

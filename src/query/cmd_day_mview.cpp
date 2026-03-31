@@ -41,6 +41,20 @@ struct MvRes{
 	StarPick astro_pick;
 };
 
+void wr_mv_csv(CsvWriter&w,const MvRow&row){
+	w.write_field("greg_date",row.greg_date);
+	w.write_field("lun_label",row.lun_label);
+	w.write_field("is_leap",row.is_leap);
+	w.write_field("lun_m_label",row.lun_mlab);
+	w.write_raw("ill_pct",format_num(row.ill_pct));
+	w.write_field("moon_xg_region",row.moon_xg_region);
+	w.write_field("moon_xg_star",row.moon_xg_star);
+	w.write_raw("moon_xg_sep_deg",format_num(row.moon_xg_sep_deg));
+	w.write_field("ev_sum",row.ev_sum);
+	w.write_field("astro_ev_sum",row.astro_ev_sum);
+	w.finish_row();
+}
+
 DayCmd parse_day(const std::vector<std::string>&args){
 	if(args.size()<2){
 		throw std::invalid_argument("day requires: <bsp> <YYYY-MM-DD>");
@@ -421,20 +435,9 @@ void write_mview(std::ostream&os,const MvOpt&opt,const MvRes&res){
 			 os<<"\n";
 		 }},
 		{"csv",[&](){
-			 os<<"greg_date,lun_label,is_leap,lun_m_label,ill_pct,"
-				  "moon_xg_region,moon_xg_star,moon_xg_sep_deg,ev_sum,"
-				  "astro_ev_sum\n";
+			 CsvWriter csv(os);
 			 for(const auto&row : res.rows){
-				 os<<csv_quote(row.greg_date)<<","
-				   <<csv_quote(row.lun_label)<<","
-				   <<(row.is_leap?"1":"0")<<","
-				   <<csv_quote(row.lun_mlab)<<","
-				   <<format_num(row.ill_pct)<<","
-				   <<csv_quote(row.moon_xg_region)<<","
-				   <<csv_quote(row.moon_xg_star)<<","
-				   <<format_num(row.moon_xg_sep_deg)<<","
-				   <<csv_quote(row.ev_sum)<<","
-				   <<csv_quote(row.astro_ev_sum)<<"\n";
+				 wr_mv_csv(csv,row);
 			 }
 		 }},
 		{"txt",[&](){

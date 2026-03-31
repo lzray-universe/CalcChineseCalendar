@@ -1,5 +1,169 @@
 namespace{
 
+void wr_csv_num(CsvWriter&w,const std::string&key,double v){
+	if(std::isfinite(v)){
+		w.write_raw(key,format_num(v));
+	}else{
+		w.write_raw(key,"");
+	}
+}
+
+std::vector<std::string> el_csv_hdr(bool calc_eclipse){
+	std::vector<std::string> out={
+		"kind","code","name","year","jd_utc","utc_iso","loc_iso"
+	};
+	if(!calc_eclipse){
+		return out;
+	}
+	const std::array<const char*,89> extra={{
+		"eclipse_type","eclipse_gamma","eclipse_eps_deg","eclipse_dt_max_sec",
+		"eclipse_dur_pen_sec","eclipse_dur_umb_sec","eclipse_dur_tot_sec",
+		"eclipse_rp_re","eclipse_ru_re","eclipse_opp_rp_re","eclipse_opp_ru_re",
+		"eclipse_moon_dist_km","eclipse_sun_ra_deg","eclipse_sun_dec_deg",
+		"eclipse_sun_sd_deg","eclipse_sun_ehp_deg","eclipse_moon_ra_deg",
+		"eclipse_moon_dec_deg","eclipse_moon_sd_deg","eclipse_moon_ehp_deg",
+		"eclipse_lib_l_deg","eclipse_lib_b_deg","eclipse_lib_c_deg",
+		"eclipse_opp_loc_iso","eclipse_max_loc_iso","eclipse_pen_mag",
+		"eclipse_umb_mag","eclipse_p1_loc_iso","eclipse_u1_loc_iso",
+		"eclipse_u2_loc_iso","eclipse_u3_loc_iso","eclipse_u4_loc_iso",
+		"eclipse_p4_loc_iso",
+		"p1_jd_ut1","p1_jd_td","p1_jd","p1_zen_lat_deg","p1_zen_lon_deg",
+		"p1_pa_deg","p1_axis_deg",
+		"u1_jd_ut1","u1_jd_td","u1_jd","u1_zen_lat_deg","u1_zen_lon_deg",
+		"u1_pa_deg","u1_axis_deg",
+		"u2_jd_ut1","u2_jd_td","u2_jd","u2_zen_lat_deg","u2_zen_lon_deg",
+		"u2_pa_deg","u2_axis_deg",
+		"opp_jd_ut1","opp_jd_td","opp_jd","opp_zen_lat_deg","opp_zen_lon_deg",
+		"opp_pa_deg","opp_axis_deg",
+		"max_jd_ut1","max_jd_td","max_jd","max_zen_lat_deg","max_zen_lon_deg",
+		"max_pa_deg","max_axis_deg",
+		"u3_jd_ut1","u3_jd_td","u3_jd","u3_zen_lat_deg","u3_zen_lon_deg",
+		"u3_pa_deg","u3_axis_deg",
+		"u4_jd_ut1","u4_jd_td","u4_jd","u4_zen_lat_deg","u4_zen_lon_deg",
+		"u4_pa_deg","u4_axis_deg",
+		"p4_jd_ut1","p4_jd_td","p4_jd","p4_zen_lat_deg","p4_zen_lon_deg",
+		"p4_pa_deg","p4_axis_deg"
+	}};
+	out.insert(out.end(),extra.begin(),extra.end());
+	return out;
+}
+
+void wr_csv_node_blank(CsvWriter&w,const std::string&tag){
+	w.write_raw(tag+"_jd_ut1","");
+	w.write_raw(tag+"_jd_td","");
+	w.write_raw(tag+"_jd","");
+	w.write_raw(tag+"_zen_lat_deg","");
+	w.write_raw(tag+"_zen_lon_deg","");
+	w.write_raw(tag+"_pa_deg","");
+	w.write_raw(tag+"_axis_deg","");
+}
+
+void wr_csv_node(CsvWriter&w,const std::string&tag,double jd_tdb,
+				 const EclipsePointMeta&meta){
+	if(!std::isfinite(jd_tdb)){
+		wr_csv_node_blank(w,tag);
+		return;
+	}
+	double jd_td=TimeScale::tdb_to_tt(jd_tdb);
+	double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
+	double jd_ut1=jd_utc;
+	w.write_raw(tag+"_jd_ut1",format_num(jd_ut1));
+	w.write_raw(tag+"_jd_td",format_num(jd_td));
+	w.write_raw(tag+"_jd",format_num(jd_utc));
+	w.write_raw(tag+"_zen_lat_deg",node_num(meta.zen_lat_deg));
+	w.write_raw(tag+"_zen_lon_deg",node_num(meta.zen_lon_deg));
+	w.write_raw(tag+"_pa_deg",node_num(meta.pa_deg));
+	w.write_raw(tag+"_axis_deg",node_num(meta.axis_deg));
+}
+
+void wr_csv_ecl(CsvWriter&w,const LunarEclipse&ecl,int tz_off){
+	w.write_field("eclipse_type",ecl.type);
+	wr_csv_num(w,"eclipse_gamma",ecl.gamma);
+	wr_csv_num(w,"eclipse_eps_deg",ecl.eps_deg);
+	wr_csv_num(w,"eclipse_dt_max_sec",ecl.dt_max_sec);
+	wr_csv_num(w,"eclipse_dur_pen_sec",ecl.dur_pen_sec);
+	wr_csv_num(w,"eclipse_dur_umb_sec",ecl.dur_umb_sec);
+	wr_csv_num(w,"eclipse_dur_tot_sec",ecl.dur_tot_sec);
+	wr_csv_num(w,"eclipse_rp_re",ecl.rp_re);
+	wr_csv_num(w,"eclipse_ru_re",ecl.ru_re);
+	wr_csv_num(w,"eclipse_opp_rp_re",ecl.opp_rp_re);
+	wr_csv_num(w,"eclipse_opp_ru_re",ecl.opp_ru_re);
+	wr_csv_num(w,"eclipse_moon_dist_km",ecl.moon_dist_km);
+	wr_csv_num(w,"eclipse_sun_ra_deg",ecl.sun_geo.ra_deg);
+	wr_csv_num(w,"eclipse_sun_dec_deg",ecl.sun_geo.dec_deg);
+	wr_csv_num(w,"eclipse_sun_sd_deg",ecl.sun_geo.sd_deg);
+	wr_csv_num(w,"eclipse_sun_ehp_deg",ecl.sun_geo.ehp_deg);
+	wr_csv_num(w,"eclipse_moon_ra_deg",ecl.moon_geo.ra_deg);
+	wr_csv_num(w,"eclipse_moon_dec_deg",ecl.moon_geo.dec_deg);
+	wr_csv_num(w,"eclipse_moon_sd_deg",ecl.moon_geo.sd_deg);
+	wr_csv_num(w,"eclipse_moon_ehp_deg",ecl.moon_geo.ehp_deg);
+	wr_csv_num(w,"eclipse_lib_l_deg",ecl.lib.l_deg);
+	wr_csv_num(w,"eclipse_lib_b_deg",ecl.lib.b_deg);
+	wr_csv_num(w,"eclipse_lib_c_deg",ecl.lib.c_deg);
+	w.write_field("eclipse_opp_loc_iso",node_liso(ecl.jd_tdb_opp,tz_off));
+	w.write_field("eclipse_max_loc_iso",node_liso(ecl.jd_tdb_max,tz_off));
+	wr_csv_num(w,"eclipse_pen_mag",ecl.pen_mag);
+	wr_csv_num(w,"eclipse_umb_mag",ecl.umb_mag);
+	w.write_field("eclipse_p1_loc_iso",node_liso(ecl.jd_tdb_p1,tz_off));
+	w.write_field("eclipse_u1_loc_iso",node_liso(ecl.jd_tdb_u1,tz_off));
+	w.write_field("eclipse_u2_loc_iso",node_liso(ecl.jd_tdb_u2,tz_off));
+	w.write_field("eclipse_u3_loc_iso",node_liso(ecl.jd_tdb_u3,tz_off));
+	w.write_field("eclipse_u4_loc_iso",node_liso(ecl.jd_tdb_u4,tz_off));
+	w.write_field("eclipse_p4_loc_iso",node_liso(ecl.jd_tdb_p4,tz_off));
+	wr_csv_node(w,"p1",ecl.jd_tdb_p1,ecl.p1_meta);
+	wr_csv_node(w,"u1",ecl.jd_tdb_u1,ecl.u1_meta);
+	wr_csv_node(w,"u2",ecl.jd_tdb_u2,ecl.u2_meta);
+	wr_csv_node(w,"opp",ecl.jd_tdb_opp,ecl.opp_meta);
+	wr_csv_node(w,"max",ecl.jd_tdb_max,ecl.max_meta);
+	wr_csv_node(w,"u3",ecl.jd_tdb_u3,ecl.u3_meta);
+	wr_csv_node(w,"u4",ecl.jd_tdb_u4,ecl.u4_meta);
+	wr_csv_node(w,"p4",ecl.jd_tdb_p4,ecl.p4_meta);
+}
+
+void wr_csv_ecl_blank(CsvWriter&w){
+	w.write_raw("eclipse_type","");
+	wr_csv_num(w,"eclipse_gamma",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_eps_deg",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_dt_max_sec",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_dur_pen_sec",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_dur_umb_sec",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_dur_tot_sec",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_rp_re",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_ru_re",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_opp_rp_re",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_opp_ru_re",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_moon_dist_km",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_sun_ra_deg",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_sun_dec_deg",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_sun_sd_deg",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_sun_ehp_deg",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_moon_ra_deg",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_moon_dec_deg",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_moon_sd_deg",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_moon_ehp_deg",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_lib_l_deg",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_lib_b_deg",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_lib_c_deg",std::numeric_limits<double>::quiet_NaN());
+	w.write_raw("eclipse_opp_loc_iso","");
+	w.write_raw("eclipse_max_loc_iso","");
+	wr_csv_num(w,"eclipse_pen_mag",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"eclipse_umb_mag",std::numeric_limits<double>::quiet_NaN());
+	w.write_raw("eclipse_p1_loc_iso","");
+	w.write_raw("eclipse_u1_loc_iso","");
+	w.write_raw("eclipse_u2_loc_iso","");
+	w.write_raw("eclipse_u3_loc_iso","");
+	w.write_raw("eclipse_u4_loc_iso","");
+	w.write_raw("eclipse_p4_loc_iso","");
+	wr_csv_node_blank(w,"p1");
+	wr_csv_node_blank(w,"u1");
+	wr_csv_node_blank(w,"u2");
+	wr_csv_node_blank(w,"opp");
+	wr_csv_node_blank(w,"max");
+	wr_csv_node_blank(w,"u3");
+	wr_csv_node_blank(w,"u4");
+	wr_csv_node_blank(w,"p4");
+}
+
 void wr_eljs(std::ostream&os,const std::string&ephem,const std::string&tz,
 			 bool pretty,const std::vector<EventRec>&events,
 			 const std::string&type,EphRead&eph,bool calc_eclipse=false,
@@ -147,132 +311,24 @@ void wr_eltxt(std::ostream&os,const std::string&tz,
 
 void wr_elcsv(std::ostream&os,const std::vector<EventRec>&events,
 			  EphRead*eph=nullptr,bool calc_eclipse=false,int tz_off=0){
-	constexpr int kEclSummaryCols=33;
-	constexpr int kEclNodeCols=8*7;
-	constexpr int kEclExtraCols=kEclSummaryCols+kEclNodeCols;
-	os<<"kind,code,name,year,jd_utc,utc_iso,loc_iso";
-	if(calc_eclipse){
-		os<<",eclipse_type,eclipse_gamma,eclipse_eps_deg,eclipse_dt_max_sec,"
-		  <<"eclipse_dur_pen_sec,eclipse_dur_umb_sec,eclipse_dur_tot_sec,"
-		  <<"eclipse_rp_re,eclipse_ru_re,eclipse_opp_rp_re,eclipse_opp_ru_re,"
-		  <<"eclipse_moon_dist_km,eclipse_sun_ra_deg,eclipse_sun_dec_deg,"
-		  <<"eclipse_sun_sd_deg,eclipse_sun_ehp_deg,eclipse_moon_ra_deg,"
-		  <<"eclipse_moon_dec_deg,eclipse_moon_sd_deg,eclipse_moon_ehp_deg,"
-		  <<"eclipse_lib_l_deg,eclipse_lib_b_deg,eclipse_lib_c_deg,"
-		  <<"eclipse_opp_loc_iso,eclipse_max_loc_iso,eclipse_pen_mag,"
-		  <<"eclipse_umb_mag,eclipse_p1_loc_iso,eclipse_u1_loc_iso,"
-		  <<"eclipse_u2_loc_iso,eclipse_u3_loc_iso,eclipse_u4_loc_iso,"
-		  <<"eclipse_p4_loc_iso,"
-		  <<"p1_jd_ut1,p1_jd_td,p1_jd,p1_zen_lat_deg,p1_zen_lon_deg,p1_pa_deg,"
-		  <<"p1_axis_deg,u1_jd_ut1,u1_jd_td,u1_jd,u1_zen_lat_deg,u1_zen_lon_deg,"
-		  <<"u1_pa_deg,u1_axis_deg,u2_jd_ut1,u2_jd_td,u2_jd,u2_zen_lat_deg,"
-		  <<"u2_zen_lon_deg,u2_pa_deg,u2_axis_deg,opp_jd_ut1,opp_jd_td,opp_jd,"
-		  <<"opp_zen_lat_deg,opp_zen_lon_deg,opp_pa_deg,opp_axis_deg,max_jd_ut1,max_jd_td,max_jd,"
-		  <<"max_zen_lat_deg,max_zen_lon_deg,max_pa_deg,max_axis_deg,u3_jd_ut1,"
-		  <<"u3_jd_td,u3_jd,u3_zen_lat_deg,u3_zen_lon_deg,u3_pa_deg,u3_axis_deg,"
-		  <<"u4_jd_ut1,u4_jd_td,u4_jd,u4_zen_lat_deg,u4_zen_lon_deg,u4_pa_deg,"
-		  <<"u4_axis_deg,p4_jd_ut1,p4_jd_td,p4_jd,p4_zen_lat_deg,p4_zen_lon_deg,"
-		  <<"p4_pa_deg,p4_axis_deg";
-	}
-	os<<"\n";
+	CsvWriter csv(os);
+	csv.write_header(el_csv_hdr(calc_eclipse));
 	for(const auto&ev : events){
-		os<<csv_quote(ev.kind)<<","<<csv_quote(ev.code)<<","<<csv_quote(ev.name)
-		  <<","<<ev.year<<","<<format_num(ev.jd_utc)<<","<<csv_quote(ev.utc_iso)
-		  <<","<<csv_quote(ev.loc_iso);
+		csv.write_field("kind",ev.kind);
+		csv.write_field("code",ev.code);
+		csv.write_field("name",ev.name);
+		csv.write_field("year",ev.year);
+		csv.write_raw("jd_utc",format_num(ev.jd_utc));
+		csv.write_field("utc_iso",ev.utc_iso);
+		csv.write_field("loc_iso",ev.loc_iso);
 		if(calc_eclipse){
 			if(eph&&(is_full_moon_ev(ev)||ev.kind=="lunar_eclipse")){
-				LunarEclipse ecl=calc_ecl_for_event(*eph,ev);
-				auto out_num=[&](double v){
-					if(std::isfinite(v)){
-						os<<format_num(v);
-					}
-				};
-				os<<","<<csv_quote(ecl.type)<<",";
-				out_num(ecl.gamma);
-				os<<",";
-				out_num(ecl.eps_deg);
-				os<<",";
-				out_num(ecl.dt_max_sec);
-				os<<",";
-				out_num(ecl.dur_pen_sec);
-				os<<",";
-				out_num(ecl.dur_umb_sec);
-				os<<",";
-				out_num(ecl.dur_tot_sec);
-				os<<",";
-				out_num(ecl.rp_re);
-				os<<",";
-				out_num(ecl.ru_re);
-				os<<",";
-				out_num(ecl.opp_rp_re);
-				os<<",";
-				out_num(ecl.opp_ru_re);
-				os<<",";
-				out_num(ecl.moon_dist_km);
-				os<<",";
-				out_num(ecl.sun_geo.ra_deg);
-				os<<",";
-				out_num(ecl.sun_geo.dec_deg);
-				os<<",";
-				out_num(ecl.sun_geo.sd_deg);
-				os<<",";
-				out_num(ecl.sun_geo.ehp_deg);
-				os<<",";
-				out_num(ecl.moon_geo.ra_deg);
-				os<<",";
-				out_num(ecl.moon_geo.dec_deg);
-				os<<",";
-				out_num(ecl.moon_geo.sd_deg);
-				os<<",";
-				out_num(ecl.moon_geo.ehp_deg);
-				os<<",";
-				out_num(ecl.lib.l_deg);
-				os<<",";
-				out_num(ecl.lib.b_deg);
-				os<<",";
-				out_num(ecl.lib.c_deg);
-				os<<","<<csv_quote(node_liso(ecl.jd_tdb_opp,tz_off))
-				  <<","<<csv_quote(node_liso(ecl.jd_tdb_max,tz_off))<<",";
-				out_num(ecl.pen_mag);
-				os<<",";
-				out_num(ecl.umb_mag);
-				os<<","<<csv_quote(node_liso(ecl.jd_tdb_p1,tz_off))
-				  <<","<<csv_quote(node_liso(ecl.jd_tdb_u1,tz_off))
-				  <<","<<csv_quote(node_liso(ecl.jd_tdb_u2,tz_off))
-				  <<","<<csv_quote(node_liso(ecl.jd_tdb_u3,tz_off))
-				  <<","<<csv_quote(node_liso(ecl.jd_tdb_u4,tz_off))
-				  <<","<<csv_quote(node_liso(ecl.jd_tdb_p4,tz_off));
-				auto out_node_csv=[&](double jd_tdb,const EclipsePointMeta&meta){
-					if(!std::isfinite(jd_tdb)){
-						os<<",,,,,,,";
-						return;
-					}
-					double jd_td=TimeScale::tdb_to_tt(jd_tdb);
-					double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
-					double jd_ut1=jd_utc;
-					os<<","<<format_num(jd_ut1)
-					  <<","<<format_num(jd_td)
-					  <<","<<format_num(jd_utc)
-					  <<","<<node_num(meta.zen_lat_deg)
-					  <<","<<node_num(meta.zen_lon_deg)
-					  <<","<<node_num(meta.pa_deg)
-					  <<","<<node_num(meta.axis_deg);
-				};
-				out_node_csv(ecl.jd_tdb_p1,ecl.p1_meta);
-				out_node_csv(ecl.jd_tdb_u1,ecl.u1_meta);
-				out_node_csv(ecl.jd_tdb_u2,ecl.u2_meta);
-				out_node_csv(ecl.jd_tdb_opp,ecl.opp_meta);
-				out_node_csv(ecl.jd_tdb_max,ecl.max_meta);
-				out_node_csv(ecl.jd_tdb_u3,ecl.u3_meta);
-				out_node_csv(ecl.jd_tdb_u4,ecl.u4_meta);
-				out_node_csv(ecl.jd_tdb_p4,ecl.p4_meta);
+				wr_csv_ecl(csv,calc_ecl_for_event(*eph,ev),tz_off);
 			}else{
-				for(int i=0;i<kEclExtraCols;++i){
-					os<<",";
-				}
+				wr_csv_ecl_blank(csv);
 			}
 		}
-		os<<"\n";
+		csv.finish_row();
 	}
 }
 
@@ -327,7 +383,7 @@ std::vector<EventRec> load_evs(EphRead&eph,double jd_from,double jd_to,
 		years.insert(y);
 	}
 	std::vector<EventRec> events=
-		col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr,filter.inc_ecl);
+		col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr,filter);
 	std::sort(events.begin(),events.end(),[](const EventRec&a,const EventRec&b){
 		return a.jd_utc<b.jd_utc;
 	});
@@ -347,14 +403,19 @@ EventRec nearest_ecl(EphRead&eph,double jd_utc,int tz_off,bool quiet,
 	EventRec best;
 	bool has_best=false;
 	double best_abs=std::numeric_limits<double>::infinity();
+	std::set<int> loaded_years;
+	std::vector<EventRec> evs;
+	EvtFilt filter;
+	filter.inc_st=false;
+	filter.inc_lph=false;
+	filter.inc_lecl=(ecl_kind=="lunar_eclipse");
+	filter.inc_secl=(ecl_kind=="solar_eclipse");
+	filter.inc_ecl=true;
 
 	for(int span : {2,4,8}){
-		std::set<int> years;
-		for(int y=cst_year-span;y<=cst_year+span;++y){
-			years.insert(y);
-		}
-		std::vector<EventRec> evs=
-			col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr,true);
+		std::set<int> years=
+			add_years(loaded_years,cst_year-span,cst_year+span);
+		merge_evs(evs,col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr,filter));
 		for(const auto&ev : evs){
 			if(ev.kind!=ecl_kind){
 				continue;

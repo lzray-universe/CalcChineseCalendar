@@ -1,34 +1,50 @@
+#include "src/common/exec.hpp"
+
+namespace{
+
+struct CliYearCtx{
+	EphRead* eph=nullptr;
+	LunCal6 calc;
+	SolLunCal solver;
+
+	explicit CliYearCtx(EphRead&src)
+		: eph(&src),calc(src),solver(src){}
+};
+
+}
+
 void cli_month_impl(const MonthsArgs&args,bool inc_eclipse){
 	std::vector<int> years=parse_year(args.years);
 	const std::string mode=to_low(args.mode);
 	chk_mode(mode);
 
 	int tz_off=parse_tz(args.tz);
-
 	EphRead eph(args.ephem);
-	LunCal6 calc(eph);
-	SolLunCal solver(eph);
-
-	std::vector<MonYrData> data;
-	data.reserve(years.size());
 	const bool show_progress=(!args.quiet&&years.size()>1);
-	for(int y : years){
-		if(show_progress){
+	if(show_progress){
+		for(int y : years){
 			log_year_progress(&std::cerr,y);
 		}
-		std::vector<LunarMonth> months=
-			(mode=="lunar")?enum_lyr(calc,y):enum_gyr(calc,y);
-		MonYrData row;
-		row.year=y;
-		row.mode=mode;
-		row.months=bld_mrec(months,tz_off);
-		row.inc_eclipse=inc_eclipse;
-		if(inc_eclipse){
-			YearResult yr=solver.compute_year(y,nullptr);
-			row.eclipses=bld_eclipses(eph,yr);
-		}
-		data.push_back(std::move(row));
 	}
+	std::vector<MonYrData> data(years.size());
+	lunar::exec::for_each_index(
+		years.size(),0,
+		[&](){ return CliYearCtx(eph); },
+		[&](CliYearCtx&ctx,std::size_t idx){
+			const int y=years[idx];
+			std::vector<LunarMonth> months=
+				(mode=="lunar")?enum_lyr(ctx.calc,y):enum_gyr(ctx.calc,y);
+			MonYrData row;
+			row.year=y;
+			row.mode=mode;
+			row.months=bld_mrec(months,tz_off);
+			row.inc_eclipse=inc_eclipse;
+			if(inc_eclipse){
+				YearResult yr=ctx.solver.compute_year(y,nullptr);
+				row.eclipses=bld_eclipses(*ctx.eph,yr);
+			}
+			data[idx]=std::move(row);
+		});
 
 	if(!args.out_json.empty()||!args.out_txt.empty()){
 		if(!args.out_json.empty()){
@@ -64,33 +80,35 @@ void cli_cal_impl(const CalArgs&args,bool inc_eclipse){
 	}
 
 	EphRead eph(args.ephem);
-	SolLunCal solver(eph);
-	LunCal6 calc(eph);
-
-	std::vector<CalYrData> out_data;
-	out_data.reserve(years.size());
 	const bool show_progress=(!args.quiet&&years.size()>1);
-	for(int y : years){
-		if(show_progress){
+	if(show_progress){
+		for(int y : years){
 			log_year_progress(&std::cerr,y);
 		}
-		YearResult yr=solver.compute_year(y,nullptr);
-		CalYrData item;
-		item.year=y;
-		item.mode="lunar";
-		item.sol_terms=bld_stev(yr,tz_off);
-		item.lun_phase=bld_lpev(yr,tz_off);
-		item.inc_month=args.inc_month;
-		item.inc_eclipse=inc_eclipse;
-		if(args.inc_month){
-			std::vector<LunarMonth> months=enum_lyr(calc,y);
-			item.months=bld_mrec(months,tz_off);
-		}
-		if(inc_eclipse){
-			item.eclipses=bld_eclipses(eph,yr);
-		}
-		out_data.push_back(std::move(item));
 	}
+	std::vector<CalYrData> out_data(years.size());
+	lunar::exec::for_each_index(
+		years.size(),0,
+		[&](){ return CliYearCtx(eph); },
+		[&](CliYearCtx&ctx,std::size_t idx){
+			const int y=years[idx];
+			YearResult yr=ctx.solver.compute_year(y,nullptr);
+			CalYrData item;
+			item.year=y;
+			item.mode="lunar";
+			item.sol_terms=bld_stev(yr,tz_off);
+			item.lun_phase=bld_lpev(yr,tz_off);
+			item.inc_month=args.inc_month;
+			item.inc_eclipse=inc_eclipse;
+			if(args.inc_month){
+				std::vector<LunarMonth> months=enum_lyr(ctx.calc,y);
+				item.months=bld_mrec(months,tz_off);
+			}
+			if(inc_eclipse){
+				item.eclipses=bld_eclipses(*ctx.eph,yr);
+			}
+			out_data[idx]=std::move(item);
+		});
 
 	OutTgt out=open_out(args.out);
 	const FmtMap handlers={

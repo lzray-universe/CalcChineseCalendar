@@ -18,32 +18,64 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          
           - os: ubuntu-latest
-            name: linux-x64-musl
+            name: linux-x64-musl-st
             kind: musl
+            threads: OFF
             zig_target: x86_64-linux-musl
 
           - os: ubuntu-latest
-            name: linux-arm64-musl
+            name: linux-arm64-musl-st
             kind: musl
+            threads: OFF
             zig_target: aarch64-linux-musl
 
-          
           - os: windows-latest
-            name: windows-x64
+            name: windows-x64-st
             kind: native
+            threads: OFF
             cmake_args: ""
 
           - os: windows-latest
-            name: windows-arm64
+            name: windows-arm64-st
             kind: native
+            threads: OFF
             cmake_args: "-A ARM64"
 
-          
           - os: macos-latest
-            name: macos-universal
+            name: macos-universal-st
             kind: native
+            threads: OFF
+            cmake_args: '-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"'
+
+          - os: ubuntu-latest
+            name: linux-x64-musl-mt
+            kind: musl
+            threads: ON
+            zig_target: x86_64-linux-musl
+
+          - os: ubuntu-latest
+            name: linux-arm64-musl-mt
+            kind: musl
+            threads: ON
+            zig_target: aarch64-linux-musl
+
+          - os: windows-latest
+            name: windows-x64-mt
+            kind: native
+            threads: ON
+            cmake_args: ""
+
+          - os: windows-latest
+            name: windows-arm64-mt
+            kind: native
+            threads: ON
+            cmake_args: "-A ARM64"
+
+          - os: macos-latest
+            name: macos-universal-mt
+            kind: native
+            threads: ON
             cmake_args: '-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"'
 
           - os: ubuntu-latest
@@ -76,6 +108,7 @@ jobs:
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release
           -DLUNAR_ENABLE_SERIES_FALLBACK=ON
+          -DLUNAR_ENABLE_THREADS=${{ matrix.threads }}
           -DLUNAR_ENABLE_IPO=ON
           -DLUNAR_ENABLE_FAST_MATH=OFF
           ${{ matrix.cmake_args }}
@@ -140,6 +173,7 @@ jobs:
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DLUNAR_ENABLE_SERIES_FALLBACK=ON \
+            -DLUNAR_ENABLE_THREADS=${{ matrix.threads }} \
             -DLUNAR_ENABLE_IPO=ON \
             -DLUNAR_ENABLE_FAST_MATH=OFF \
             -DCMAKE_C_COMPILER="$PWD/zigcc" \

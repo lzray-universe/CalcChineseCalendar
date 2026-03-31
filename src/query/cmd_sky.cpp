@@ -29,6 +29,21 @@ std::string csv_num_or_empty(double value){
 	return std::isfinite(value)?format_num(value):"";
 }
 
+void wr_sky_csv(CsvWriter&w,const SkyPos&row){
+	w.write_field("kind",row.kind);
+	w.write_field("code",row.code);
+	w.write_field("name",row.name);
+	w.write_field("region",row.region);
+	w.write_field("is_solar_system",row.is_solar_system);
+	w.write_field("is_juxing",row.is_juxing);
+	w.write_raw("mag_v",csv_num_or_empty(row.mag_v));
+	w.write_raw("ra_deg",format_num(row.ra_deg));
+	w.write_raw("dec_deg",format_num(row.dec_deg));
+	w.write_raw("az_deg",format_num(row.az_deg));
+	w.write_raw("alt_deg",format_num(row.alt_deg));
+	w.finish_row();
+}
+
 SkyOpt parse_sky(const std::vector<std::string>&args){
 	if(args.empty()){
 		throw std::invalid_argument(
@@ -190,20 +205,9 @@ void write_sky(std::ostream&os,const SkyOpt&opt,const SkyRes&res){
 			 os<<"\n";
 		 }},
 		{"csv",[&](){
-			 os<<"kind,code,name,region,is_solar_system,is_juxing,mag_v,"
-				  "ra_deg,dec_deg,az_deg,alt_deg\n";
+			 CsvWriter csv(os);
 			 for(const auto&row : res.rows){
-				 os<<csv_quote(row.kind)<<","
-				   <<csv_quote(row.code)<<","
-				   <<csv_quote(row.name)<<","
-				   <<csv_quote(row.region)<<","
-				   <<(row.is_solar_system?"1":"0")<<","
-				   <<(row.is_juxing?"1":"0")<<","
-				   <<csv_num_or_empty(row.mag_v)<<","
-				   <<format_num(row.ra_deg)<<","
-				   <<format_num(row.dec_deg)<<","
-				   <<format_num(row.az_deg)<<","
-				   <<format_num(row.alt_deg)<<"\n";
+				 wr_sky_csv(csv,row);
 			 }
 		 }},
 		{"txt",[&](){

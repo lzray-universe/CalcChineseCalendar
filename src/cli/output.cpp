@@ -212,16 +212,21 @@ void wr_mtxt(std::ostream&os,const std::vector<MonYrData>&data,
 }
 
 void wr_mcsv(std::ostream&os,const std::vector<MonYrData>&data){
-	os<<"year,mode,label,month_no,is_leap,st_jdutc,ed_jdutc,start_utc_"
-		"iso,st_loc,ed_utc,ed_loc\n";
-	os<<std::setprecision(17);
+	CsvWriter csv(os);
 	for(const auto&bundle : data){
 		for(const auto&m : bundle.months){
-			os<<bundle.year<<","<<csv_quote(bundle.mode)<<","
-			  <<csv_quote(m.label)<<","<<m.month_no<<","<<(m.is_leap?1:0)<<","
-			  <<m.st_jdutc<<","<<m.ed_jdutc<<","<<csv_quote(m.st_utc)<<","
-			  <<csv_quote(m.st_loc)<<","<<csv_quote(m.ed_utc)<<","
-			  <<csv_quote(m.ed_loc)<<"\n";
+			csv.write_field("year",bundle.year);
+			csv.write_field("mode",bundle.mode);
+			csv.write_field("label",m.label);
+			csv.write_field("month_no",m.month_no);
+			csv.write_field("is_leap",m.is_leap);
+			csv.write_field("st_jdutc",m.st_jdutc);
+			csv.write_field("ed_jdutc",m.ed_jdutc);
+			csv.write_field("start_utc_iso",m.st_utc);
+			csv.write_field("st_loc",m.st_loc);
+			csv.write_field("ed_utc",m.ed_utc);
+			csv.write_field("ed_loc",m.ed_loc);
+			csv.finish_row();
 		}
 	}
 }

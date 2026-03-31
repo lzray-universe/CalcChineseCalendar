@@ -74,6 +74,15 @@ public:
 		push(name,value);
 	}
 
+	void write_header(const std::vector<std::string>&header){
+		if(header_.empty()){
+			header_=header;
+			write_line(header_);
+		}else if(header_!=header){
+			throw std::logic_error("csv header mismatch");
+		}
+	}
+
 	void finish_row(){
 		if(header_.empty()){
 			header_=row_header_;

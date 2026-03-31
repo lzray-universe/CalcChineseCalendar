@@ -125,6 +125,72 @@ void wr_interval_json(JsonWriter&w,const SolarZodiacYearInterval&item,int tz_off
 	w.obj_end();
 }
 
+void wr_zod_point_csv(CsvWriter&w,const SolarZodiacPoint&pt,
+					  const SolarZodiacDef&def,int tz_off){
+	w.write_raw("jd_utc",format_num(pt.jd_utc));
+	w.write_raw("jd_tdb",format_num(pt.jd_tdb));
+	w.write_field("utc_iso",fmt_iso(pt.jd_utc,0,true));
+	w.write_field("loc_iso",fmt_iso(pt.jd_utc,tz_off,true));
+	w.write_raw("sun_lam",format_num(pt.sun_lam_rad));
+	w.write_raw("sun_lam_deg",format_num(pt.sun_lam_deg));
+	w.write_field("sign_index",pt.sign_index);
+	w.write_field("sign_order",pt.sign_index+1);
+	w.write_field("sign_code",pt.sign_code);
+	w.write_field("sign_name",zodiac_name(pt.sign_code));
+	w.write_field("term_code",pt.term_code);
+	w.write_raw("start_lambda_deg",format_num(def.start_lambda_rad*180.0/PI));
+	w.write_raw("end_lambda_deg",format_num(def.end_lambda_rad*180.0/PI));
+	w.write_raw("sign_offset_rad",format_num(pt.sign_offset_rad));
+	w.write_raw("sign_offset_deg",format_num(pt.sign_offset_deg));
+	w.write_raw("sign_start_jd_utc",format_num(pt.sign_start_jd_utc));
+	w.write_raw("sign_end_jd_utc",format_num(pt.sign_end_jd_utc));
+	w.write_field("sign_start_utc_iso",fmt_iso(pt.sign_start_jd_utc,0,true));
+	w.write_field("sign_end_utc_iso",fmt_iso(pt.sign_end_jd_utc,0,true));
+	w.write_field("sign_start_loc_iso",fmt_iso(pt.sign_start_jd_utc,tz_off,true));
+	w.write_field("sign_end_loc_iso",fmt_iso(pt.sign_end_jd_utc,tz_off,true));
+	w.write_raw("elapsed_sec",format_num(pt.elapsed_sec));
+	w.write_raw("elapsed_days",format_num(days_from_sec(pt.elapsed_sec)));
+	w.write_raw("remain_sec",format_num(pt.remain_sec));
+	w.write_raw("remain_days",format_num(days_from_sec(pt.remain_sec)));
+	w.write_raw("span_sec",format_num(pt.span_sec));
+	w.write_raw("span_days",format_num(days_from_sec(pt.span_sec)));
+	w.finish_row();
+}
+
+void wr_zod_year_csv(CsvWriter&w,int year,const SolarZodiacYearInterval&item,
+					 int tz_off){
+	const SolarZodiacDef&def=solar_zodiac_def(item.sign_index);
+	w.write_field("year",year);
+	w.write_field("sign_index",item.sign_index);
+	w.write_field("sign_order",item.sign_index+1);
+	w.write_field("sign_code",item.sign_code);
+	w.write_field("sign_name",zodiac_name(item.sign_code));
+	w.write_field("term_code",item.term_code);
+	w.write_raw("start_lambda_deg",format_num(def.start_lambda_rad*180.0/PI));
+	w.write_raw("end_lambda_deg",format_num(def.end_lambda_rad*180.0/PI));
+	w.write_raw("sign_start_jd_utc",format_num(item.sign_start_jd_utc));
+	w.write_raw("sign_end_jd_utc",format_num(item.sign_end_jd_utc));
+	w.write_field("sign_start_utc_iso",fmt_iso(item.sign_start_jd_utc,0,true));
+	w.write_field("sign_end_utc_iso",fmt_iso(item.sign_end_jd_utc,0,true));
+	w.write_field("sign_start_loc_iso",
+				  fmt_iso(item.sign_start_jd_utc,tz_off,true));
+	w.write_field("sign_end_loc_iso",fmt_iso(item.sign_end_jd_utc,tz_off,true));
+	w.write_raw("in_year_start_jd_utc",format_num(item.in_year_start_jd_utc));
+	w.write_raw("in_year_end_jd_utc",format_num(item.in_year_end_jd_utc));
+	w.write_field("in_year_start_utc_iso",
+				  fmt_iso(item.in_year_start_jd_utc,0,true));
+	w.write_field("in_year_end_utc_iso",fmt_iso(item.in_year_end_jd_utc,0,true));
+	w.write_field("in_year_start_loc_iso",
+				  fmt_iso(item.in_year_start_jd_utc,tz_off,true));
+	w.write_field("in_year_end_loc_iso",
+				  fmt_iso(item.in_year_end_jd_utc,tz_off,true));
+	w.write_raw("in_year_dur_sec",format_num(item.in_year_dur_sec));
+	w.write_raw("in_year_dur_days",format_num(days_from_sec(item.in_year_dur_sec)));
+	w.write_field("clipped_start",item.clipped_start);
+	w.write_field("clipped_end",item.clipped_end);
+	w.finish_row();
+}
+
 ZodOpt parse_zod(const std::vector<std::string>&args){
 	if(args.empty()){
 		throw std::invalid_argument(
@@ -275,38 +341,8 @@ void write_zod(std::ostream&os,const ZodOpt&opt,const ZodRes&res){
 				 os<<"\n";
 			 }},
 			{"csv",[&](){
-				 os<<"jd_utc,jd_tdb,utc_iso,loc_iso,sun_lam,sun_lam_deg,"
-					  "sign_index,sign_order,sign_code,sign_name,term_code,"
-					  "start_lambda_deg,end_lambda_deg,sign_offset_rad,"
-					  "sign_offset_deg,sign_start_jd_utc,sign_end_jd_utc,"
-					  "sign_start_utc_iso,sign_end_utc_iso,sign_start_loc_iso,"
-					  "sign_end_loc_iso,elapsed_sec,elapsed_days,remain_sec,"
-					  "remain_days,span_sec,span_days\n";
-				 os<<format_num(pt.jd_utc)<<","<<format_num(pt.jd_tdb)<<","
-				   <<csv_quote(fmt_iso(pt.jd_utc,0,true))<<","
-				   <<csv_quote(fmt_iso(pt.jd_utc,res.tz_off,true))<<","
-				   <<format_num(pt.sun_lam_rad)<<","
-				   <<format_num(pt.sun_lam_deg)<<","
-				   <<pt.sign_index<<","<<(pt.sign_index+1)<<","
-				   <<csv_quote(pt.sign_code)<<","
-				   <<csv_quote(zodiac_name(pt.sign_code))<<","
-				   <<csv_quote(pt.term_code)<<","
-				   <<format_num(def.start_lambda_rad*180.0/PI)<<","
-				   <<format_num(def.end_lambda_rad*180.0/PI)<<","
-				   <<format_num(pt.sign_offset_rad)<<","
-				   <<format_num(pt.sign_offset_deg)<<","
-				   <<format_num(pt.sign_start_jd_utc)<<","
-				   <<format_num(pt.sign_end_jd_utc)<<","
-				   <<csv_quote(fmt_iso(pt.sign_start_jd_utc,0,true))<<","
-				   <<csv_quote(fmt_iso(pt.sign_end_jd_utc,0,true))<<","
-				   <<csv_quote(fmt_iso(pt.sign_start_jd_utc,res.tz_off,true))<<","
-				   <<csv_quote(fmt_iso(pt.sign_end_jd_utc,res.tz_off,true))<<","
-				   <<format_num(pt.elapsed_sec)<<","
-				   <<format_num(days_from_sec(pt.elapsed_sec))<<","
-				   <<format_num(pt.remain_sec)<<","
-				   <<format_num(days_from_sec(pt.remain_sec))<<","
-				   <<format_num(pt.span_sec)<<","
-				   <<format_num(days_from_sec(pt.span_sec))<<"\n";
+				 CsvWriter csv(os);
+				 wr_zod_point_csv(csv,pt,def,res.tz_off);
 			 }},
 			{"txt",[&](){
 				 os<<"tool=lunar format=txt type=zodiac mode=point tz_display="
@@ -398,41 +434,9 @@ void write_zod(std::ostream&os,const ZodOpt&opt,const ZodRes&res){
 			 os<<"\n";
 		 }},
 		{"csv",[&](){
-			 os<<"year,sign_index,sign_order,sign_code,sign_name,term_code,"
-				  "start_lambda_deg,end_lambda_deg,sign_start_jd_utc,"
-				  "sign_end_jd_utc,sign_start_utc_iso,sign_end_utc_iso,"
-				  "sign_start_loc_iso,sign_end_loc_iso,in_year_start_jd_utc,"
-				  "in_year_end_jd_utc,in_year_start_utc_iso,in_year_end_utc_iso,"
-				  "in_year_start_loc_iso,in_year_end_loc_iso,in_year_dur_sec,"
-				  "in_year_dur_days,clipped_start,clipped_end\n";
+			 CsvWriter csv(os);
 			 for(const auto&item : sum.intervals){
-				 const SolarZodiacDef&def=solar_zodiac_def(item.sign_index);
-				 os<<opt.year<<","<<item.sign_index<<","<<(item.sign_index+1)<<","
-				   <<csv_quote(item.sign_code)<<","
-				   <<csv_quote(zodiac_name(item.sign_code))<<","
-				   <<csv_quote(item.term_code)<<","
-				   <<format_num(def.start_lambda_rad*180.0/PI)<<","
-				   <<format_num(def.end_lambda_rad*180.0/PI)<<","
-				   <<format_num(item.sign_start_jd_utc)<<","
-				   <<format_num(item.sign_end_jd_utc)<<","
-				   <<csv_quote(fmt_iso(item.sign_start_jd_utc,0,true))<<","
-				   <<csv_quote(fmt_iso(item.sign_end_jd_utc,0,true))<<","
-				   <<csv_quote(fmt_iso(item.sign_start_jd_utc,res.tz_off,true))
-				   <<","
-				   <<csv_quote(fmt_iso(item.sign_end_jd_utc,res.tz_off,true))
-				   <<","
-				   <<format_num(item.in_year_start_jd_utc)<<","
-				   <<format_num(item.in_year_end_jd_utc)<<","
-				   <<csv_quote(fmt_iso(item.in_year_start_jd_utc,0,true))<<","
-				   <<csv_quote(fmt_iso(item.in_year_end_jd_utc,0,true))<<","
-				   <<csv_quote(fmt_iso(item.in_year_start_jd_utc,res.tz_off,true))
-				   <<","
-				   <<csv_quote(fmt_iso(item.in_year_end_jd_utc,res.tz_off,true))
-				   <<","
-				   <<format_num(item.in_year_dur_sec)<<","
-				   <<format_num(days_from_sec(item.in_year_dur_sec))<<","
-				   <<(item.clipped_start?"1":"0")<<","
-				   <<(item.clipped_end?"1":"0")<<"\n";
+				 wr_zod_year_csv(csv,opt.year,item,res.tz_off);
 			 }
 		 }},
 		{"txt",[&](){
