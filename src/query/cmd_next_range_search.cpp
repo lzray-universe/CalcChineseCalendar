@@ -63,6 +63,10 @@ std::vector<EventRec> collect_next_events(EphRead&eph,double jd_utc_from,
 	int cst_month=0;
 	int cst_day=0;
 	utc2cst(jd_utc_from,cst_year,cst_month,cst_day);
+	if(only_ecl_flt(filter)){
+		return col_next_ecl(eph,jd_utc_from,cst_year,count,tz_off,
+							quiet?nullptr:&std::cerr,filter,code_filter);
+	}
 
 	int span=1;
 	std::vector<EventRec> picked;
@@ -70,7 +74,7 @@ std::vector<EventRec> collect_next_events(EphRead&eph,double jd_utc_from,
 	std::vector<EventRec> all;
 	while(span<=8){
 		std::set<int> years=
-			add_years(loaded_years,cst_year-span,cst_year+span);
+			add_years(loaded_years,cst_year,cst_year+span);
 		merge_evs(
 			all,col_eyrs(eph,years,tz_off,quiet?nullptr:&std::cerr,filter));
 		std::vector<EventRec> filtered=

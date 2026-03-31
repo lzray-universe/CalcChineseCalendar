@@ -15,6 +15,7 @@ option(LUNAR_ENABLE_THREADS "Enable internal multithreading" ON)
 option(LUNAR_BUILD_TESTS "Build GoogleTest-based test targets" ${BUILD_TESTING})
 option(LUNAR_ENABLE_IPO "Enable link-time/interprocedural optimization for release-like builds" ON)
 option(LUNAR_ENABLE_FAST_MATH "Enable faster but less strict floating-point optimizations" OFF)
+set(LUNAR_VERSION "test" CACHE STRING "Version string embedded into binaries")
 
 if(LUNAR_ENABLE_THREADS)
     find_package(Threads REQUIRED)
@@ -168,6 +169,7 @@ target_compile_definitions(lunar_core PUBLIC
     LUNAR_ENABLE_DIMENSION_TYPES=$<BOOL:${LUNAR_ENABLE_DIMENSION_TYPES}>
     LUNAR_ENABLE_SERIES_FALLBACK=$<BOOL:${LUNAR_ENABLE_SERIES_FALLBACK}>
     LUNAR_ENABLE_THREADS=$<BOOL:${LUNAR_ENABLE_THREADS}>
+    LUNAR_VERSION_TEXT="${LUNAR_VERSION}"
 )
 if(LUNAR_ENABLE_THREADS)
     target_link_libraries(lunar_core PUBLIC Threads::Threads)

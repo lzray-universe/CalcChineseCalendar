@@ -147,20 +147,39 @@ worker.postMessage({
 - 可执行程序：`lunar`
 - 动态库：`lunar_dll`（输出名为 `lunar`，对应平台扩展名）
 - 测试程序：`lunar_tests`（启用 `LUNAR_BUILD_TESTS` 时）
+- wasm 构建还会生成：`lunar.js`、`lunar.wasm`、`lunar_worker.js`
 
 ### 2.6 可选构建开关
 
 - `-DLUNAR_ENABLE_SERIES_FALLBACK=ON|OFF`
   - `ON`（默认）：未找到 BSP 时自动切换到内置 VSOP87A + ELPMPP02
   - `OFF`：保持旧行为，必须提供可用 BSP
+- `-DLUNAR_ENABLE_THREADS=ON|OFF`
+  - `ON`（默认）：启用内部多线程执行路径
+  - `OFF`：保持单线程，计算结果不变
 - `-DLUNAR_BUILD_TESTS=ON|OFF`
   - `ON`（默认）：构建 gtest/ctest 测试目标
   - `OFF`：不构建测试目标
+- `-DLUNAR_ENABLE_IPO=ON|OFF`
+  - `ON`（默认）：在 Release / RelWithDebInfo 下启用 IPO/LTO
+- `-DLUNAR_ENABLE_FAST_MATH=ON|OFF`
+  - `OFF`（默认）：保持严格浮点语义
+- `-DLUNAR_VERSION=<text>`
+  - 默认：`test`
+  - `lunar --version`、`info` 和 C API 版本字符串都使用这个值
+- Release 构建应通过 `-DLUNAR_VERSION=<release tag>` 传入版本；未传时统一为 `test`
 
 ### 2.7 运行测试
 
 ```bash
 cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+若使用 Visual Studio 这类多配置生成器，可改为：
+
+```powershell
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```

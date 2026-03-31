@@ -19,13 +19,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            name: linux-x64-musl-st
+            name: linux-x64-st
             kind: musl
             threads: OFF
             zig_target: x86_64-linux-musl
 
           - os: ubuntu-latest
-            name: linux-arm64-musl-st
+            name: linux-arm64-st
             kind: musl
             threads: OFF
             zig_target: aarch64-linux-musl
@@ -49,13 +49,13 @@ jobs:
             cmake_args: '-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"'
 
           - os: ubuntu-latest
-            name: linux-x64-musl-mt
+            name: linux-x64-mt
             kind: musl
             threads: ON
             zig_target: x86_64-linux-musl
 
           - os: ubuntu-latest
-            name: linux-arm64-musl-mt
+            name: linux-arm64-mt
             kind: musl
             threads: ON
             zig_target: aarch64-linux-musl
@@ -79,7 +79,7 @@ jobs:
             cmake_args: '-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"'
 
           - os: ubuntu-latest
-            name: wasm-emscripten
+            name: wasm
             kind: emscripten
             emsdk_version: 5.0.3
 
@@ -88,18 +88,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Derive release suffix
-        id: version
+      - name: Derive release tag
+        id: rel
         shell: bash
         run: |
           set -euxo pipefail
           tag='${{ inputs.tag }}'
-          if [[ "$tag" =~ (v[0-9][0-9A-Za-z._-]*)$ ]]; then
-            echo "suffix=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
-          else
-            echo "Unable to derive version suffix from tag: $tag" >&2
-            exit 1
-          fi
+          safe_tag="${tag//\//-}"
+          safe_tag="${safe_tag// /-}"
+          echo "tag=${safe_tag}" >> "$GITHUB_OUTPUT"
 
     
       - name: Configure (native)
@@ -107,6 +104,7 @@ jobs:
         run: >
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release
+          -DLUNAR_VERSION=${{ inputs.tag }}
           -DLUNAR_ENABLE_SERIES_FALLBACK=ON
           -DLUNAR_ENABLE_THREADS=${{ matrix.threads }}
           -DLUNAR_ENABLE_IPO=ON
@@ -134,6 +132,7 @@ jobs:
           source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           emcmake cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
+            -DLUNAR_VERSION='${{ inputs.tag }}' \
             -DLUNAR_ENABLE_SERIES_FALLBACK=ON \
             -DLUNAR_ENABLE_IPO=OFF \
             -DLUNAR_ENABLE_FAST_MATH=OFF \
@@ -172,6 +171,7 @@ jobs:
 
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
+            -DLUNAR_VERSION='${{ inputs.tag }}' \
             -DLUNAR_ENABLE_SERIES_FALLBACK=ON \
             -DLUNAR_ENABLE_THREADS=${{ matrix.threads }} \
             -DLUNAR_ENABLE_IPO=ON \
@@ -201,13 +201,13 @@ jobs:
       - name: Package
         shell: bash
         env:
-          RELEASE_SUFFIX: ${{ steps.version.outputs.suffix }}
+          RELEASE_TAG: ${{ steps.rel.outputs.tag }}
         run: |
           set -euxo pipefail
           mkdir -p package
           cp README.md package/
           cp LICENSE package/
-          archive_base="lunar-${{ matrix.name }}-${RELEASE_SUFFIX}"
+          archive_base="lunar-${{ matrix.name }}-${RELEASE_TAG}"
 
           if [ "${{ matrix.kind }}" = "emscripten" ]; then
             cp build/lunar.js package/
@@ -236,7 +236,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: lunar-${{ matrix.name }}
-          path: lunar-${{ matrix.name }}-${{ steps.version.outputs.suffix }}.*
+          path: lunar-${{ matrix.name }}-${{ steps.rel.outputs.tag }}.*
 
   release:
     needs: build

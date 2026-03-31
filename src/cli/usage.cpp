@@ -1,4 +1,8 @@
-std::string tool_ver(){ return "lunar-cli-2026.02"; }
+#ifndef LUNAR_VERSION_TEXT
+#define LUNAR_VERSION_TEXT "test"
+#endif
+
+std::string tool_ver(){ return LUNAR_VERSION_TEXT; }
 
 void use_month(){
 	std::cout

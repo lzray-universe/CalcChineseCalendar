@@ -216,6 +216,165 @@ bool pass_flt(const EventRec&ev,const EvtFilt&f){
 	return false;
 }
 
+bool only_ecl_flt(const EvtFilt&f){
+	return !f.inc_st&&(!f.inc_lph)&&f.inc_ecl;
+}
+
+std::string lun_ecl_code(const std::string&type){
+	if(type=="T"){
+		return "total";
+	}
+	if(type=="U"){
+		return "partial";
+	}
+	return "penumbral";
+}
+
+std::string lun_ecl_name(const std::string&type){
+	std::string fallback;
+	if(type=="T"){
+		fallback="月全食";
+	}else if(type=="U"){
+		fallback="月偏食";
+	}else{
+		fallback="半影月食";
+	}
+	return lunar::i18n::tr_event_name("lunar_eclipse",lun_ecl_code(type),
+									  fallback);
+}
+
+std::string sol_ecl_code(const std::string&type){
+	if(type=="T"){
+		return "total";
+	}
+	if(type=="A"){
+		return "annular";
+	}
+	if(type=="H"){
+		return "hybrid";
+	}
+	return "partial";
+}
+
+std::string sol_ecl_name(const std::string&type){
+	std::string fallback;
+	if(type=="T"){
+		fallback="日全食";
+	}else if(type=="A"){
+		fallback="日环食";
+	}else if(type=="H"){
+		fallback="全环食";
+	}else{
+		fallback="日偏食";
+	}
+	return lunar::i18n::tr_event_name("solar_eclipse",sol_ecl_code(type),
+									  fallback);
+}
+
+EventRec mk_lun_ecl_ev(const LunarEclipse&ecl,int year,int tz_off){
+	EventRec ev;
+	ev.kind="lunar_eclipse";
+	ev.code=lun_ecl_code(ecl.type);
+	ev.name=lun_ecl_name(ecl.type);
+	ev.year=year;
+	ev.jd_tdb=ecl.jd_tdb_max;
+	ev.jd_utc=TimeScale::tdb_to_utc(ecl.jd_tdb_max);
+	ev.utc_iso=fmt_iso(ev.jd_utc,0,true);
+	ev.loc_iso=fmt_iso(ev.jd_utc,tz_off,true);
+	return ev;
+}
+
+EventRec mk_sol_ecl_ev(const SolarEclipse&ecl,int year,int tz_off){
+	EventRec ev;
+	ev.kind="solar_eclipse";
+	ev.code=sol_ecl_code(ecl.type);
+	ev.name=sol_ecl_name(ecl.type);
+	ev.year=year;
+	ev.jd_tdb=ecl.jd_tdb_max;
+	ev.jd_utc=TimeScale::tdb_to_utc(ecl.jd_tdb_max);
+	ev.utc_iso=fmt_iso(ev.jd_utc,0,true);
+	ev.loc_iso=fmt_iso(ev.jd_utc,tz_off,true);
+	return ev;
+}
+
+std::vector<EventRec> bld_next_ecl_year(YearEvtCtx&ctx,int year,double jd_from,
+										int tz_off,const EvtFilt&filter,
+										const std::string&code_filter){
+	YearResult yr=ctx.solver.compute_year(year,nullptr);
+	std::vector<EventRec> out;
+	if(filter.inc_lecl){
+		for(const auto&item : yr.lun_phase){
+			double jd_utc=item.full_moon.toUtcJD();
+			if(jd_utc<=jd_from){
+				continue;
+			}
+			double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
+			LunarEclipse ecl;
+			if(!calc_lunar_eclipse(*ctx.eph,jd_tdb,&ecl)||!ecl.has){
+				continue;
+			}
+			EventRec ev=mk_lun_ecl_ev(ecl,yr.year,tz_off);
+			if(ev.jd_utc<=jd_from){
+				continue;
+			}
+			if(!code_filter.empty()&&ev.code!=code_filter){
+				continue;
+			}
+			out.push_back(std::move(ev));
+		}
+	}
+	if(filter.inc_secl){
+		for(const auto&item : yr.lun_phase){
+			double jd_utc=item.new_moon.toUtcJD();
+			if(jd_utc<=jd_from){
+				continue;
+			}
+			double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
+			SolarEclipse ecl;
+			if(!calc_solar_eclipse(*ctx.eph,jd_tdb,&ecl)||!ecl.has){
+				continue;
+			}
+			EventRec ev=mk_sol_ecl_ev(ecl,yr.year,tz_off);
+			if(ev.jd_utc<=jd_from){
+				continue;
+			}
+			if(!code_filter.empty()&&ev.code!=code_filter){
+				continue;
+			}
+			out.push_back(std::move(ev));
+		}
+	}
+	std::sort(out.begin(),out.end(),[](const EventRec&a,const EventRec&b){
+		return a.jd_utc<b.jd_utc;
+	});
+	out.erase(
+		std::unique(out.begin(),out.end(),[](const EventRec&a,const EventRec&b){
+			return std::fabs(a.jd_utc-b.jd_utc)<1e-9;
+		}),
+		out.end());
+	return out;
+}
+
+std::vector<EventRec> col_next_ecl(EphRead&eph,double jd_from,int year_from,
+								   int count,int tz_off,std::ostream*log,
+								   const EvtFilt&filter,
+								   const std::string&code_filter){
+	YearEvtCtx ctx(eph);
+	std::vector<EventRec> out;
+	for(int span=0;span<=8&&static_cast<int>(out.size())<count;++span){
+		const int year=year_from+span;
+		if(log!=nullptr&&count>1){
+			log_year_progress(log,year);
+		}
+		merge_evs(out,bld_next_ecl_year(ctx,year,jd_from,tz_off,filter,
+										code_filter));
+	}
+	if(static_cast<int>(out.size())>count){
+		out.resize(static_cast<std::size_t>(count));
+	}
+	return out;
+}
+
 void wr_elics(std::ostream&os,const std::string&ephem,
 			  const std::string&cal_name,const std::vector<EventRec>&events){
 	std::vector<IcsEvent> out;
