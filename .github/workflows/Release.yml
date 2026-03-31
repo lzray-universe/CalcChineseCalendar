@@ -21,66 +21,98 @@ jobs:
           - os: ubuntu-latest
             name: linux-x64-st
             kind: musl
+            system: linux
+            arch: x64
+            mode: st
             threads: OFF
             zig_target: x86_64-linux-musl
 
           - os: ubuntu-latest
             name: linux-arm64-st
             kind: musl
+            system: linux
+            arch: arm64
+            mode: st
             threads: OFF
             zig_target: aarch64-linux-musl
 
           - os: windows-latest
             name: windows-x64-st
             kind: native
+            system: windows
+            arch: x64
+            mode: st
             threads: OFF
             cmake_args: ""
 
           - os: windows-latest
             name: windows-arm64-st
             kind: native
+            system: windows
+            arch: arm64
+            mode: st
             threads: OFF
             cmake_args: "-A ARM64"
 
           - os: macos-latest
             name: macos-universal-st
             kind: native
+            system: macos
+            arch: universal
+            mode: st
             threads: OFF
             cmake_args: '-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"'
 
           - os: ubuntu-latest
             name: linux-x64-mt
             kind: musl
+            system: linux
+            arch: x64
+            mode: mt
             threads: ON
             zig_target: x86_64-linux-musl
 
           - os: ubuntu-latest
             name: linux-arm64-mt
             kind: musl
+            system: linux
+            arch: arm64
+            mode: mt
             threads: ON
             zig_target: aarch64-linux-musl
 
           - os: windows-latest
             name: windows-x64-mt
             kind: native
+            system: windows
+            arch: x64
+            mode: mt
             threads: ON
             cmake_args: ""
 
           - os: windows-latest
             name: windows-arm64-mt
             kind: native
+            system: windows
+            arch: arm64
+            mode: mt
             threads: ON
             cmake_args: "-A ARM64"
 
           - os: macos-latest
             name: macos-universal-mt
             kind: native
+            system: macos
+            arch: universal
+            mode: mt
             threads: ON
             cmake_args: '-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"'
 
           - os: ubuntu-latest
             name: wasm
             kind: emscripten
+            system: wasm
+            arch: wasm
             emsdk_version: 5.0.3
 
     runs-on: ${{ matrix.os }}
@@ -98,13 +130,25 @@ jobs:
           safe_tag="${safe_tag// /-}"
           echo "tag=${safe_tag}" >> "$GITHUB_OUTPUT"
 
+      - name: Derive build version
+        id: ver
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if [ "${{ matrix.kind }}" = "emscripten" ]; then
+            echo "text=lunar-wasm-${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "text=lunar-${{ matrix.system }}-${{ matrix.arch }}-${{ inputs.tag }}(${{ matrix.mode }})" >> "$GITHUB_OUTPUT"
+          fi
+
     
       - name: Configure (native)
         if: matrix.kind == 'native'
+        shell: bash
         run: >
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release
-          -DLUNAR_VERSION=${{ inputs.tag }}
+          -DLUNAR_VERSION='${{ steps.ver.outputs.text }}'
           -DLUNAR_ENABLE_SERIES_FALLBACK=ON
           -DLUNAR_ENABLE_THREADS=${{ matrix.threads }}
           -DLUNAR_ENABLE_IPO=ON
@@ -132,7 +176,7 @@ jobs:
           source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           emcmake cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DLUNAR_VERSION='${{ inputs.tag }}' \
+            -DLUNAR_VERSION='${{ steps.ver.outputs.text }}' \
             -DLUNAR_ENABLE_SERIES_FALLBACK=ON \
             -DLUNAR_ENABLE_IPO=OFF \
             -DLUNAR_ENABLE_FAST_MATH=OFF \
@@ -171,7 +215,7 @@ jobs:
 
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DLUNAR_VERSION='${{ inputs.tag }}' \
+            -DLUNAR_VERSION='${{ steps.ver.outputs.text }}' \
             -DLUNAR_ENABLE_SERIES_FALLBACK=ON \
             -DLUNAR_ENABLE_THREADS=${{ matrix.threads }} \
             -DLUNAR_ENABLE_IPO=ON \
