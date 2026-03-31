@@ -22,6 +22,7 @@
 #include<utility>
 
 #include "lunar/calendar.hpp"
+#include "lunar/arg_parser.hpp"
 #include "lunar/download.hpp"
 #include "lunar/events.hpp"
 #include "lunar/format.hpp"

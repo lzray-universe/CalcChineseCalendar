@@ -54,61 +54,39 @@ SkyOpt parse_sky(const std::vector<std::string>&args){
 		opt.time_raw=args[idx];
 		++idx;
 	}
-
-	const OptMap handlers={
-		{"--time",[&](const std::vector<std::string>&src,std::size_t&i,
-					  const std::string&tag){
-			 opt.time_raw=req_val(src,i,tag);
-		 }},
-		{"--input-tz",[&](const std::vector<std::string>&src,std::size_t&i,
-						  const std::string&tag){
-			 opt.input_tz=req_val(src,i,tag);
-		 }},
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&i,
-					const std::string&tag){ opt.tz=req_val(src,i,tag); }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.format=to_low(req_val(src,i,tag));
-		 }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&i,
-					 const std::string&tag){ opt.out_path=req_val(src,i,tag); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.pretty=parse_bool01(req_val(src,i,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ opt.quiet=true; }},
-		{"--mode",[&](const std::vector<std::string>&src,std::size_t&i,
-					  const std::string&tag){
-			 opt.mode_text=to_low(req_val(src,i,tag));
-		 }},
-		{"--pick",[&](const std::vector<std::string>&src,std::size_t&i,
-					  const std::string&tag){
-			 opt.pick_csv=req_val(src,i,tag);
-		 }},
-		{"--lat",[&](const std::vector<std::string>&src,std::size_t&i,
-					 const std::string&tag){
-			 opt.lat_deg=parse_double(req_val(src,i,tag),"--lat");
-			 has_lat=true;
-		 }},
-		{"--lon",[&](const std::vector<std::string>&src,std::size_t&i,
-					 const std::string&tag){
-			 opt.lon_deg=parse_double(req_val(src,i,tag),"--lon");
-			 has_lon=true;
-		 }},
-		{"--height",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.height_m=parse_double(req_val(src,i,tag),"--height");
-		 }},
-	};
+	lunar::ArgParser parser;
+	parser.add_flag("-h",[&](){ opt.help=true; })
+		.add_flag("--help",[&](){ opt.help=true; })
+		.add_value("--time",[&](const std::string&v){ opt.time_raw=v; })
+		.add_value("--input-tz",[&](const std::string&v){ opt.input_tz=v; })
+		.add_value("--tz",[&](const std::string&v){ opt.tz=v; })
+		.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
+		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			opt.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ opt.quiet=true; })
+		.add_value("--mode",[&](const std::string&v){ opt.mode_text=to_low(v); })
+		.add_value("--pick",[&](const std::string&v){ opt.pick_csv=v; })
+		.add_value("--lat",[&](const std::string&v){
+			opt.lat_deg=parse_double(v,"--lat");
+			has_lat=true;
+		})
+		.add_value("--lon",[&](const std::string&v){
+			opt.lon_deg=parse_double(v,"--lon");
+			has_lon=true;
+		})
+		.add_value("--height",[&](const std::string&v){
+			opt.height_m=parse_double(v,"--height");
+		});
 
 	for(;idx<args.size();++idx){
-		const std::string&tag=args[idx];
-		if(tag=="-h"||tag=="--help"){
-			opt.help=true;
+		if(!parser.parse_one(args,idx,"sky")){
+			throw std::invalid_argument("unknown option for sky: "+args[idx]);
+		}
+		if(opt.help){
 			return opt;
 		}
-		apply_opt(handlers,args,idx,tag,"sky");
 	}
 
 	if(opt.time_raw.empty()){

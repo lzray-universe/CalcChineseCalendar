@@ -114,30 +114,83 @@ AtOpt parse_at(const std::vector<std::string>&args){
 	if(i<args.size()&&!is_opt(args[i])){
 		a.time_raw=args[i++];
 	}
-	const OptMap handlers={
-		{"--time",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ a.time_raw=req_val(src,j,tag); }},
-		{"--stdin",[&](const std::vector<std::string>&,std::size_t&,const std::string&){ a.from_stdin=true; }},
-		{"--file",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ a.input_file=req_val(src,j,tag); }},
-		{"--input-tz",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ a.input_tz=req_val(src,j,tag); }},
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ a.tz=req_val(src,j,tag); }},
-		{"--lunar-day-tz",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ a.lunar_day_tz=req_val(src,j,tag); }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ a.format=to_low(req_val(src,j,tag)); }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ a.out=req_val(src,j,tag); }},
-		{"--jobs",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ a.jobs=parse_int(req_val(src,j,tag),"--jobs"); if(a.jobs<1){ throw std::invalid_argument("--jobs must be >= 1"); } }},
-		{"--meta-once",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ a.meta_once=parse_bool01(req_val(src,j,tag),"--meta-once"); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ a.pretty=parse_bool01(req_val(src,j,tag),"--pretty"); }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,const std::string&){ a.quiet=true; }},
-		{"--events",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ a.events=parse_bool01(req_val(src,j,tag),"--events"); }},
-		{"--eot-lon",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ a.eot_lon_deg=parse_double(req_val(src,j,tag),"--eot-lon"); a.calc_eot=true; }},
-		{"--trad",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ std::string v=req_val(src,j,tag); HliProfileCode p=HliProfileCode::Folk; if(!parse_hli_profile(v,&p)){ throw std::invalid_argument("invalid --trad: "+v+" (expected folk|ziping|purple|xieji)"); } a.hli_trad=hli_profile_key(p); a.hli_rules=make_hli_rule_set(p); }},
-		{"--year-boundary",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ std::string v=req_val(src,j,tag); HliYearBoundary p=HliYearBoundary::LunarNewYear; if(!parse_hli_year_boundary(v,&p)){ throw std::invalid_argument("invalid --year-boundary: "+v+" (expected lichun|lunar_new_year|dongzhi)"); } a.hli_rules.year_boundary=static_cast<int>(p); }},
-		{"--month-boundary",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ std::string v=req_val(src,j,tag); HliMonthBoundary p=HliMonthBoundary::LunarFirstDay; if(!parse_hli_month_boundary(v,&p)){ throw std::invalid_argument("invalid --month-boundary: "+v+" (expected solar_term|lunar_first_day)"); } a.hli_rules.month_boundary=static_cast<int>(p); }},
-		{"--leap-month-mode",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ std::string v=req_val(src,j,tag); HliLeapMonthMode p=HliLeapMonthMode::InheritPrevious; if(!parse_hli_leap_month_mode(v,&p)){ throw std::invalid_argument("invalid --leap-month-mode: "+v+" (expected ignore|inherit_previous|split_midway|shift_to_next)"); } a.hli_rules.leap_month_mode=static_cast<int>(p); }},
-		{"--day-boundary",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ std::string v=req_val(src,j,tag); HliDayBoundary p=HliDayBoundary::Hour23; if(!parse_hli_day_boundary(v,&p)){ throw std::invalid_argument("invalid --day-boundary: "+v+" (expected hour23|hour0)"); } a.hli_rules.day_boundary=static_cast<int>(p); }},
-	};
-	for(;i<args.size();++i){
-		apply_opt(handlers,args,i,args[i],"at");
-	}
+	lunar::ArgParser parser;
+	parser.add_value("--time",[&](const std::string&v){ a.time_raw=v; })
+		.add_flag("--stdin",[&](){ a.from_stdin=true; })
+		.add_value("--file",[&](const std::string&v){ a.input_file=v; })
+		.add_value("--input-tz",[&](const std::string&v){ a.input_tz=v; })
+		.add_value("--tz",[&](const std::string&v){ a.tz=v; })
+		.add_value("--lunar-day-tz",[&](const std::string&v){
+			a.lunar_day_tz=v;
+		})
+		.add_value("--format",[&](const std::string&v){ a.format=to_low(v); })
+		.add_value("--out",[&](const std::string&v){ a.out=v; })
+		.add_value("--jobs",[&](const std::string&v){
+			a.jobs=parse_int(v,"--jobs");
+			if(a.jobs<1){
+				throw std::invalid_argument("--jobs must be >= 1");
+			}
+		})
+		.add_value("--meta-once",[&](const std::string&v){
+			a.meta_once=parse_bool01(v,"--meta-once");
+		})
+		.add_value("--pretty",[&](const std::string&v){
+			a.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ a.quiet=true; })
+		.add_value("--events",[&](const std::string&v){
+			a.events=parse_bool01(v,"--events");
+		})
+		.add_value("--eot-lon",[&](const std::string&v){
+			a.eot_lon_deg=parse_double(v,"--eot-lon");
+			a.calc_eot=true;
+		})
+		.add_value("--trad",[&](const std::string&v){
+			HliProfileCode p=HliProfileCode::Folk;
+			if(!parse_hli_profile(v,&p)){
+				throw std::invalid_argument(
+					"invalid --trad: "+v+" (expected folk|ziping|purple|xieji)");
+			}
+			a.hli_trad=hli_profile_key(p);
+			a.hli_rules=make_hli_rule_set(p);
+		})
+		.add_value("--year-boundary",[&](const std::string&v){
+			HliYearBoundary p=HliYearBoundary::LunarNewYear;
+			if(!parse_hli_year_boundary(v,&p)){
+				throw std::invalid_argument(
+					"invalid --year-boundary: "+v+
+					" (expected lichun|lunar_new_year|dongzhi)");
+			}
+			a.hli_rules.year_boundary=static_cast<int>(p);
+		})
+		.add_value("--month-boundary",[&](const std::string&v){
+			HliMonthBoundary p=HliMonthBoundary::LunarFirstDay;
+			if(!parse_hli_month_boundary(v,&p)){
+				throw std::invalid_argument(
+					"invalid --month-boundary: "+v+
+					" (expected solar_term|lunar_first_day)");
+			}
+			a.hli_rules.month_boundary=static_cast<int>(p);
+		})
+		.add_value("--leap-month-mode",[&](const std::string&v){
+			HliLeapMonthMode p=HliLeapMonthMode::InheritPrevious;
+			if(!parse_hli_leap_month_mode(v,&p)){
+				throw std::invalid_argument(
+					"invalid --leap-month-mode: "+v+
+					" (expected ignore|inherit_previous|split_midway|"
+					"shift_to_next)");
+			}
+			a.hli_rules.leap_month_mode=static_cast<int>(p);
+		})
+		.add_value("--day-boundary",[&](const std::string&v){
+			HliDayBoundary p=HliDayBoundary::Hour23;
+			if(!parse_hli_day_boundary(v,&p)){
+				throw std::invalid_argument(
+					"invalid --day-boundary: "+v+" (expected hour23|hour0)");
+			}
+			a.hli_rules.day_boundary=static_cast<int>(p);
+		});
+	parser.parse_all(args,i,"at");
 	if(a.from_stdin&&!a.input_file.empty()){
 		throw std::invalid_argument("--stdin and --file cannot be used together");
 	}
@@ -247,24 +300,48 @@ ConvOpt parse_conv(const std::vector<std::string>&args){
 		c.in_value=args[i++];
 		c.has_in=true;
 	}
-	const OptMap handlers={
-		{"--from-lunar",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&){ c.from_lunar=true; if(j+1>=src.size()||is_opt(src[j+1])){ return; } if(j+3>=src.size()||is_opt(src[j+2])||is_opt(src[j+3])){ throw std::invalid_argument("--from-lunar requires: <year> <month_no> <day>"); } c.lunar_year=parse_int(src[++j],"lunar_year"); c.lun_mno=parse_int(src[++j],"lun_mno"); c.lunar_day=parse_int(src[++j],"lunar_day"); c.has_lunar_input=true; }},
-		{"--stdin",[&](const std::vector<std::string>&,std::size_t&,const std::string&){ c.from_stdin=true; }},
-		{"--file",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ c.input_file=req_val(src,j,tag); }},
-		{"--leap",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ c.leap=parse_bool01(req_val(src,j,tag),"--leap"); }},
-		{"--input-tz",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ c.input_tz=req_val(src,j,tag); }},
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ c.tz=req_val(src,j,tag); }},
-		{"--lunar-day-tz",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ c.lunar_day_tz=req_val(src,j,tag); }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ c.format=to_low(req_val(src,j,tag)); }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ c.out=req_val(src,j,tag); }},
-		{"--jobs",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ c.jobs=parse_int(req_val(src,j,tag),"--jobs"); if(c.jobs<1){ throw std::invalid_argument("--jobs must be >= 1"); } }},
-		{"--meta-once",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ c.meta_once=parse_bool01(req_val(src,j,tag),"--meta-once"); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ c.pretty=parse_bool01(req_val(src,j,tag),"--pretty"); }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,const std::string&){ c.quiet=true; }},
-	};
-	for(;i<args.size();++i){
-		apply_opt(handlers,args,i,args[i],"convert");
-	}
+	lunar::ArgParser parser;
+	parser.add("--from-lunar",[&](const std::vector<std::string>&src,
+								  std::size_t&j,const std::string&){
+			c.from_lunar=true;
+			if(j+1>=src.size()||is_opt(src[j+1])){
+				return;
+			}
+			if(j+3>=src.size()||is_opt(src[j+2])||is_opt(src[j+3])){
+				throw std::invalid_argument(
+					"--from-lunar requires: <year> <month_no> <day>");
+			}
+			c.lunar_year=parse_int(src[++j],"lunar_year");
+			c.lun_mno=parse_int(src[++j],"lun_mno");
+			c.lunar_day=parse_int(src[++j],"lunar_day");
+			c.has_lunar_input=true;
+		})
+		.add_flag("--stdin",[&](){ c.from_stdin=true; })
+		.add_value("--file",[&](const std::string&v){ c.input_file=v; })
+		.add_value("--leap",[&](const std::string&v){
+			c.leap=parse_bool01(v,"--leap");
+		})
+		.add_value("--input-tz",[&](const std::string&v){ c.input_tz=v; })
+		.add_value("--tz",[&](const std::string&v){ c.tz=v; })
+		.add_value("--lunar-day-tz",[&](const std::string&v){
+			c.lunar_day_tz=v;
+		})
+		.add_value("--format",[&](const std::string&v){ c.format=to_low(v); })
+		.add_value("--out",[&](const std::string&v){ c.out=v; })
+		.add_value("--jobs",[&](const std::string&v){
+			c.jobs=parse_int(v,"--jobs");
+			if(c.jobs<1){
+				throw std::invalid_argument("--jobs must be >= 1");
+			}
+		})
+		.add_value("--meta-once",[&](const std::string&v){
+			c.meta_once=parse_bool01(v,"--meta-once");
+		})
+		.add_value("--pretty",[&](const std::string&v){
+			c.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ c.quiet=true; });
+	parser.parse_all(args,i,"convert");
 	if(c.from_lunar&&c.has_in){
 		throw std::invalid_argument("do not pass positional <dt_or_tm> when using --from-lunar");
 	}

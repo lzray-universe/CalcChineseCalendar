@@ -247,25 +247,14 @@ InfoOpt parse_info(const std::vector<std::string>&args){
 	}
 	InfoOpt opt;
 	opt.ephem=args[0];
-	const OptMap handlers={
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
-						const std::string&tag){
-			 opt.format=to_low(req_val(src,idx,tag));
-		 }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
-					 const std::string&tag){
-			 opt.out_path=req_val(src,idx,tag);
-		 }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
-						const std::string&tag){
-			 opt.pretty=parse_bool01(req_val(src,idx,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ opt.quiet=true; }},
-	};
-	for(std::size_t i=1;i<args.size();++i){
-		apply_opt(handlers,args,i,args[i],"info");
-	}
+	lunar::ArgParser parser;
+	parser.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
+		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			opt.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ opt.quiet=true; });
+	parser.parse_all(args,1,"info");
 	chk_fmt(opt.format,{"json","txt"},"info");
 	return opt;
 }
@@ -359,29 +348,15 @@ CfgOpt parse_cfg(const std::vector<std::string>&args){
 	}
 	CfgOpt opt;
 	opt.action=to_low(args[0]);
-	const OptMap handlers={
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&idx,
-						const std::string&tag){
-			 opt.format=to_low(req_val(src,idx,tag));
-		 }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&idx,
-					 const std::string&tag){
-			 opt.out_path=req_val(src,idx,tag);
-		 }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&idx,
-						const std::string&tag){
-			 opt.pretty=parse_bool01(req_val(src,idx,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ opt.quiet=true; }},
-	};
-	auto parse_more=[&](std::size_t start){
-		for(std::size_t i=start;i<args.size();++i){
-			apply_opt(handlers,args,i,args[i],"config");
-		}
-	};
+	lunar::ArgParser parser;
+	parser.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
+		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			opt.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ opt.quiet=true; });
 	if(opt.action=="show"){
-		parse_more(1);
+		parser.parse_all(args,1,"config");
 		chk_fmt(opt.format,{"json","txt"},"config show");
 		return opt;
 	}
@@ -391,7 +366,7 @@ CfgOpt parse_cfg(const std::vector<std::string>&args){
 		}
 		opt.key=to_low(args[1]);
 		opt.value=args[2];
-		parse_more(3);
+		parser.parse_all(args,3,"config");
 		return opt;
 	}
 	throw std::invalid_argument("config action must be show or set");

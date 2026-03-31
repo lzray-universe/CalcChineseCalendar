@@ -14,19 +14,23 @@ public:
 	using Action=std::function<void(const std::vector<std::string>&,
 									std::size_t&,const std::string&)>;
 
-	void add(const std::string&opt,Action action){
+	ArgParser&add(const std::string&opt,Action action){
 		actions_[opt]=std::move(action);
+		return *this;
 	}
 
-	void add_flag(const std::string&opt,std::function<void()> action){
-		add(opt,[fn=std::move(action)](const std::vector<std::string>&,
-									  std::size_t&,const std::string&){ fn(); });
+	ArgParser&add_flag(const std::string&opt,std::function<void()> action){
+		return add(opt,[fn=std::move(action)](const std::vector<std::string>&,
+											 std::size_t&,const std::string&){
+			fn();
+		});
 	}
 
-	void add_value(const std::string&opt,
-				   std::function<void(const std::string&)> action){
-		add(opt,[fn=std::move(action)](const std::vector<std::string>&args,
-									  std::size_t&idx,const std::string&name){
+	ArgParser&add_value(const std::string&opt,
+					   std::function<void(const std::string&)> action){
+		return add(opt,[fn=std::move(action)](const std::vector<std::string>&args,
+											 std::size_t&idx,
+											 const std::string&name){
 			fn(require_value(args,idx,name));
 		});
 	}

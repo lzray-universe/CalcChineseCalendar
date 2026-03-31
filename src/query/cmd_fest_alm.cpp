@@ -49,28 +49,20 @@ FestOpt parse_fest(const std::vector<std::string>&args){
 		opt.format="txt";
 	}
 	opt.pretty=cfg.def_prety;
-	const OptMap handlers={
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&i,
-					const std::string&tag){ opt.tz=req_val(src,i,tag); }},
-		{"--lunar-day-tz",[&](const std::vector<std::string>&src,
-							  std::size_t&i,const std::string&tag){
-			 opt.lunar_day_tz=req_val(src,i,tag);
-		 }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.format=to_low(req_val(src,i,tag));
-		 }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&i,
-					 const std::string&tag){ opt.out_path=req_val(src,i,tag); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.pretty=parse_bool01(req_val(src,i,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ opt.quiet=true; }},
-	};
+	lunar::ArgParser parser;
+	parser.add_value("--tz",[&](const std::string&v){ opt.tz=v; })
+		.add_value("--lunar-day-tz",
+				   [&](const std::string&v){ opt.lunar_day_tz=v; })
+		.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
+		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			opt.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ opt.quiet=true; });
 	for(std::size_t i=2;i<args.size();++i){
-		apply_opt(handlers,args,i,args[i],"festival");
+		if(!parser.parse_one(args,i,"festival")){
+			throw std::invalid_argument("unknown option for festival: "+args[i]);
+		}
 	}
 	chk_fmt(opt.format,{"json","txt","csv"},"festival");
 	opt.lunar_day_tz=canonical_tz_text(opt.lunar_day_tz);
@@ -115,88 +107,67 @@ AlmOpt parse_alm(const std::vector<std::string>&args){
 	}
 	opt.pretty=cfg.def_prety;
 	opt.hli_rules=hli_rules_from_cfg(cfg);
-	const OptMap handlers={
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&i,
-					const std::string&tag){ opt.tz=req_val(src,i,tag); }},
-		{"--lunar-day-tz",[&](const std::vector<std::string>&src,
-							  std::size_t&i,const std::string&tag){
-			 opt.lunar_day_tz=req_val(src,i,tag);
-		 }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.format=to_low(req_val(src,i,tag));
-		 }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&i,
-					 const std::string&tag){ opt.out_path=req_val(src,i,tag); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.pretty=parse_bool01(req_val(src,i,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ opt.quiet=true; }},
-		{"--lon",[&](const std::vector<std::string>&src,std::size_t&i,
-					 const std::string&tag){
-			 opt.hli_lon_deg=parse_double(req_val(src,i,tag),tag);
-		 }},
-		{"--trad",[&](const std::vector<std::string>&src,std::size_t&i,
-					  const std::string&tag){
-			 std::string value=req_val(src,i,tag);
-			 HliProfileCode trad=HliProfileCode::Folk;
-			 if(!parse_hli_profile(value,&trad)){
-				 throw std::invalid_argument(
-					 "invalid --trad: "+value+
-					 " (expected folk|ziping|purple|xieji)");
-			 }
-			 opt.hli_rules=make_hli_rule_set(trad);
-		 }},
-		{"--year-boundary",[&](const std::vector<std::string>&src,
-							   std::size_t&i,const std::string&tag){
-			 std::string value=req_val(src,i,tag);
-			 HliYearBoundary parsed=HliYearBoundary::LunarNewYear;
-			 if(!parse_hli_year_boundary(value,&parsed)){
-				 throw std::invalid_argument(
-					 "invalid --year-boundary: "+value+
-					 " (expected lichun|lunar_new_year|dongzhi)");
-			 }
-			 opt.hli_rules.year_boundary=static_cast<int>(parsed);
-		 }},
-		{"--month-boundary",[&](const std::vector<std::string>&src,
-								std::size_t&i,const std::string&tag){
-			 std::string value=req_val(src,i,tag);
-			 HliMonthBoundary parsed=HliMonthBoundary::LunarFirstDay;
-			 if(!parse_hli_month_boundary(value,&parsed)){
-				 throw std::invalid_argument(
-					 "invalid --month-boundary: "+value+
-					 " (expected solar_term|lunar_first_day)");
-			 }
-			 opt.hli_rules.month_boundary=static_cast<int>(parsed);
-		 }},
-		{"--leap-month-mode",[&](const std::vector<std::string>&src,
-								 std::size_t&i,const std::string&tag){
-			 std::string value=req_val(src,i,tag);
-			 HliLeapMonthMode parsed=HliLeapMonthMode::InheritPrevious;
-			 if(!parse_hli_leap_month_mode(value,&parsed)){
-				 throw std::invalid_argument(
-					 "invalid --leap-month-mode: "+value+
-					 " (expected ignore|inherit_previous|split_midway|"
-					 "shift_to_next)");
-			 }
-			 opt.hli_rules.leap_month_mode=static_cast<int>(parsed);
-		 }},
-		{"--day-boundary",[&](const std::vector<std::string>&src,
-							  std::size_t&i,const std::string&tag){
-			 std::string value=req_val(src,i,tag);
-			 HliDayBoundary parsed=HliDayBoundary::Hour23;
-			 if(!parse_hli_day_boundary(value,&parsed)){
-				 throw std::invalid_argument(
-					 "invalid --day-boundary: "+value+
-					 " (expected hour23|hour0)");
-			 }
-			 opt.hli_rules.day_boundary=static_cast<int>(parsed);
-		 }},
-	};
+	lunar::ArgParser parser;
+	parser.add_value("--tz",[&](const std::string&v){ opt.tz=v; })
+		.add_value("--lunar-day-tz",
+				   [&](const std::string&v){ opt.lunar_day_tz=v; })
+		.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
+		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			opt.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ opt.quiet=true; })
+		.add_value("--lon",[&](const std::string&v){
+			opt.hli_lon_deg=parse_double(v,"--lon");
+		})
+		.add_value("--trad",[&](const std::string&v){
+			HliProfileCode trad=HliProfileCode::Folk;
+			if(!parse_hli_profile(v,&trad)){
+				throw std::invalid_argument(
+					"invalid --trad: "+v+" (expected folk|ziping|purple|xieji)");
+			}
+			opt.hli_rules=make_hli_rule_set(trad);
+		})
+		.add_value("--year-boundary",[&](const std::string&v){
+			HliYearBoundary parsed=HliYearBoundary::LunarNewYear;
+			if(!parse_hli_year_boundary(v,&parsed)){
+				throw std::invalid_argument(
+					"invalid --year-boundary: "+v+
+					" (expected lichun|lunar_new_year|dongzhi)");
+			}
+			opt.hli_rules.year_boundary=static_cast<int>(parsed);
+		})
+		.add_value("--month-boundary",[&](const std::string&v){
+			HliMonthBoundary parsed=HliMonthBoundary::LunarFirstDay;
+			if(!parse_hli_month_boundary(v,&parsed)){
+				throw std::invalid_argument(
+					"invalid --month-boundary: "+v+
+					" (expected solar_term|lunar_first_day)");
+			}
+			opt.hli_rules.month_boundary=static_cast<int>(parsed);
+		})
+		.add_value("--leap-month-mode",[&](const std::string&v){
+			HliLeapMonthMode parsed=HliLeapMonthMode::InheritPrevious;
+			if(!parse_hli_leap_month_mode(v,&parsed)){
+				throw std::invalid_argument(
+					"invalid --leap-month-mode: "+v+
+					" (expected ignore|inherit_previous|split_midway|"
+					"shift_to_next)");
+			}
+			opt.hli_rules.leap_month_mode=static_cast<int>(parsed);
+		})
+		.add_value("--day-boundary",[&](const std::string&v){
+			HliDayBoundary parsed=HliDayBoundary::Hour23;
+			if(!parse_hli_day_boundary(v,&parsed)){
+				throw std::invalid_argument(
+					"invalid --day-boundary: "+v+" (expected hour23|hour0)");
+			}
+			opt.hli_rules.day_boundary=static_cast<int>(parsed);
+		});
 	for(std::size_t i=2;i<args.size();++i){
-		apply_opt(handlers,args,i,args[i],"almanac");
+		if(!parser.parse_one(args,i,"almanac")){
+			throw std::invalid_argument("unknown option for almanac: "+args[i]);
+		}
 	}
 	chk_fmt(opt.format,{"json","txt","csv"},"almanac");
 	opt.lunar_day_tz=canonical_tz_text(opt.lunar_day_tz);
@@ -295,39 +266,15 @@ void write_alm(std::ostream&os,const AlmOpt&opt,const AlmRes&res){
 			 os<<"\n";
 		 }},
 		{"csv",[&](){
-			 os<<"date,lun_label,ill_pct,phase_name,events,festivals,y_lun_gz,"
-				  "y_lchun_gz,y_rule_gz,m_gz,d_gz,h_gz,h_true_gz,rule_profile,"
-				  "rule_profile_code,y_lun_index,y_lun_stem,y_lun_branch,"
-				  "y_lchun_index,y_lchun_stem,y_lchun_branch,y_rule_index,"
-				  "y_rule_stem,y_rule_branch,m_gz_index,m_gz_stem,m_gz_branch,"
-				  "d_gz_index,d_gz_stem,d_gz_branch,h_gz_index,h_gz_stem,"
-				  "h_gz_branch,h_true_gz_index,h_true_gz_stem,h_true_gz_branch,"
-				  "year_boundary,year_boundary_code,month_boundary,"
-				  "month_boundary_code,leap_month_mode,leap_month_mode_code,"
-				  "day_boundary,day_boundary_code,jianchu,bazi_clock,bazi_true,"
-				  "duty_god,jianchu_code,duty_god_code,duty_is_yellow,duty_tag,"
-				  "clash,chong_sha,zodiac_day,six_he,three_he,pengzu,nayin,"
-				  "wuxing_day,fetal_god,meridian,lucky_dir,wealth_dir,mascot_dir,"
-				  "sun_noble_dir,moon_noble_dir,xiu28,xiu28_code,xiu28_mod28,"
-				  "xiu28_mod28_code,xiu_star,yi_ji_level,yi_ji_rule,"
-				  "yi_ji_rule_code,good_gods,bad_gods,yi,ji,rule_profile_key,"
-				  "year_boundary_key,month_boundary_key,leap_month_mode_key,"
-				  "day_boundary_key,duty_tag_code,clash_branch_code,sha_dir_code,"
-				  "zodiac_day_code,six_he_branch_code,three_he_group_code,"
-				  "nayin_code,fetal_god_code,meridian_code,lucky_dir_code,"
-				  "wealth_dir_code,mascot_dir_code,sun_noble_dir_code,"
-				  "moon_noble_dir_code,good_god_codes,bad_god_codes,yi_codes,"
-				  "ji_codes,good_god_mask_hex,bad_god_mask_hex,yi_mask_hex,"
-				  "ji_mask_hex,hour_slots,hour_slot_indexes,hour_gzs,"
-				  "hour_gz_indexes,hour_lucks,hour_is_bad\n";
-			 os<<csv_quote(opt.date_text)<<","
-			   <<csv_quote(res.atd.lunar_date.lun_label)<<","
-			   <<format_num(res.atd.ill_pct)<<","
-			   <<csv_quote(res.atd.phase_name)<<","
-			   <<csv_quote(join_ev_name(res.evs))<<","
-			   <<csv_quote(join_ev_name(res.fests))<<",";
-			 wr_hli_csv(os,res.atd.hli,HliCsvLayout::Almanac);
-			 os<<"\n";
+			 CsvWriter csv(os);
+			 csv.write_field("date",opt.date_text);
+			 csv.write_field("lun_label",res.atd.lunar_date.lun_label);
+			 csv.write_raw("ill_pct",format_num(res.atd.ill_pct));
+			 csv.write_field("phase_name",res.atd.phase_name);
+			 csv.write_field("events",join_ev_name(res.evs));
+			 csv.write_field("festivals",join_ev_name(res.fests));
+			 wr_hli_csv(csv,res.atd.hli,HliCsvLayout::Almanac);
+			 csv.finish_row();
 		 }},
 		{"txt",[&](){
 			 os<<"tool=lunar format=txt type=almanac tz_display="<<opt.tz<<"\n";

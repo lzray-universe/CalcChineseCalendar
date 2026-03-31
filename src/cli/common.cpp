@@ -33,20 +33,6 @@ using cli_util::parse_int;
 using cli_util::req_val;
 using cli_util::to_low;
 
-using OptHandler=
-	std::function<void(const std::vector<std::string>&,std::size_t&,
-					   const std::string&)>;
-using OptMap=std::unordered_map<std::string,OptHandler>;
-
-void apply_opt(const OptMap&handlers,const std::vector<std::string>&args,
-			   std::size_t&idx,const std::string&opt,const std::string&ctx){
-	auto it=handlers.find(opt);
-	if(it==handlers.end()){
-		throw std::invalid_argument("unknown option for "+ctx+": "+opt);
-	}
-	it->second(args,idx,opt);
-}
-
 using FmtHandler=std::function<void()>;
 using FmtMap=std::unordered_map<std::string,FmtHandler>;
 

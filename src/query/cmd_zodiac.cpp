@@ -148,40 +148,27 @@ ZodOpt parse_zod(const std::vector<std::string>&args){
 		opt.has_time=true;
 		++i;
 	}
-	const OptMap handlers={
-		{"--time",[&](const std::vector<std::string>&src,std::size_t&j,
-					  const std::string&tag){
-			 opt.time_raw=req_val(src,j,tag);
-			 opt.has_time=true;
-		 }},
-		{"--year",[&](const std::vector<std::string>&src,std::size_t&j,
-					  const std::string&tag){
-			 opt.year=parse_int(req_val(src,j,tag),"--year");
-			 opt.has_year=true;
-		 }},
-		{"--input-tz",[&](const std::vector<std::string>&src,std::size_t&j,
-						  const std::string&tag){
-			 opt.input_tz=req_val(src,j,tag);
-			 has_input_tz=true;
-		 }},
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&j,
-					const std::string&tag){ opt.tz=req_val(src,j,tag); }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&j,
-						const std::string&tag){
-			 opt.format=to_low(req_val(src,j,tag));
-		 }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&j,
-					 const std::string&tag){ opt.out_path=req_val(src,j,tag); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&j,
-						const std::string&tag){
-			 opt.pretty=parse_bool01(req_val(src,j,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ opt.quiet=true; }},
-	};
-	for(;i<args.size();++i){
-		apply_opt(handlers,args,i,args[i],"zodiac");
-	}
+	lunar::ArgParser parser;
+	parser.add_value("--time",[&](const std::string&v){
+			opt.time_raw=v;
+			opt.has_time=true;
+		})
+		.add_value("--year",[&](const std::string&v){
+			opt.year=parse_int(v,"--year");
+			opt.has_year=true;
+		})
+		.add_value("--input-tz",[&](const std::string&v){
+			opt.input_tz=v;
+			has_input_tz=true;
+		})
+		.add_value("--tz",[&](const std::string&v){ opt.tz=v; })
+		.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
+		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			opt.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ opt.quiet=true; });
+	parser.parse_all(args,i,"zodiac");
 	if(opt.has_time==opt.has_year){
 		throw std::invalid_argument(
 			"zodiac requires exactly one of --time <time> or --year <year>");

@@ -1268,11 +1268,6 @@ std::string normalize_path(const std::string&path){
 	return p.lexically_normal().string();
 }
 
-std::mutex&cache_mtx(){
-	static std::mutex mtx;
-	return mtx;
-}
-
 std::unordered_map<std::string,std::weak_ptr<SpkFile>>&cache_map(){
 	static std::unordered_map<std::string,std::weak_ptr<SpkFile>> cache;
 	return cache;
@@ -2725,27 +2720,16 @@ namespace{
 
 std::shared_ptr<SpkFile>acq_kernel(const std::string&filepath){
 	std::string key=normalize_path(filepath);
-	{
-		std::lock_guard<std::mutex> lk(cache_mtx());
-		auto it=cache_map().find(key);
-		if(it!=cache_map().end()){
-			std::shared_ptr<SpkFile> cached=it->second.lock();
-			if(cached){
-				return cached;
-			}
+	auto it=cache_map().find(key);
+	if(it!=cache_map().end()){
+		std::shared_ptr<SpkFile> cached=it->second.lock();
+		if(cached){
+			return cached;
 		}
 	}
 
 	std::shared_ptr<SpkFile> fresh=std::make_shared<SpkFile>(key);
-	{
-		std::lock_guard<std::mutex> lk(cache_mtx());
-		auto&slot=cache_map()[key];
-		std::shared_ptr<SpkFile> cached=slot.lock();
-		if(cached){
-			return cached;
-		}
-		slot=fresh;
-	}
+	cache_map()[key]=fresh;
 	return fresh;
 }
 
@@ -2935,29 +2919,32 @@ EphRead::EphRead(const std::string&path){
 }
 
 void EphRead::load_kern(){
-	std::call_once(kern_flag,[this](){
+	if(kern_loaded){
+		return;
+	}
 #if LUNAR_ENABLE_SERIES_FALLBACK
-		if(should_use_series_backend(filepath)){
-			use_series=true;
-			if(filepath.empty()){
-				filepath=kSeriesEphemToken;
-			}
-			return;
+	if(should_use_series_backend(filepath)){
+		use_series=true;
+		kern_loaded=true;
+		if(filepath.empty()){
+			filepath=kSeriesEphemToken;
 		}
+		return;
+	}
 #endif
-		if(!fs::exists(filepath)){
-			throw std::runtime_error("ephemeris file not found: "+filepath);
-		}
+	if(!fs::exists(filepath)){
+		throw std::runtime_error("ephemeris file not found: "+filepath);
+	}
 
-		std::error_code ec;
-		auto fsize=fs::file_size(filepath,ec);
-		if(ec||fsize==0){
-			throw std::runtime_error("ephemeris file is not readable or empty: "+
-									 filepath);
-		}
+	std::error_code ec;
+	auto fsize=fs::file_size(filepath,ec);
+	if(ec||fsize==0){
+		throw std::runtime_error("ephemeris file is not readable or empty: "+
+								 filepath);
+	}
 
-		kern=acq_kernel(filepath);
-	});
+	kern=acq_kernel(filepath);
+	kern_loaded=true;
 
 	if(use_series){
 		return;

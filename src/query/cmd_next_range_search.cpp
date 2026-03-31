@@ -193,39 +193,23 @@ NextOpt parse_next(const std::vector<std::string>&args){
 	InterCfg cfg=load_def();
 	NextOpt opt;
 	static_cast<EvOpt&>(opt)=mk_ev_opt(cfg,args[0],"next",cfg.def_fmt);
-	const OptMap handlers={
-		{"--from",[&](const std::vector<std::string>&src,std::size_t&i,
-					  const std::string&tag){
-			 opt.from_time=req_val(src,i,tag);
-		 }},
-		{"--count",[&](const std::vector<std::string>&src,std::size_t&i,
-					   const std::string&tag){
-			 opt.count=parse_int(req_val(src,i,tag),"--count");
-		 }},
-		{"--kinds",[&](const std::vector<std::string>&src,std::size_t&i,
-					   const std::string&tag){ opt.kinds=req_val(src,i,tag); }},
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&i,
-					const std::string&tag){ opt.tz=req_val(src,i,tag); }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.format=to_low(req_val(src,i,tag));
-		 }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&i,
-					 const std::string&tag){ opt.out_path=req_val(src,i,tag); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.pretty=parse_bool01(req_val(src,i,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ opt.quiet=true; }},
-		{"--eclipse",[&](const std::vector<std::string>&src,std::size_t&i,
-						 const std::string&tag){
-			 opt.calc_ecl=parse_bool01(req_val(src,i,tag),tag);
-		 }},
-	};
-	for(std::size_t i=1;i<args.size();++i){
-		apply_opt(handlers,args,i,args[i],"next");
-	}
+	lunar::ArgParser parser;
+	parser.add_value("--from",[&](const std::string&v){ opt.from_time=v; })
+		.add_value("--count",[&](const std::string&v){
+			opt.count=parse_int(v,"--count");
+		})
+		.add_value("--kinds",[&](const std::string&v){ opt.kinds=v; })
+		.add_value("--tz",[&](const std::string&v){ opt.tz=v; })
+		.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
+		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			opt.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ opt.quiet=true; })
+		.add_value("--eclipse",[&](const std::string&v){
+			opt.calc_ecl=parse_bool01(v,"--eclipse");
+		});
+	parser.parse_all(args,1,"next");
 	if(opt.from_time.empty()){
 		throw std::invalid_argument("next requires --from <time>");
 	}
@@ -244,37 +228,21 @@ RangeOpt parse_range(const std::vector<std::string>&args){
 	InterCfg cfg=load_def();
 	RangeOpt opt;
 	static_cast<EvOpt&>(opt)=mk_ev_opt(cfg,args[0],"range",cfg.def_fmt);
-	const OptMap handlers={
-		{"--from",[&](const std::vector<std::string>&src,std::size_t&i,
-					  const std::string&tag){
-			 opt.from_time=req_val(src,i,tag);
-		 }},
-		{"--to",[&](const std::vector<std::string>&src,std::size_t&i,
-					const std::string&tag){ opt.to_time=req_val(src,i,tag); }},
-		{"--kinds",[&](const std::vector<std::string>&src,std::size_t&i,
-					   const std::string&tag){ opt.kinds=req_val(src,i,tag); }},
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&i,
-					const std::string&tag){ opt.tz=req_val(src,i,tag); }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.format=to_low(req_val(src,i,tag));
-		 }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&i,
-					 const std::string&tag){ opt.out_path=req_val(src,i,tag); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.pretty=parse_bool01(req_val(src,i,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ opt.quiet=true; }},
-		{"--eclipse",[&](const std::vector<std::string>&src,std::size_t&i,
-						 const std::string&tag){
-			 opt.calc_ecl=parse_bool01(req_val(src,i,tag),tag);
-		 }},
-	};
-	for(std::size_t i=1;i<args.size();++i){
-		apply_opt(handlers,args,i,args[i],"range");
-	}
+	lunar::ArgParser parser;
+	parser.add_value("--from",[&](const std::string&v){ opt.from_time=v; })
+		.add_value("--to",[&](const std::string&v){ opt.to_time=v; })
+		.add_value("--kinds",[&](const std::string&v){ opt.kinds=v; })
+		.add_value("--tz",[&](const std::string&v){ opt.tz=v; })
+		.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
+		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			opt.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ opt.quiet=true; })
+		.add_value("--eclipse",[&](const std::string&v){
+			opt.calc_ecl=parse_bool01(v,"--eclipse");
+		});
+	parser.parse_all(args,1,"range");
 	if(opt.from_time.empty()||opt.to_time.empty()){
 		throw std::invalid_argument(
 			"range requires --from <time> and --to <time>");
@@ -291,37 +259,22 @@ SearchOpt parse_search(const std::vector<std::string>&args){
 	SearchOpt opt;
 	static_cast<EvOpt&>(opt)=mk_ev_opt(cfg,args[0],"search",cfg.def_fmt);
 	opt.query=args[1];
-	const OptMap handlers={
-		{"--from",[&](const std::vector<std::string>&src,std::size_t&i,
-					  const std::string&tag){
-			 opt.from_time=req_val(src,i,tag);
-		 }},
-		{"--count",[&](const std::vector<std::string>&src,std::size_t&i,
-					   const std::string&tag){
-			 opt.count=parse_int(req_val(src,i,tag),"--count");
-		 }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.format=to_low(req_val(src,i,tag));
-		 }},
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&i,
-					const std::string&tag){ opt.tz=req_val(src,i,tag); }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&i,
-					 const std::string&tag){ opt.out_path=req_val(src,i,tag); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&i,
-						const std::string&tag){
-			 opt.pretty=parse_bool01(req_val(src,i,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ opt.quiet=true; }},
-		{"--eclipse",[&](const std::vector<std::string>&src,std::size_t&i,
-						 const std::string&tag){
-			 opt.calc_ecl=parse_bool01(req_val(src,i,tag),tag);
-		 }},
-	};
-	for(std::size_t i=2;i<args.size();++i){
-		apply_opt(handlers,args,i,args[i],"search");
-	}
+	lunar::ArgParser parser;
+	parser.add_value("--from",[&](const std::string&v){ opt.from_time=v; })
+		.add_value("--count",[&](const std::string&v){
+			opt.count=parse_int(v,"--count");
+		})
+		.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
+		.add_value("--tz",[&](const std::string&v){ opt.tz=v; })
+		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			opt.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ opt.quiet=true; })
+		.add_value("--eclipse",[&](const std::string&v){
+			opt.calc_ecl=parse_bool01(v,"--eclipse");
+		});
+	parser.parse_all(args,2,"search");
 	if(opt.count<1){
 		throw std::invalid_argument("--count must be >=1");
 	}

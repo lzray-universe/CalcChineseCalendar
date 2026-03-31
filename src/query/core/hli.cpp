@@ -11,146 +11,144 @@ enum class HliTxtLayout{
 	At,
 };
 
-void wr_hli_csv(std::ostream&os,const HliData&h,HliCsvLayout layout){
-	auto wr_hour_field=[&](auto&&fn){
-		os<<csv_quote(join_hour_pipe(h.hour_jx,std::forward<decltype(fn)>(fn)));
+void wr_hli_csv(CsvWriter&w,const HliData&h,HliCsvLayout layout){
+	auto wr_hour_field=[&](const std::string&name,auto&&fn){
+		w.write_field(name,join_hour_pipe(h.hour_jx,std::forward<decltype(fn)>(fn)));
 	};
 
-	os<<csv_quote(h.y_lun.text)<<","
-	  <<csv_quote(h.y_lchun.text)<<","
-	  <<csv_quote(h.y_rule.text)<<","
-	  <<csv_quote(h.m_gz.text)<<","
-	  <<csv_quote(h.d_gz.text)<<","
-	  <<csv_quote(h.h_gz.text)<<","
-	  <<csv_quote(h.h_gz_true.text)<<","
-	  <<csv_quote(h.rule_profile)<<","
-	  <<h.rule_profile_code<<","
-	  <<gz_index_of(h.y_lun)<<","
-	  <<h.y_lun.stem<<","
-	  <<h.y_lun.branch<<","
-	  <<gz_index_of(h.y_lchun)<<","
-	  <<h.y_lchun.stem<<","
-	  <<h.y_lchun.branch<<","
-	  <<gz_index_of(h.y_rule)<<","
-	  <<h.y_rule.stem<<","
-	  <<h.y_rule.branch<<","
-	  <<gz_index_of(h.m_gz)<<","
-	  <<h.m_gz.stem<<","
-	  <<h.m_gz.branch<<","
-	  <<gz_index_of(h.d_gz)<<","
-	  <<h.d_gz.stem<<","
-	  <<h.d_gz.branch<<","
-	  <<gz_index_of(h.h_gz)<<","
-	  <<h.h_gz.stem<<","
-	  <<h.h_gz.branch<<","
-	  <<gz_index_of(h.h_gz_true)<<","
-	  <<h.h_gz_true.stem<<","
-	  <<h.h_gz_true.branch<<","
-	  <<csv_quote(h.year_boundary_text)<<","
-	  <<h.year_boundary_code<<","
-	  <<csv_quote(h.month_boundary_text)<<","
-	  <<h.month_boundary_code<<","
-	  <<csv_quote(h.leap_month_mode_text)<<","
-	  <<h.leap_month_mode_code<<","
-	  <<csv_quote(h.day_boundary_text)<<","
-	  <<h.day_boundary_code<<",";
+	w.write_field("y_lun_gz",h.y_lun.text);
+	w.write_field("y_lchun_gz",h.y_lchun.text);
+	w.write_field("y_rule_gz",h.y_rule.text);
+	w.write_field("m_gz",h.m_gz.text);
+	w.write_field("d_gz",h.d_gz.text);
+	w.write_field("h_gz",h.h_gz.text);
+	w.write_field("h_true_gz",h.h_gz_true.text);
+	w.write_field("rule_profile",h.rule_profile);
+	w.write_field("rule_profile_code",h.rule_profile_code);
+	w.write_field("y_lun_index",gz_index_of(h.y_lun));
+	w.write_field("y_lun_stem",h.y_lun.stem);
+	w.write_field("y_lun_branch",h.y_lun.branch);
+	w.write_field("y_lchun_index",gz_index_of(h.y_lchun));
+	w.write_field("y_lchun_stem",h.y_lchun.stem);
+	w.write_field("y_lchun_branch",h.y_lchun.branch);
+	w.write_field("y_rule_index",gz_index_of(h.y_rule));
+	w.write_field("y_rule_stem",h.y_rule.stem);
+	w.write_field("y_rule_branch",h.y_rule.branch);
+	w.write_field("m_gz_index",gz_index_of(h.m_gz));
+	w.write_field("m_gz_stem",h.m_gz.stem);
+	w.write_field("m_gz_branch",h.m_gz.branch);
+	w.write_field("d_gz_index",gz_index_of(h.d_gz));
+	w.write_field("d_gz_stem",h.d_gz.stem);
+	w.write_field("d_gz_branch",h.d_gz.branch);
+	w.write_field("h_gz_index",gz_index_of(h.h_gz));
+	w.write_field("h_gz_stem",h.h_gz.stem);
+	w.write_field("h_gz_branch",h.h_gz.branch);
+	w.write_field("h_true_gz_index",gz_index_of(h.h_gz_true));
+	w.write_field("h_true_gz_stem",h.h_gz_true.stem);
+	w.write_field("h_true_gz_branch",h.h_gz_true.branch);
+	w.write_field("year_boundary",h.year_boundary_text);
+	w.write_field("year_boundary_code",h.year_boundary_code);
+	w.write_field("month_boundary",h.month_boundary_text);
+	w.write_field("month_boundary_code",h.month_boundary_code);
+	w.write_field("leap_month_mode",h.leap_month_mode_text);
+	w.write_field("leap_month_mode_code",h.leap_month_mode_code);
+	w.write_field("day_boundary",h.day_boundary_text);
+	w.write_field("day_boundary_code",h.day_boundary_code);
 
 	switch(layout){
 	case HliCsvLayout::Day:
-		os<<csv_quote(h.jianchu)<<","
-		  <<h.jianchu_code<<","
-		  <<csv_quote(h.bazi_clock)<<","
-		  <<csv_quote(h.bazi_true)<<","
-		  <<csv_quote(h.duty_god)<<","
-		  <<h.duty_god_code<<",";
+		w.write_field("jianchu",h.jianchu);
+		w.write_field("jianchu_code",h.jianchu_code);
+		w.write_field("bazi_clock",h.bazi_clock);
+		w.write_field("bazi_true",h.bazi_true);
+		w.write_field("duty_god",h.duty_god);
+		w.write_field("duty_god_code",h.duty_god_code);
 		break;
 	case HliCsvLayout::Almanac:
-		os<<csv_quote(h.jianchu)<<","
-		  <<csv_quote(h.bazi_clock)<<","
-		  <<csv_quote(h.bazi_true)<<","
-		  <<csv_quote(h.duty_god)<<","
-		  <<h.jianchu_code<<","
-		  <<h.duty_god_code<<",";
+		w.write_field("jianchu",h.jianchu);
+		w.write_field("bazi_clock",h.bazi_clock);
+		w.write_field("bazi_true",h.bazi_true);
+		w.write_field("duty_god",h.duty_god);
+		w.write_field("jianchu_code",h.jianchu_code);
+		w.write_field("duty_god_code",h.duty_god_code);
 		break;
 	}
 
-	os<<(h.duty_is_yellow?"1":"0")<<","
-	  <<csv_quote(h.duty_tag)<<","
-	  <<csv_quote(h.clash)<<","
-	  <<csv_quote(h.chong_sha)<<","
-	  <<csv_quote(h.zodiac_day)<<","
-	  <<csv_quote(h.six_he)<<","
-	  <<csv_quote(h.three_he)<<","
-	  <<csv_quote(h.pengzu)<<","
-	  <<csv_quote(h.nayin)<<","
-	  <<csv_quote(h.wx_day)<<","
-	  <<csv_quote(h.fetal_god)<<","
-	  <<csv_quote(h.meridian)<<","
-	  <<csv_quote(h.lucky_dir)<<","
-	  <<csv_quote(h.wealth_dir)<<","
-	  <<csv_quote(h.mascot_dir)<<","
-	  <<csv_quote(h.sun_noble_dir)<<","
-	  <<csv_quote(h.moon_noble_dir)<<","
-	  <<csv_quote(h.xiu28)<<","
-	  <<h.xiu28_code<<","
-	  <<csv_quote(h.xiu28_mod28)<<","
-	  <<h.xiu28_mod28_code<<","
-	  <<csv_quote(h.xiu_id)<<","
-	  <<h.yi_ji_level<<","
-	  <<csv_quote(h.yi_ji_rule)<<","
-	  <<h.yi_ji_rule_code<<","
-	  <<csv_quote(join_pipe(h.good_gods))<<","
-	  <<csv_quote(join_pipe(h.bad_gods))<<","
-	  <<csv_quote(join_pipe(h.yi))<<","
-	  <<csv_quote(join_pipe(h.ji))<<","
-	  <<csv_quote(
-			 hli_profile_key(static_cast<HliProfileCode>(h.rule_profile_code)))
-	  <<","
-	  <<csv_quote(hli_year_boundary_key(
-			 static_cast<HliYearBoundary>(h.year_boundary_code)))
-	  <<","
-	  <<csv_quote(hli_month_boundary_key(
-			 static_cast<HliMonthBoundary>(h.month_boundary_code)))
-	  <<","
-	  <<csv_quote(hli_leap_month_mode_key(
-			 static_cast<HliLeapMonthMode>(h.leap_month_mode_code)))
-	  <<","
-	  <<csv_quote(hli_day_boundary_key(
-			 static_cast<HliDayBoundary>(h.day_boundary_code)))
-	  <<","
-	  <<h.duty_tag_code<<","
-	  <<h.clash_branch_code<<","
-	  <<h.sha_dir_code<<","
-	  <<h.zodiac_day_code<<","
-	  <<h.six_he_branch_code<<","
-	  <<h.three_he_group_code<<","
-	  <<h.nayin_code<<","
-	  <<h.fetal_god_code<<","
-	  <<h.meridian_code<<","
-	  <<h.lucky_dir_code<<","
-	  <<h.wealth_dir_code<<","
-	  <<h.mascot_dir_code<<","
-	  <<h.sun_noble_dir_code<<","
-	  <<h.moon_noble_dir_code<<","
-	  <<csv_quote(join_code_pipe(h.good_god_codes))<<","
-	  <<csv_quote(join_code_pipe(h.bad_god_codes))<<","
-	  <<csv_quote(join_code_pipe(h.yi_codes))<<","
-	  <<csv_quote(join_code_pipe(h.ji_codes))<<","
-	  <<csv_quote(hex_mask64(h.good_god_mask))<<","
-	  <<csv_quote(hex_mask64(h.bad_god_mask))<<","
-	  <<csv_quote(join_mask_hex_pipe(h.yi_mask))<<","
-	  <<csv_quote(join_mask_hex_pipe(h.ji_mask))<<",";
-	wr_hour_field([](const HliHour&x){ return x.slot; });
-	os<<",";
-	wr_hour_field([](const HliHour&x){ return std::to_string(x.slot_index); });
-	os<<",";
-	wr_hour_field([](const HliHour&x){ return x.gz; });
-	os<<",";
-	wr_hour_field([](const HliHour&x){ return std::to_string(x.gz_index); });
-	os<<",";
-	wr_hour_field([](const HliHour&x){ return x.luck; });
-	os<<",";
-	wr_hour_field([](const HliHour&x){ return x.is_bad?"1":"0"; });
+	w.write_field("duty_is_yellow",h.duty_is_yellow);
+	w.write_field("duty_tag",h.duty_tag);
+	w.write_field("clash",h.clash);
+	w.write_field("chong_sha",h.chong_sha);
+	w.write_field("zodiac_day",h.zodiac_day);
+	w.write_field("six_he",h.six_he);
+	w.write_field("three_he",h.three_he);
+	w.write_field("pengzu",h.pengzu);
+	w.write_field("nayin",h.nayin);
+	w.write_field("wuxing_day",h.wx_day);
+	w.write_field("fetal_god",h.fetal_god);
+	w.write_field("meridian",h.meridian);
+	w.write_field("lucky_dir",h.lucky_dir);
+	w.write_field("wealth_dir",h.wealth_dir);
+	w.write_field("mascot_dir",h.mascot_dir);
+	w.write_field("sun_noble_dir",h.sun_noble_dir);
+	w.write_field("moon_noble_dir",h.moon_noble_dir);
+	w.write_field("xiu28",h.xiu28);
+	w.write_field("xiu28_code",h.xiu28_code);
+	w.write_field("xiu28_mod28",h.xiu28_mod28);
+	w.write_field("xiu28_mod28_code",h.xiu28_mod28_code);
+	w.write_field("xiu_star",h.xiu_id);
+	w.write_field("yi_ji_level",h.yi_ji_level);
+	w.write_field("yi_ji_rule",h.yi_ji_rule);
+	w.write_field("yi_ji_rule_code",h.yi_ji_rule_code);
+	w.write_field("good_gods",join_pipe(h.good_gods));
+	w.write_field("bad_gods",join_pipe(h.bad_gods));
+	w.write_field("yi",join_pipe(h.yi));
+	w.write_field("ji",join_pipe(h.ji));
+	w.write_field("rule_profile_key",
+				  hli_profile_key(
+					  static_cast<HliProfileCode>(h.rule_profile_code)));
+	w.write_field("year_boundary_key",
+				  hli_year_boundary_key(
+					  static_cast<HliYearBoundary>(h.year_boundary_code)));
+	w.write_field("month_boundary_key",
+				  hli_month_boundary_key(
+					  static_cast<HliMonthBoundary>(h.month_boundary_code)));
+	w.write_field("leap_month_mode_key",
+				  hli_leap_month_mode_key(
+					  static_cast<HliLeapMonthMode>(h.leap_month_mode_code)));
+	w.write_field("day_boundary_key",
+				  hli_day_boundary_key(
+					  static_cast<HliDayBoundary>(h.day_boundary_code)));
+	w.write_field("duty_tag_code",h.duty_tag_code);
+	w.write_field("clash_branch_code",h.clash_branch_code);
+	w.write_field("sha_dir_code",h.sha_dir_code);
+	w.write_field("zodiac_day_code",h.zodiac_day_code);
+	w.write_field("six_he_branch_code",h.six_he_branch_code);
+	w.write_field("three_he_group_code",h.three_he_group_code);
+	w.write_field("nayin_code",h.nayin_code);
+	w.write_field("fetal_god_code",h.fetal_god_code);
+	w.write_field("meridian_code",h.meridian_code);
+	w.write_field("lucky_dir_code",h.lucky_dir_code);
+	w.write_field("wealth_dir_code",h.wealth_dir_code);
+	w.write_field("mascot_dir_code",h.mascot_dir_code);
+	w.write_field("sun_noble_dir_code",h.sun_noble_dir_code);
+	w.write_field("moon_noble_dir_code",h.moon_noble_dir_code);
+	w.write_field("good_god_codes",join_code_pipe(h.good_god_codes));
+	w.write_field("bad_god_codes",join_code_pipe(h.bad_god_codes));
+	w.write_field("yi_codes",join_code_pipe(h.yi_codes));
+	w.write_field("ji_codes",join_code_pipe(h.ji_codes));
+	w.write_field("good_god_mask_hex",hex_mask64(h.good_god_mask));
+	w.write_field("bad_god_mask_hex",hex_mask64(h.bad_god_mask));
+	w.write_field("yi_mask_hex",join_mask_hex_pipe(h.yi_mask));
+	w.write_field("ji_mask_hex",join_mask_hex_pipe(h.ji_mask));
+	wr_hour_field("hour_slots",[](const HliHour&x){ return x.slot; });
+	wr_hour_field("hour_slot_indexes",
+				  [](const HliHour&x){ return std::to_string(x.slot_index); });
+	wr_hour_field("hour_gzs",[](const HliHour&x){ return x.gz; });
+	wr_hour_field("hour_gz_indexes",
+				  [](const HliHour&x){ return std::to_string(x.gz_index); });
+	wr_hour_field("hour_lucks",[](const HliHour&x){ return x.luck; });
+	wr_hour_field("hour_is_bad",
+				  [](const HliHour&x){ return x.is_bad?"1":"0"; });
 }
 
 void wr_hli_txt(std::ostream&os,const HliData&h,HliTxtLayout layout){

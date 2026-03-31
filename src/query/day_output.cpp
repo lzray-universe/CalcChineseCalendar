@@ -120,44 +120,22 @@ void format_day_output(std::ostream&os,const DayResult&result,
 		}
 		std::string summary=join_pipe(ev_names);
 		std::string astro_summary=join_pipe(astro_names);
-		os<<"date,lun_label,lun_mlab,is_leap,lunar_"
-			 "day,ill_pct,phase_name,moon_xg_region,moon_xg_star,"
-			 "moon_xg_sep_deg,smp_tlociso,ev_sum,astro_ev_sum,"
-			 "y_lun_gz,y_lchun_gz,y_rule_gz,m_gz,d_gz,h_gz,h_true_gz,rule_profile,rule_profile_code,"
-			 "y_lun_index,y_lun_stem,y_lun_branch,y_lchun_index,y_lchun_stem,y_lchun_branch,"
-			 "y_rule_index,y_rule_stem,y_rule_branch,m_gz_index,m_gz_stem,m_gz_branch,"
-			 "d_gz_index,d_gz_stem,d_gz_branch,h_gz_index,h_gz_stem,h_gz_branch,"
-			 "h_true_gz_index,h_true_gz_stem,h_true_gz_branch,"
-			 "year_boundary,year_boundary_code,month_boundary,month_boundary_code,leap_month_mode,leap_month_mode_code,day_boundary,day_boundary_code,jianchu,jianchu_code,"
-			 "bazi_clock,bazi_true,duty_god,duty_god_code,duty_is_yellow,duty_tag,clash,"
-			 "chong_sha,zodiac_day,six_he,"
-			 "three_he,pengzu,nayin,wuxing_day,fetal_god,meridian,"
-			 "lucky_dir,wealth_dir,mascot_dir,sun_noble_dir,"
-			 "moon_noble_dir,xiu28,xiu28_code,xiu28_mod28,xiu28_mod28_code,"
-			 "xiu_star,yi_ji_level,yi_ji_rule,yi_ji_rule_code,"
-			 "good_gods,bad_gods,yi,ji,"
-			 "rule_profile_key,year_boundary_key,month_boundary_key,leap_month_mode_key,day_boundary_key,"
-			 "duty_tag_code,clash_branch_code,sha_dir_code,zodiac_day_code,six_he_branch_code,"
-			 "three_he_group_code,nayin_code,fetal_god_code,meridian_code,lucky_dir_code,"
-			 "wealth_dir_code,mascot_dir_code,sun_noble_dir_code,moon_noble_dir_code,"
-			 "good_god_codes,bad_god_codes,yi_codes,ji_codes,"
-			 "good_god_mask_hex,bad_god_mask_hex,yi_mask_hex,ji_mask_hex,"
-			 "hour_slots,hour_slot_indexes,hour_gzs,hour_gz_indexes,hour_lucks,hour_is_bad\n";
-		os<<csv_quote(result.date_text)<<","
-		  <<csv_quote(result.at_data.lunar_date.lun_label)<<","
-		  <<csv_quote(result.at_data.lunar_date.lun_mlab)<<","
-		  <<(result.at_data.lunar_date.is_leap?"1":"0")<<","
-		  <<result.at_data.lunar_date.lunar_day<<","
-		  <<format_num(result.at_data.ill_pct)<<","
-		  <<csv_quote(result.at_data.phase_name)<<","
-		  <<csv_quote(result.at_data.moon_xg.region)<<","
-		  <<csv_quote(result.at_data.moon_xg.star_name)<<","
-		  <<format_num(result.at_data.moon_xg.sep_deg)<<","
-		  <<csv_quote(result.at_data.local_iso)<<","
-		  <<csv_quote(summary)<<","
-		  <<csv_quote(astro_summary)<<",";
-		wr_hli_csv(os,result.at_data.hli,HliCsvLayout::Day);
-		os<<"\n";
+		CsvWriter csv(os);
+		csv.write_field("date",result.date_text);
+		csv.write_field("lun_label",result.at_data.lunar_date.lun_label);
+		csv.write_field("lun_mlab",result.at_data.lunar_date.lun_mlab);
+		csv.write_field("is_leap",result.at_data.lunar_date.is_leap);
+		csv.write_field("lunar_day",result.at_data.lunar_date.lunar_day);
+		csv.write_raw("ill_pct",format_num(result.at_data.ill_pct));
+		csv.write_field("phase_name",result.at_data.phase_name);
+		csv.write_field("moon_xg_region",result.at_data.moon_xg.region);
+		csv.write_field("moon_xg_star",result.at_data.moon_xg.star_name);
+		csv.write_raw("moon_xg_sep_deg",format_num(result.at_data.moon_xg.sep_deg));
+		csv.write_field("smp_tlociso",result.at_data.local_iso);
+		csv.write_field("ev_sum",summary);
+		csv.write_field("astro_ev_sum",astro_summary);
+		wr_hli_csv(csv,result.at_data.hli,HliCsvLayout::Day);
+		csv.finish_row();
 		return;
 	}
 	if(format=="txt"){

@@ -6,14 +6,10 @@
 #include<iomanip>
 #include<iostream>
 #include<limits>
-#include<memory>
 #include<stdexcept>
-#include<thread>
 #include<vector>
 
 namespace{
-
-constexpr std::size_t kMaxWork=8;
 
 std::string clean_txt(std::string text){
 	for(char&c : text){
@@ -306,65 +302,16 @@ SolLunCal::run_roots(const std::vector<RootTask>&tasks){
 		return {results,errors};
 	}
 
-	auto run_serial=[&](){
-		for(std::size_t idx=0;idx<tasks.size();++idx){
-			const auto&task=tasks[idx];
-			try{
-				results[idx]=newton(task.kind,task.jd_initial,task.target,
-									task.eps_days,task.max_iter);
-			}catch(const std::exception&ex){
-				errors[idx]=ex.what();
-			}catch(...){
-				errors[idx]="unknown error";
-			}
-		}
-	};
-
-	if(tasks.size()==1){
-		run_serial();
-		return {results,errors};
-	}
-
-	unsigned int hc=std::thread::hardware_concurrency();
-	std::size_t wk_count=hc==0?4:static_cast<std::size_t>(hc);
-	wk_count=std::min<std::size_t>(wk_count,tasks.size());
-	wk_count=std::min<std::size_t>(wk_count,kMaxWork);
-	if(wk_count<=1){
-		run_serial();
-		return {results,errors};
-	}
-
-	try{
-		std::vector<std::unique_ptr<SolLunCal>> workers;
-		workers.reserve(wk_count);
-		for(std::size_t i=0;i<wk_count;++i){
-			workers.push_back(std::make_unique<SolLunCal>(eph));
-		}
-
-		std::atomic<std::size_t> cursor{0};
-		std::vector<RootCtx> ctxs(wk_count);
-		std::vector<std::thread> threads;
-		threads.reserve(wk_count);
-
+	for(std::size_t idx=0;idx<tasks.size();++idx){
+		const auto&task=tasks[idx];
 		try{
-			for(std::size_t i=0;i<wk_count;++i){
-				ctxs[i]={workers[i].get(),&tasks,&results,&errors,&cursor};
-				threads.emplace_back(run_wkr,&ctxs[i]);
-			}
+			results[idx]=newton(task.kind,task.jd_initial,task.target,
+								task.eps_days,task.max_iter);
+		}catch(const std::exception&ex){
+			errors[idx]=ex.what();
 		}catch(...){
-			for(auto&th : threads){
-				if(th.joinable()){
-					th.join();
-				}
-			}
-			throw;
+			errors[idx]="unknown error";
 		}
-
-		for(auto&th : threads){
-			th.join();
-		}
-	}catch(...){
-		run_serial();
 	}
 
 	return {results,errors};

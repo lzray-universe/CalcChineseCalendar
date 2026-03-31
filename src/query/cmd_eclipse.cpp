@@ -107,29 +107,55 @@ EclOpt parse_ecl(const std::vector<std::string>&args){
 		opt.format="json";
 	}
 	opt.pretty=cfg.def_prety;
-	const OptMap handlers={
-		{"--kind",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.kind=to_low(req_val(src,j,tag)); }},
-		{"--near",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.near_date=req_val(src,j,tag); }},
-		{"--stage",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.stage=to_low(req_val(src,j,tag)); }},
-		{"--sample-min",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.sample_min=parse_double(req_val(src,j,tag),tag); }},
-		{"--point-refine",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.point_refine=parse_bool01(req_val(src,j,tag),tag); opt.point_refine_set=true; }},
-		{"--point-lat",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.point_lat=parse_double(req_val(src,j,tag),tag); opt.has_point_lat=true; }},
-		{"--point-lon",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.point_lon=parse_double(req_val(src,j,tag),tag); opt.has_point_lon=true; }},
-		{"--point-height",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.point_height=parse_double(req_val(src,j,tag),tag); opt.has_point_height=true; }},
-		{"--global-vis",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.global_vis=parse_bool01(req_val(src,j,tag),tag); }},
-		{"--global",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.global_vis=parse_bool01(req_val(src,j,tag),tag); }},
-		{"--global-format",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.global_fmt=to_low(req_val(src,j,tag)); opt.global_fmt_set=true; }},
-		{"--grid-lat-step",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.grid_lat=parse_double(req_val(src,j,tag),tag); opt.grid_lat_set=true; }},
-		{"--grid-lon-step",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.grid_lon=parse_double(req_val(src,j,tag),tag); opt.grid_lon_set=true; }},
-		{"--tz",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.tz=req_val(src,j,tag); }},
-		{"--format",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.format=to_low(req_val(src,j,tag)); }},
-		{"--out",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.out_path=req_val(src,j,tag); }},
-		{"--pretty",[&](const std::vector<std::string>&src,std::size_t&j,const std::string&tag){ opt.pretty=parse_bool01(req_val(src,j,tag),"--pretty"); }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,const std::string&){ opt.quiet=true; }},
-	};
-	for(std::size_t i=1;i<args.size();++i){
-		apply_opt(handlers,args,i,args[i],"eclipse");
-	}
+	lunar::ArgParser parser;
+	parser.add_value("--kind",[&](const std::string&v){ opt.kind=to_low(v); })
+		.add_value("--near",[&](const std::string&v){ opt.near_date=v; })
+		.add_value("--stage",[&](const std::string&v){ opt.stage=to_low(v); })
+		.add_value("--sample-min",[&](const std::string&v){
+			opt.sample_min=parse_double(v,"--sample-min");
+		})
+		.add_value("--point-refine",[&](const std::string&v){
+			opt.point_refine=parse_bool01(v,"--point-refine");
+			opt.point_refine_set=true;
+		})
+		.add_value("--point-lat",[&](const std::string&v){
+			opt.point_lat=parse_double(v,"--point-lat");
+			opt.has_point_lat=true;
+		})
+		.add_value("--point-lon",[&](const std::string&v){
+			opt.point_lon=parse_double(v,"--point-lon");
+			opt.has_point_lon=true;
+		})
+		.add_value("--point-height",[&](const std::string&v){
+			opt.point_height=parse_double(v,"--point-height");
+			opt.has_point_height=true;
+		})
+		.add_value("--global-vis",[&](const std::string&v){
+			opt.global_vis=parse_bool01(v,"--global-vis");
+		})
+		.add_value("--global",[&](const std::string&v){
+			opt.global_vis=parse_bool01(v,"--global");
+		})
+		.add_value("--global-format",[&](const std::string&v){
+			opt.global_fmt=to_low(v);
+			opt.global_fmt_set=true;
+		})
+		.add_value("--grid-lat-step",[&](const std::string&v){
+			opt.grid_lat=parse_double(v,"--grid-lat-step");
+			opt.grid_lat_set=true;
+		})
+		.add_value("--grid-lon-step",[&](const std::string&v){
+			opt.grid_lon=parse_double(v,"--grid-lon-step");
+			opt.grid_lon_set=true;
+		})
+		.add_value("--tz",[&](const std::string&v){ opt.tz=v; })
+		.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
+		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			opt.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ opt.quiet=true; });
+	parser.parse_all(args,1,"eclipse");
 	if(opt.near_date.empty()){
 		throw std::invalid_argument("eclipse requires --near <YYYY-MM-DD>");
 	}

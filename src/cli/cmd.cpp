@@ -37,44 +37,31 @@ MonthCmd parse_month(const std::vector<std::string>&src){
 	MonthCmd cmd;
 	cmd.args.ephem=src[0];
 	cmd.args.years=src[1];
-	const OptMap handlers={
-		{"--mode",[&](const std::vector<std::string>&args,std::size_t&i,
-					  const std::string&tag){
-			 cmd.args.mode=to_low(req_val(args,i,tag));
-		 }},
-		{"--format",[&](const std::vector<std::string>&args,std::size_t&i,
-						const std::string&tag){
-			 cmd.args.format=to_low(req_val(args,i,tag));
-		 }},
-		{"--out",[&](const std::vector<std::string>&args,std::size_t&i,
-					 const std::string&tag){ cmd.args.out=req_val(args,i,tag); }},
-		{"--tz",[&](const std::vector<std::string>&args,std::size_t&i,
-					const std::string&tag){ cmd.args.tz=req_val(args,i,tag); }},
-		{"--pretty",[&](const std::vector<std::string>&args,std::size_t&i,
-						const std::string&tag){
-			 cmd.args.pretty=parse_bool01(req_val(args,i,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ cmd.args.quiet=true; }},
-		{"--include-eclipses",[&](const std::vector<std::string>&args,
-								  std::size_t&i,const std::string&tag){
-			 cmd.inc_ecl=parse_bool01(req_val(args,i,tag),tag);
-		 }},
-		{"--output",[&](const std::vector<std::string>&args,std::size_t&i,
-						const std::string&tag){
-			 cmd.args.out_json=req_val(args,i,tag);
-		 }},
-		{"--output-txt",[&](const std::vector<std::string>&args,std::size_t&i,
-							const std::string&tag){
-			 cmd.args.out_txt=req_val(args,i,tag);
-		 }},
-	};
+	lunar::ArgParser parser;
+	parser.add_flag("-h",[&](){ cmd.help=true; })
+		.add_flag("--help",[&](){ cmd.help=true; })
+		.add_value("--mode",[&](const std::string&v){ cmd.args.mode=to_low(v); })
+		.add_value("--format",[&](const std::string&v){
+			cmd.args.format=to_low(v);
+		})
+		.add_value("--out",[&](const std::string&v){ cmd.args.out=v; })
+		.add_value("--tz",[&](const std::string&v){ cmd.args.tz=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			cmd.args.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ cmd.args.quiet=true; })
+		.add_value("--include-eclipses",[&](const std::string&v){
+			cmd.inc_ecl=parse_bool01(v,"--include-eclipses");
+		})
+		.add_value("--output",[&](const std::string&v){ cmd.args.out_json=v; })
+		.add_value("--output-txt",[&](const std::string&v){ cmd.args.out_txt=v; });
 	for(std::size_t i=2;i<src.size();++i){
-		if(src[i]=="-h"||src[i]=="--help"){
-			cmd.help=true;
+		if(!parser.parse_one(src,i,"months")){
+			throw std::invalid_argument("unknown option for months: "+src[i]);
+		}
+		if(cmd.help){
 			return cmd;
 		}
-		apply_opt(handlers,src,i,src[i],"months");
 	}
 	if((!cmd.args.out_json.empty()||!cmd.args.out_txt.empty())&&
 	   !cmd.args.out.empty()){
@@ -105,36 +92,31 @@ CalCmd parse_cal(const std::vector<std::string>&src){
 		cmd.args.has_years=true;
 		++i;
 	}
-	const OptMap handlers={
-		{"--format",[&](const std::vector<std::string>&args,std::size_t&j,
-						const std::string&tag){
-			 cmd.args.format=to_low(req_val(args,j,tag));
-		 }},
-		{"--out",[&](const std::vector<std::string>&args,std::size_t&j,
-					 const std::string&tag){ cmd.args.out=req_val(args,j,tag); }},
-		{"--tz",[&](const std::vector<std::string>&args,std::size_t&j,
-					const std::string&tag){ cmd.args.tz=req_val(args,j,tag); }},
-		{"--include-months",[&](const std::vector<std::string>&args,
-								std::size_t&j,const std::string&tag){
-			 cmd.args.inc_month=parse_bool01(req_val(args,j,tag),"--include-months");
-		 }},
-		{"--include-eclipses",[&](const std::vector<std::string>&args,
-								   std::size_t&j,const std::string&tag){
-			 cmd.inc_ecl=parse_bool01(req_val(args,j,tag),tag);
-		 }},
-		{"--pretty",[&](const std::vector<std::string>&args,std::size_t&j,
-						const std::string&tag){
-			 cmd.args.pretty=parse_bool01(req_val(args,j,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ cmd.args.quiet=true; }},
-	};
+	lunar::ArgParser parser;
+	parser.add_flag("-h",[&](){ cmd.help=true; })
+		.add_flag("--help",[&](){ cmd.help=true; })
+		.add_value("--format",[&](const std::string&v){
+			cmd.args.format=to_low(v);
+		})
+		.add_value("--out",[&](const std::string&v){ cmd.args.out=v; })
+		.add_value("--tz",[&](const std::string&v){ cmd.args.tz=v; })
+		.add_value("--include-months",[&](const std::string&v){
+			cmd.args.inc_month=parse_bool01(v,"--include-months");
+		})
+		.add_value("--include-eclipses",[&](const std::string&v){
+			cmd.inc_ecl=parse_bool01(v,"--include-eclipses");
+		})
+		.add_value("--pretty",[&](const std::string&v){
+			cmd.args.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ cmd.args.quiet=true; });
 	for(;i<src.size();++i){
-		if(src[i]=="-h"||src[i]=="--help"){
-			cmd.help=true;
+		if(!parser.parse_one(src,i,"calendar")){
+			throw std::invalid_argument("unknown option for calendar: "+src[i]);
+		}
+		if(cmd.help){
 			return cmd;
 		}
-		apply_opt(handlers,src,i,src[i],"calendar");
 	}
 	return cmd;
 }
@@ -150,32 +132,26 @@ YearCmd parse_year_cmd(const std::vector<std::string>&src){
 	YearCmd cmd;
 	cmd.args.ephem=src[0];
 	cmd.args.year=parse_int(src[1],"year");
-	const OptMap handlers={
-		{"--mode",[&](const std::vector<std::string>&args,std::size_t&i,
-					  const std::string&tag){
-			 cmd.args.mode=to_low(req_val(args,i,tag));
-		 }},
-		{"--format",[&](const std::vector<std::string>&args,std::size_t&i,
-						const std::string&tag){
-			 cmd.args.format=to_low(req_val(args,i,tag));
-		 }},
-		{"--out",[&](const std::vector<std::string>&args,std::size_t&i,
-					 const std::string&tag){ cmd.args.out=req_val(args,i,tag); }},
-		{"--tz",[&](const std::vector<std::string>&args,std::size_t&i,
-					const std::string&tag){ cmd.args.tz=req_val(args,i,tag); }},
-		{"--pretty",[&](const std::vector<std::string>&args,std::size_t&i,
-						const std::string&tag){
-			 cmd.args.pretty=parse_bool01(req_val(args,i,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ cmd.args.quiet=true; }},
-	};
+	lunar::ArgParser parser;
+	parser.add_flag("-h",[&](){ cmd.help=true; })
+		.add_flag("--help",[&](){ cmd.help=true; })
+		.add_value("--mode",[&](const std::string&v){ cmd.args.mode=to_low(v); })
+		.add_value("--format",[&](const std::string&v){
+			cmd.args.format=to_low(v);
+		})
+		.add_value("--out",[&](const std::string&v){ cmd.args.out=v; })
+		.add_value("--tz",[&](const std::string&v){ cmd.args.tz=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			cmd.args.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ cmd.args.quiet=true; });
 	for(std::size_t i=2;i<src.size();++i){
-		if(src[i]=="-h"||src[i]=="--help"){
-			cmd.help=true;
+		if(!parser.parse_one(src,i,"year")){
+			throw std::invalid_argument("unknown option for year: "+src[i]);
+		}
+		if(cmd.help){
 			return cmd;
 		}
-		apply_opt(handlers,src,i,src[i],"year");
 	}
 	return cmd;
 }
@@ -230,36 +206,29 @@ EventCmd parse_event(const std::vector<std::string>&src){
 		throw std::invalid_argument(
 			"event category must be solar-term or lunar-phase");
 	}
-	const OptMap handlers={
-		{"--near",[&](const std::vector<std::string>&args,std::size_t&j,
-					  const std::string&tag){
-			 cmd.args.near_date=req_val(args,j,tag);
-		 }},
-		{"--format",[&](const std::vector<std::string>&args,std::size_t&j,
-						const std::string&tag){
-			 cmd.args.format=to_low(req_val(args,j,tag));
-		 }},
-		{"--out",[&](const std::vector<std::string>&args,std::size_t&j,
-					 const std::string&tag){ cmd.args.out=req_val(args,j,tag); }},
-		{"--tz",[&](const std::vector<std::string>&args,std::size_t&j,
-					const std::string&tag){ cmd.args.tz=req_val(args,j,tag); }},
-		{"--pretty",[&](const std::vector<std::string>&args,std::size_t&j,
-						const std::string&tag){
-			 cmd.args.pretty=parse_bool01(req_val(args,j,tag),"--pretty");
-		 }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ cmd.args.quiet=true; }},
-		{"--eclipse",[&](const std::vector<std::string>&args,std::size_t&j,
-						 const std::string&tag){
-			 cmd.calc_ecl=parse_bool01(req_val(args,j,tag),tag);
-		 }},
-	};
+	lunar::ArgParser parser;
+	parser.add_flag("-h",[&](){ cmd.help=true; })
+		.add_flag("--help",[&](){ cmd.help=true; })
+		.add_value("--near",[&](const std::string&v){ cmd.args.near_date=v; })
+		.add_value("--format",[&](const std::string&v){
+			cmd.args.format=to_low(v);
+		})
+		.add_value("--out",[&](const std::string&v){ cmd.args.out=v; })
+		.add_value("--tz",[&](const std::string&v){ cmd.args.tz=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			cmd.args.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ cmd.args.quiet=true; })
+		.add_value("--eclipse",[&](const std::string&v){
+			cmd.calc_ecl=parse_bool01(v,"--eclipse");
+		});
 	for(;i<src.size();++i){
-		if(src[i]=="-h"||src[i]=="--help"){
-			cmd.help=true;
+		if(!parser.parse_one(src,i,"event")){
+			throw std::invalid_argument("unknown option for event: "+src[i]);
+		}
+		if(cmd.help){
 			return cmd;
 		}
-		apply_opt(handlers,src,i,src[i],"event");
 	}
 	if(cmd.args.category=="lunar-phase"&&cmd.args.near_date.empty()){
 		throw std::invalid_argument("lunar-phase requires --near YYYY-MM-DD");
@@ -291,18 +260,18 @@ DlCmd parse_dl(const std::vector<std::string>&src){
 	}else if(cmd.args.action!="list"){
 		throw std::invalid_argument("download action must be list or get");
 	}
-	const OptMap handlers={
-		{"--dir",[&](const std::vector<std::string>&args,std::size_t&j,
-					 const std::string&tag){ cmd.args.dir=req_val(args,j,tag); }},
-		{"--quiet",[&](const std::vector<std::string>&,std::size_t&,
-					   const std::string&){ cmd.args.quiet=true; }},
-	};
+	lunar::ArgParser parser;
+	parser.add_flag("-h",[&](){ cmd.help=true; })
+		.add_flag("--help",[&](){ cmd.help=true; })
+		.add_value("--dir",[&](const std::string&v){ cmd.args.dir=v; })
+		.add_flag("--quiet",[&](){ cmd.args.quiet=true; });
 	for(;i<src.size();++i){
-		if(src[i]=="-h"||src[i]=="--help"){
-			cmd.help=true;
+		if(!parser.parse_one(src,i,"download")){
+			throw std::invalid_argument("unknown option for download: "+src[i]);
+		}
+		if(cmd.help){
 			return cmd;
 		}
-		apply_opt(handlers,src,i,src[i],"download");
 	}
 	return cmd;
 }

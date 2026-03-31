@@ -2,7 +2,6 @@
 
 #include<map>
 #include<memory>
-#include<mutex>
 #include<string>
 #include<utility>
 #include<vector>
@@ -38,7 +37,7 @@ struct EphRead{
 	int MOON;
 	std::map<int,std::string> id_name;
 	std::shared_ptr<SpkFile> kern;
-	std::once_flag kern_flag;
+	bool kern_loaded=false;
 	bool use_series=false;
 
 	explicit EphRead(const std::string&path);

@@ -4,8 +4,10 @@
 #include<iomanip>
 #include<iosfwd>
 #include<limits>
+#include<stdexcept>
 #include<sstream>
 #include<string>
+#include<vector>
 
 #include "lunar/events.hpp"
 #include "lunar/format.hpp"
@@ -37,6 +39,74 @@ inline std::string csv_quote(const std::string&s){
 	out.push_back('"');
 	return out;
 }
+
+inline std::string csv_num(double v){
+	std::ostringstream oss;
+	oss<<std::setprecision(17)<<v;
+	return oss.str();
+}
+
+class CsvWriter{
+public:
+	explicit CsvWriter(std::ostream&os) : os_(os){}
+
+	void write_field(const std::string&name,const std::string&value){
+		push(name,csv_quote(value));
+	}
+
+	void write_field(const std::string&name,const char*value){
+		push(name,csv_quote(value==nullptr?"":std::string(value)));
+	}
+
+	void write_field(const std::string&name,int value){
+		push(name,std::to_string(value));
+	}
+
+	void write_field(const std::string&name,bool value){
+		push(name,value?"1":"0");
+	}
+
+	void write_field(const std::string&name,double value){
+		push(name,csv_num(value));
+	}
+
+	void write_raw(const std::string&name,const std::string&value){
+		push(name,value);
+	}
+
+	void finish_row(){
+		if(header_.empty()){
+			header_=row_header_;
+			write_line(header_);
+		}else if(header_!=row_header_){
+			throw std::logic_error("csv row header mismatch");
+		}
+		write_line(row_values_);
+		row_header_.clear();
+		row_values_.clear();
+	}
+
+private:
+	std::ostream&os_;
+	std::vector<std::string> header_;
+	std::vector<std::string> row_header_;
+	std::vector<std::string> row_values_;
+
+	void push(const std::string&name,const std::string&value){
+		row_header_.push_back(name);
+		row_values_.push_back(value);
+	}
+
+	void write_line(const std::vector<std::string>&cells){
+		for(std::size_t i=0;i<cells.size();++i){
+			if(i!=0){
+				os_<<",";
+			}
+			os_<<cells[i];
+		}
+		os_<<"\n";
+	}
+};
 
 inline bool is_full_moon_ev(const EventRec&ev){
 	return ev.kind=="lunar_phase"&&ev.code=="full_moon";

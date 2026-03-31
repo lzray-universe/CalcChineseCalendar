@@ -1,6 +1,5 @@
 #include "test_common.hpp"
 
-#include<atomic>
 #include<chrono>
 #include<cstdlib>
 #include<fstream>
@@ -65,11 +64,11 @@ bool has_reference_bsp(){
 }
 
 std::filesystem::path make_temp_path(const char*stem,const char*ext){
-	static std::atomic<unsigned long long> seq{0};
+	static unsigned long long seq=0;
 	const unsigned long long tick=
 		static_cast<unsigned long long>(
 			std::chrono::steady_clock::now().time_since_epoch().count());
-	const unsigned long long id=seq.fetch_add(1,std::memory_order_relaxed);
+	const unsigned long long id=seq++;
 	return std::filesystem::temp_directory_path()/
 		   ("lunar_"+std::string(stem)+"_"+std::to_string(tick)+"_"+
 			std::to_string(id)+ext);
