@@ -6,7 +6,7 @@
 #include<vector>
 
 #include "lunar/calendar.hpp"
-#include "lunar/cli.hpp"
+#include "lunar/cli/main.hpp"
 #include "lunar/global_context.hpp"
 #include "lunar/i18n.hpp"
 #include "lunar/interact.hpp"

@@ -1,0 +1,548 @@
+// Huangli serializers and text renderers.
+namespace{
+
+enum class HliCsvLayout{
+	Day,
+	Almanac,
+};
+
+enum class HliTxtLayout{
+	Day,
+	At,
+};
+
+void wr_hli_csv(std::ostream&os,const HliData&h,HliCsvLayout layout){
+	auto wr_hour_field=[&](auto&&fn){
+		os<<csv_quote(join_hour_pipe(h.hour_jx,std::forward<decltype(fn)>(fn)));
+	};
+
+	os<<csv_quote(h.y_lun.text)<<","
+	  <<csv_quote(h.y_lchun.text)<<","
+	  <<csv_quote(h.y_rule.text)<<","
+	  <<csv_quote(h.m_gz.text)<<","
+	  <<csv_quote(h.d_gz.text)<<","
+	  <<csv_quote(h.h_gz.text)<<","
+	  <<csv_quote(h.h_gz_true.text)<<","
+	  <<csv_quote(h.rule_profile)<<","
+	  <<h.rule_profile_code<<","
+	  <<gz_index_of(h.y_lun)<<","
+	  <<h.y_lun.stem<<","
+	  <<h.y_lun.branch<<","
+	  <<gz_index_of(h.y_lchun)<<","
+	  <<h.y_lchun.stem<<","
+	  <<h.y_lchun.branch<<","
+	  <<gz_index_of(h.y_rule)<<","
+	  <<h.y_rule.stem<<","
+	  <<h.y_rule.branch<<","
+	  <<gz_index_of(h.m_gz)<<","
+	  <<h.m_gz.stem<<","
+	  <<h.m_gz.branch<<","
+	  <<gz_index_of(h.d_gz)<<","
+	  <<h.d_gz.stem<<","
+	  <<h.d_gz.branch<<","
+	  <<gz_index_of(h.h_gz)<<","
+	  <<h.h_gz.stem<<","
+	  <<h.h_gz.branch<<","
+	  <<gz_index_of(h.h_gz_true)<<","
+	  <<h.h_gz_true.stem<<","
+	  <<h.h_gz_true.branch<<","
+	  <<csv_quote(h.year_boundary_text)<<","
+	  <<h.year_boundary_code<<","
+	  <<csv_quote(h.month_boundary_text)<<","
+	  <<h.month_boundary_code<<","
+	  <<csv_quote(h.leap_month_mode_text)<<","
+	  <<h.leap_month_mode_code<<","
+	  <<csv_quote(h.day_boundary_text)<<","
+	  <<h.day_boundary_code<<",";
+
+	switch(layout){
+	case HliCsvLayout::Day:
+		os<<csv_quote(h.jianchu)<<","
+		  <<h.jianchu_code<<","
+		  <<csv_quote(h.bazi_clock)<<","
+		  <<csv_quote(h.bazi_true)<<","
+		  <<csv_quote(h.duty_god)<<","
+		  <<h.duty_god_code<<",";
+		break;
+	case HliCsvLayout::Almanac:
+		os<<csv_quote(h.jianchu)<<","
+		  <<csv_quote(h.bazi_clock)<<","
+		  <<csv_quote(h.bazi_true)<<","
+		  <<csv_quote(h.duty_god)<<","
+		  <<h.jianchu_code<<","
+		  <<h.duty_god_code<<",";
+		break;
+	}
+
+	os<<(h.duty_is_yellow?"1":"0")<<","
+	  <<csv_quote(h.duty_tag)<<","
+	  <<csv_quote(h.clash)<<","
+	  <<csv_quote(h.chong_sha)<<","
+	  <<csv_quote(h.zodiac_day)<<","
+	  <<csv_quote(h.six_he)<<","
+	  <<csv_quote(h.three_he)<<","
+	  <<csv_quote(h.pengzu)<<","
+	  <<csv_quote(h.nayin)<<","
+	  <<csv_quote(h.wx_day)<<","
+	  <<csv_quote(h.fetal_god)<<","
+	  <<csv_quote(h.meridian)<<","
+	  <<csv_quote(h.lucky_dir)<<","
+	  <<csv_quote(h.wealth_dir)<<","
+	  <<csv_quote(h.mascot_dir)<<","
+	  <<csv_quote(h.sun_noble_dir)<<","
+	  <<csv_quote(h.moon_noble_dir)<<","
+	  <<csv_quote(h.xiu28)<<","
+	  <<h.xiu28_code<<","
+	  <<csv_quote(h.xiu28_mod28)<<","
+	  <<h.xiu28_mod28_code<<","
+	  <<csv_quote(h.xiu_id)<<","
+	  <<h.yi_ji_level<<","
+	  <<csv_quote(h.yi_ji_rule)<<","
+	  <<h.yi_ji_rule_code<<","
+	  <<csv_quote(join_pipe(h.good_gods))<<","
+	  <<csv_quote(join_pipe(h.bad_gods))<<","
+	  <<csv_quote(join_pipe(h.yi))<<","
+	  <<csv_quote(join_pipe(h.ji))<<","
+	  <<csv_quote(
+			 hli_profile_key(static_cast<HliProfileCode>(h.rule_profile_code)))
+	  <<","
+	  <<csv_quote(hli_year_boundary_key(
+			 static_cast<HliYearBoundary>(h.year_boundary_code)))
+	  <<","
+	  <<csv_quote(hli_month_boundary_key(
+			 static_cast<HliMonthBoundary>(h.month_boundary_code)))
+	  <<","
+	  <<csv_quote(hli_leap_month_mode_key(
+			 static_cast<HliLeapMonthMode>(h.leap_month_mode_code)))
+	  <<","
+	  <<csv_quote(hli_day_boundary_key(
+			 static_cast<HliDayBoundary>(h.day_boundary_code)))
+	  <<","
+	  <<h.duty_tag_code<<","
+	  <<h.clash_branch_code<<","
+	  <<h.sha_dir_code<<","
+	  <<h.zodiac_day_code<<","
+	  <<h.six_he_branch_code<<","
+	  <<h.three_he_group_code<<","
+	  <<h.nayin_code<<","
+	  <<h.fetal_god_code<<","
+	  <<h.meridian_code<<","
+	  <<h.lucky_dir_code<<","
+	  <<h.wealth_dir_code<<","
+	  <<h.mascot_dir_code<<","
+	  <<h.sun_noble_dir_code<<","
+	  <<h.moon_noble_dir_code<<","
+	  <<csv_quote(join_code_pipe(h.good_god_codes))<<","
+	  <<csv_quote(join_code_pipe(h.bad_god_codes))<<","
+	  <<csv_quote(join_code_pipe(h.yi_codes))<<","
+	  <<csv_quote(join_code_pipe(h.ji_codes))<<","
+	  <<csv_quote(hex_mask64(h.good_god_mask))<<","
+	  <<csv_quote(hex_mask64(h.bad_god_mask))<<","
+	  <<csv_quote(join_mask_hex_pipe(h.yi_mask))<<","
+	  <<csv_quote(join_mask_hex_pipe(h.ji_mask))<<",";
+	wr_hour_field([](const HliHour&x){ return x.slot; });
+	os<<",";
+	wr_hour_field([](const HliHour&x){ return std::to_string(x.slot_index); });
+	os<<",";
+	wr_hour_field([](const HliHour&x){ return x.gz; });
+	os<<",";
+	wr_hour_field([](const HliHour&x){ return std::to_string(x.gz_index); });
+	os<<",";
+	wr_hour_field([](const HliHour&x){ return x.luck; });
+	os<<",";
+	wr_hour_field([](const HliHour&x){ return x.is_bad?"1":"0"; });
+}
+
+void wr_hli_txt(std::ostream&os,const HliData&h,HliTxtLayout layout){
+	const char*hour_key="hour";
+	const char*hour_index_key="hour_index";
+	const char*hour_stem_key="hour_stem";
+	const char*hour_branch_key="hour_branch";
+	if(layout==HliTxtLayout::At){
+		hour_key="hour_clock";
+		hour_index_key="hour_clock_index";
+		hour_stem_key="hour_clock_stem";
+		hour_branch_key="hour_clock_branch";
+	}
+
+	os<<"data.hli.y_lun="<<h.y_lun.text<<"\n";
+	os<<"data.hli.y_lun_index="<<gz_index_of(h.y_lun)<<"\n";
+	os<<"data.hli.y_lun_stem="<<h.y_lun.stem<<"\n";
+	os<<"data.hli.y_lun_branch="<<h.y_lun.branch<<"\n";
+	os<<"data.hli.y_lchun="<<h.y_lchun.text<<"\n";
+	os<<"data.hli.y_lchun_index="<<gz_index_of(h.y_lchun)<<"\n";
+	os<<"data.hli.y_lchun_stem="<<h.y_lchun.stem<<"\n";
+	os<<"data.hli.y_lchun_branch="<<h.y_lchun.branch<<"\n";
+	os<<"data.hli.y_rule="<<h.y_rule.text<<"\n";
+	os<<"data.hli.y_rule_index="<<gz_index_of(h.y_rule)<<"\n";
+	os<<"data.hli.y_rule_stem="<<h.y_rule.stem<<"\n";
+	os<<"data.hli.y_rule_branch="<<h.y_rule.branch<<"\n";
+	os<<"data.hli.month="<<h.m_gz.text<<"\n";
+	os<<"data.hli.month_index="<<gz_index_of(h.m_gz)<<"\n";
+	os<<"data.hli.month_stem="<<h.m_gz.stem<<"\n";
+	os<<"data.hli.month_branch="<<h.m_gz.branch<<"\n";
+	os<<"data.hli.day="<<h.d_gz.text<<"\n";
+	os<<"data.hli.day_index="<<gz_index_of(h.d_gz)<<"\n";
+	os<<"data.hli.day_stem="<<h.d_gz.stem<<"\n";
+	os<<"data.hli.day_branch="<<h.d_gz.branch<<"\n";
+	os<<"data.hli."<<hour_key<<"="<<h.h_gz.text<<"\n";
+	os<<"data.hli."<<hour_index_key<<"="<<gz_index_of(h.h_gz)<<"\n";
+	os<<"data.hli."<<hour_stem_key<<"="<<h.h_gz.stem<<"\n";
+	os<<"data.hli."<<hour_branch_key<<"="<<h.h_gz.branch<<"\n";
+	os<<"data.hli.hour_true="<<h.h_gz_true.text<<"\n";
+	os<<"data.hli.hour_true_index="<<gz_index_of(h.h_gz_true)<<"\n";
+	os<<"data.hli.hour_true_stem="<<h.h_gz_true.stem<<"\n";
+	os<<"data.hli.hour_true_branch="<<h.h_gz_true.branch<<"\n";
+	os<<"data.hli.bazi_clock="<<h.bazi_clock<<"\n";
+	os<<"data.hli.bazi_true="<<h.bazi_true<<"\n";
+	os<<"data.hli.rule_profile="<<h.rule_profile<<"\n";
+	os<<"data.hli.rule_profile_code="<<h.rule_profile_code<<"\n";
+	os<<"data.hli.rule_profile_key="
+	  <<hli_profile_key(static_cast<HliProfileCode>(h.rule_profile_code))
+	  <<"\n";
+	os<<"data.hli.year_boundary="<<h.year_boundary_text<<"\n";
+	os<<"data.hli.year_boundary_code="<<h.year_boundary_code<<"\n";
+	os<<"data.hli.year_boundary_key="
+	  <<hli_year_boundary_key(
+			 static_cast<HliYearBoundary>(h.year_boundary_code))
+	  <<"\n";
+	os<<"data.hli.month_boundary="<<h.month_boundary_text<<"\n";
+	os<<"data.hli.month_boundary_code="<<h.month_boundary_code<<"\n";
+	os<<"data.hli.month_boundary_key="
+	  <<hli_month_boundary_key(
+			 static_cast<HliMonthBoundary>(h.month_boundary_code))
+	  <<"\n";
+	os<<"data.hli.leap_month_mode="<<h.leap_month_mode_text<<"\n";
+	os<<"data.hli.leap_month_mode_code="<<h.leap_month_mode_code<<"\n";
+	os<<"data.hli.leap_month_mode_key="
+	  <<hli_leap_month_mode_key(
+			 static_cast<HliLeapMonthMode>(h.leap_month_mode_code))
+	  <<"\n";
+	os<<"data.hli.day_boundary="<<h.day_boundary_text<<"\n";
+	os<<"data.hli.day_boundary_code="<<h.day_boundary_code<<"\n";
+	os<<"data.hli.day_boundary_key="
+	  <<hli_day_boundary_key(
+			 static_cast<HliDayBoundary>(h.day_boundary_code))
+	  <<"\n";
+	os<<"data.hli.jianchu="<<h.jianchu<<"\n";
+	os<<"data.hli.jianchu_code="<<h.jianchu_code<<"\n";
+	os<<"data.hli.duty_god="<<h.duty_god<<"\n";
+	os<<"data.hli.duty_god_code="<<h.duty_god_code<<"\n";
+	os<<"data.hli.duty_is_yellow="<<(h.duty_is_yellow?"1":"0")<<"\n";
+	os<<"data.hli.duty_tag="<<h.duty_tag<<"\n";
+	os<<"data.hli.duty_tag_code="<<h.duty_tag_code<<"\n";
+	os<<"data.hli.clash="<<h.clash<<"\n";
+	os<<"data.hli.clash_branch_code="<<h.clash_branch_code<<"\n";
+	os<<"data.hli.chong_sha="<<h.chong_sha<<"\n";
+	os<<"data.hli.sha_dir_code="<<h.sha_dir_code<<"\n";
+	os<<"data.hli.zodiac_day="<<h.zodiac_day<<"\n";
+	os<<"data.hli.zodiac_day_code="<<h.zodiac_day_code<<"\n";
+	os<<"data.hli.six_he="<<h.six_he<<"\n";
+	os<<"data.hli.six_he_branch_code="<<h.six_he_branch_code<<"\n";
+	os<<"data.hli.three_he="<<h.three_he<<"\n";
+	os<<"data.hli.three_he_group_code="<<h.three_he_group_code<<"\n";
+	os<<"data.hli.pengzu="<<h.pengzu<<"\n";
+	os<<"data.hli.nayin="<<h.nayin<<"\n";
+	os<<"data.hli.nayin_code="<<h.nayin_code<<"\n";
+	os<<"data.hli.wuxing_day="<<h.wx_day<<"\n";
+	os<<"data.hli.fetal_god="<<h.fetal_god<<"\n";
+	os<<"data.hli.fetal_god_code="<<h.fetal_god_code<<"\n";
+	os<<"data.hli.meridian="<<h.meridian<<"\n";
+	os<<"data.hli.meridian_code="<<h.meridian_code<<"\n";
+	os<<"data.hli.lucky_dir="<<h.lucky_dir<<"\n";
+	os<<"data.hli.lucky_dir_code="<<h.lucky_dir_code<<"\n";
+	os<<"data.hli.wealth_dir="<<h.wealth_dir<<"\n";
+	os<<"data.hli.wealth_dir_code="<<h.wealth_dir_code<<"\n";
+	os<<"data.hli.mascot_dir="<<h.mascot_dir<<"\n";
+	os<<"data.hli.mascot_dir_code="<<h.mascot_dir_code<<"\n";
+	os<<"data.hli.sun_noble_dir="<<h.sun_noble_dir<<"\n";
+	os<<"data.hli.sun_noble_dir_code="<<h.sun_noble_dir_code<<"\n";
+	os<<"data.hli.moon_noble_dir="<<h.moon_noble_dir<<"\n";
+	os<<"data.hli.moon_noble_dir_code="<<h.moon_noble_dir_code<<"\n";
+	os<<"data.hli.xiu28="<<h.xiu28<<"\n";
+	os<<"data.hli.xiu28_code="<<h.xiu28_code<<"\n";
+	os<<"data.hli.xiu28_mod28="<<h.xiu28_mod28<<"\n";
+	os<<"data.hli.xiu28_mod28_code="<<h.xiu28_mod28_code<<"\n";
+	os<<"data.hli.xiu_star="<<h.xiu_id<<"\n";
+	os<<"data.hli.yi_ji_level="<<h.yi_ji_level<<"\n";
+	os<<"data.hli.yi_ji_rule="<<h.yi_ji_rule<<"\n";
+	os<<"data.hli.yi_ji_rule_code="<<h.yi_ji_rule_code<<"\n";
+	if(layout==HliTxtLayout::At){
+		os<<"data.hli.yi="<<join_pipe(h.yi)<<"\n";
+		os<<"data.hli.ji="<<join_pipe(h.ji)<<"\n";
+		os<<"data.hli.good_gods="<<join_pipe(h.good_gods)<<"\n";
+		os<<"data.hli.bad_gods="<<join_pipe(h.bad_gods)<<"\n";
+	}else{
+		os<<"data.hli.good_gods="<<join_pipe(h.good_gods)<<"\n";
+		os<<"data.hli.bad_gods="<<join_pipe(h.bad_gods)<<"\n";
+		os<<"data.hli.yi="<<join_pipe(h.yi)<<"\n";
+		os<<"data.hli.ji="<<join_pipe(h.ji)<<"\n";
+	}
+	os<<"data.hli.good_god_codes="<<join_code_pipe(h.good_god_codes)<<"\n";
+	os<<"data.hli.bad_god_codes="<<join_code_pipe(h.bad_god_codes)<<"\n";
+	os<<"data.hli.yi_codes="<<join_code_pipe(h.yi_codes)<<"\n";
+	os<<"data.hli.ji_codes="<<join_code_pipe(h.ji_codes)<<"\n";
+	os<<"data.hli.good_god_mask_hex="<<hex_mask64(h.good_god_mask)<<"\n";
+	os<<"data.hli.bad_god_mask_hex="<<hex_mask64(h.bad_god_mask)<<"\n";
+	os<<"data.hli.yi_mask_hex="<<join_mask_hex_pipe(h.yi_mask)<<"\n";
+	os<<"data.hli.ji_mask_hex="<<join_mask_hex_pipe(h.ji_mask)<<"\n";
+}
+
+void wr_hli_hour_txt(std::ostream&os,const HliData&h){
+	os<<"[hour_jx]\n";
+	os<<"slot\tslot_index\tgz\tgz_index\tluck\tis_bad\n";
+	for(const auto&x : h.hour_jx){
+		os<<x.slot<<"\t"<<x.slot_index<<"\t"<<x.gz<<"\t"<<x.gz_index<<"\t"
+		  <<x.luck<<"\t"<<(x.is_bad?"1":"0")<<"\n";
+	}
+}
+
+void wr_gz_json(JsonWriter&w,const GzNode&g){
+	w.obj_begin();
+	w.key("text");
+	w.value(g.text);
+	w.key("index");
+	w.value(gz_index_of(g));
+	w.key("stem");
+	w.value(g.stem);
+	w.key("branch");
+	w.value(g.branch);
+	w.obj_end();
+}
+
+void wr_hli_json(JsonWriter&w,const HliData&h){
+	w.obj_begin();
+	w.key("year_lunar");
+	wr_gz_json(w,h.y_lun);
+	w.key("year_lchun");
+	wr_gz_json(w,h.y_lchun);
+	w.key("year_rule");
+	wr_gz_json(w,h.y_rule);
+	w.key("month");
+	wr_gz_json(w,h.m_gz);
+	w.key("day");
+	wr_gz_json(w,h.d_gz);
+	w.key("hour_clock");
+	wr_gz_json(w,h.h_gz);
+	w.key("hour_true_solar");
+	wr_gz_json(w,h.h_gz_true);
+	w.key("bazi_clock");
+	w.value(h.bazi_clock);
+	w.key("bazi_true");
+	w.value(h.bazi_true);
+	w.key("rule_profile");
+	w.value(h.rule_profile);
+	w.key("rule_profile_code");
+	w.value(h.rule_profile_code);
+	w.key("rule_profile_key");
+	w.value(hli_profile_key(
+		static_cast<HliProfileCode>(h.rule_profile_code)));
+	w.key("year_boundary");
+	w.value(h.year_boundary_text);
+	w.key("year_boundary_code");
+	w.value(h.year_boundary_code);
+	w.key("year_boundary_key");
+	w.value(hli_year_boundary_key(
+		static_cast<HliYearBoundary>(h.year_boundary_code)));
+	w.key("month_boundary");
+	w.value(h.month_boundary_text);
+	w.key("month_boundary_code");
+	w.value(h.month_boundary_code);
+	w.key("month_boundary_key");
+	w.value(hli_month_boundary_key(
+		static_cast<HliMonthBoundary>(h.month_boundary_code)));
+	w.key("leap_month_mode");
+	w.value(h.leap_month_mode_text);
+	w.key("leap_month_mode_code");
+	w.value(h.leap_month_mode_code);
+	w.key("leap_month_mode_key");
+	w.value(hli_leap_month_mode_key(
+		static_cast<HliLeapMonthMode>(h.leap_month_mode_code)));
+	w.key("day_boundary");
+	w.value(h.day_boundary_text);
+	w.key("day_boundary_code");
+	w.value(h.day_boundary_code);
+	w.key("day_boundary_key");
+	w.value(hli_day_boundary_key(
+		static_cast<HliDayBoundary>(h.day_boundary_code)));
+
+	w.key("jianchu");
+	w.value(h.jianchu);
+	w.key("jianchu_code");
+	w.value(h.jianchu_code);
+	w.key("duty_god");
+	w.value(h.duty_god);
+	w.key("duty_god_code");
+	w.value(h.duty_god_code);
+	w.key("duty_is_yellow");
+	w.value(h.duty_is_yellow);
+	w.key("duty_tag");
+	w.value(h.duty_tag);
+	w.key("duty_tag_code");
+	w.value(h.duty_tag_code);
+	w.key("clash");
+	w.value(h.clash);
+	w.key("clash_branch_code");
+	w.value(h.clash_branch_code);
+	w.key("chong_sha");
+	w.value(h.chong_sha);
+	w.key("sha_dir_code");
+	w.value(h.sha_dir_code);
+	w.key("zodiac_day");
+	w.value(h.zodiac_day);
+	w.key("zodiac_day_code");
+	w.value(h.zodiac_day_code);
+	w.key("six_he");
+	w.value(h.six_he);
+	w.key("six_he_branch_code");
+	w.value(h.six_he_branch_code);
+	w.key("three_he");
+	w.value(h.three_he);
+	w.key("three_he_group_code");
+	w.value(h.three_he_group_code);
+	w.key("pengzu");
+	w.value(h.pengzu);
+	w.key("nayin");
+	w.value(h.nayin);
+	w.key("nayin_code");
+	w.value(h.nayin_code);
+	w.key("wuxing_day");
+	w.value(h.wx_day);
+	w.key("fetal_god");
+	w.value(h.fetal_god);
+	w.key("fetal_god_code");
+	w.value(h.fetal_god_code);
+	w.key("meridian");
+	w.value(h.meridian);
+	w.key("meridian_code");
+	w.value(h.meridian_code);
+	w.key("lucky_dir");
+	w.value(h.lucky_dir);
+	w.key("lucky_dir_code");
+	w.value(h.lucky_dir_code);
+	w.key("wealth_dir");
+	w.value(h.wealth_dir);
+	w.key("wealth_dir_code");
+	w.value(h.wealth_dir_code);
+	w.key("mascot_dir");
+	w.value(h.mascot_dir);
+	w.key("mascot_dir_code");
+	w.value(h.mascot_dir_code);
+	w.key("sun_noble_dir");
+	w.value(h.sun_noble_dir);
+	w.key("sun_noble_dir_code");
+	w.value(h.sun_noble_dir_code);
+	w.key("moon_noble_dir");
+	w.value(h.moon_noble_dir);
+	w.key("moon_noble_dir_code");
+	w.value(h.moon_noble_dir_code);
+	w.key("xiu28");
+	w.value(h.xiu28);
+	w.key("xiu28_code");
+	w.value(h.xiu28_code);
+	w.key("xiu28_mod28");
+	w.value(h.xiu28_mod28);
+	w.key("xiu28_mod28_code");
+	w.value(h.xiu28_mod28_code);
+	w.key("xiu_star");
+	w.value(h.xiu_id);
+
+	w.key("good_gods");
+	w.arr_begin();
+	for(const auto&s : h.good_gods){
+		w.value(s);
+	}
+	w.arr_end();
+	w.key("bad_gods");
+	w.arr_begin();
+	for(const auto&s : h.bad_gods){
+		w.value(s);
+	}
+	w.arr_end();
+	w.key("good_god_codes");
+	w.arr_begin();
+	for(int code : h.good_god_codes){
+		w.value(code);
+	}
+	w.arr_end();
+	w.key("good_god_mask_hex");
+	w.value(hex_mask64(h.good_god_mask));
+	w.key("bad_god_codes");
+	w.arr_begin();
+	for(int code : h.bad_god_codes){
+		w.value(code);
+	}
+	w.arr_end();
+	w.key("bad_god_mask_hex");
+	w.value(hex_mask64(h.bad_god_mask));
+	w.key("yi");
+	w.arr_begin();
+	for(const auto&s : h.yi){
+		w.value(s);
+	}
+	w.arr_end();
+	w.key("ji");
+	w.arr_begin();
+	for(const auto&s : h.ji){
+		w.value(s);
+	}
+	w.arr_end();
+	w.key("yi_codes");
+	w.arr_begin();
+	for(int code : h.yi_codes){
+		w.value(code);
+	}
+	w.arr_end();
+	w.key("yi_mask_hex");
+	w.arr_begin();
+	for(std::uint64_t word : h.yi_mask){
+		w.value(hex_mask64(word));
+	}
+	w.arr_end();
+	w.key("ji_codes");
+	w.arr_begin();
+	for(int code : h.ji_codes){
+		w.value(code);
+	}
+	w.arr_end();
+	w.key("ji_mask_hex");
+	w.arr_begin();
+	for(std::uint64_t word : h.ji_mask){
+		w.value(hex_mask64(word));
+	}
+	w.arr_end();
+	w.key("yi_ji_level");
+	w.value(h.yi_ji_level);
+	w.key("yi_ji_rule");
+	w.value(h.yi_ji_rule);
+	w.key("yi_ji_rule_code");
+	w.value(h.yi_ji_rule_code);
+	w.key("lon_deg");
+	w.value(h.lon_deg);
+	w.key("eot_minutes");
+	w.value(h.eot_min);
+	w.key("true_solar_minutes");
+	w.value(h.tst_min);
+	w.key("hour_jx");
+	w.arr_begin();
+	for(const auto&x : h.hour_jx){
+		w.obj_begin();
+		w.key("slot");
+		w.value(x.slot);
+		w.key("slot_index");
+		w.value(x.slot_index);
+		w.key("gz");
+		w.value(x.gz);
+		w.key("gz_index");
+		w.value(x.gz_index);
+		w.key("luck");
+		w.value(x.luck);
+		w.key("is_bad");
+		w.value(x.is_bad);
+		w.obj_end();
+	}
+	w.arr_end();
+	w.obj_end();
+}
+
+}

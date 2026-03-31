@@ -15,7 +15,7 @@
 #include<vector>
 
 #include "lunar/arg_parser.hpp"
-#include "lunar/cli.hpp"
+#include "lunar/cli/main.hpp"
 #include "lunar/format.hpp"
 #include "lunar/i18n.hpp"
 #include "lunar/interact.hpp"

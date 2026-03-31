@@ -9,7 +9,7 @@
 
 #include "lunar/app_long.hpp"
 #include "lunar/calendar.hpp"
-#include "lunar/cli.hpp"
+#include "lunar/cli/main.hpp"
 #include "lunar/core.hpp"
 #include "lunar/entry.hpp"
 

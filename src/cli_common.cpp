@@ -1,4 +1,4 @@
-#include "lunar/cli_common.hpp"
+#include "lunar/cli/common.hpp"
 
 #include<algorithm>
 #include<array>

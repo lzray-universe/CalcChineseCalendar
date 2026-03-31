@@ -1,7 +1,7 @@
 #pragma once
 
-#include "lunar/cli.hpp"
-#include "lunar/cli_common.hpp"
+#include "lunar/cli/main.hpp"
+#include "lunar/cli/common.hpp"
 
 #include<algorithm>
 #include<array>
@@ -32,5 +32,4 @@
 #include "lunar/time_scale.hpp"
 
 #include "common.hpp"
-#include "src/output_common.hpp"
-
+#include "src/common/output.hpp"

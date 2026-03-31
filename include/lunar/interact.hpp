@@ -5,7 +5,7 @@
 #include<vector>
 
 #include "lunar/almanac.hpp"
-#include "lunar/cli.hpp"
+#include "lunar/cli/main.hpp"
 #include "lunar/download.hpp"
 
 struct InterCfg{
