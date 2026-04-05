@@ -151,6 +151,9 @@ worker.postMessage({
 
 ### 2.6 可选构建开关
 
+- `-DLUNAR_ENABLE_DIMENSION_TYPES=ON|OFF`
+  - `ON`（默认）：启用零开销的编译期物理量标签向量类型
+  - `OFF`：退回到普通 `Vec3` 别名，接口行为不变
 - `-DLUNAR_ENABLE_SERIES_FALLBACK=ON|OFF`
   - `ON`（默认）：未找到 BSP 时自动切换到内置 VSOP87A + ELPMPP02
   - `OFF`：保持旧行为，必须提供可用 BSP
@@ -259,6 +262,11 @@ lunar <bsp> <years> [months options...]
 
 `entry` 会在命令分发前调用 `prep_cmd_args()` 自动补 `bsp`。
 
+说明：
+
+- 下文命令参考中写作 `[bsp]` 的命令，均表示该位置参数可以省略；省略时会走本节自动选择逻辑。
+- `zodiac` 与 `sky` 当前不走这套自动补齐逻辑，仍需显式传入位置参数 `<bsp>`。
+
 ### 5.1 哪些命令需要 BSP
 
 - `months calendar year event at convert day monthview next range search eclipse festival almanac info`
@@ -336,8 +344,8 @@ lunar config set <key> <value>
 
 ### 7.2 `--tz` 与农历判日
 
-- `--tz` 只影响显示时区。
-- 农历判日固定按 UTC+8 民用日边界执行。
+- 多数命令里，`--tz` 只影响显示时区；`zodiac --year` 例外，它同时决定公历年裁剪窗口。
+- 农历判日优先使用命令行 `--lunar-day-tz`；未显式提供时，读取配置 `default_lunar_day_tz`，再缺省时按语言自动推断（当前 `ja/ko -> +09:00`，其余为 `+08:00`）。
 
 ## 8. 输出格式
 
@@ -361,10 +369,14 @@ lunar config set <key> <value>
 
 ## 9. 命令参考
 
+说明：
+
+- 本节中写作 `[bsp]` 的命令可省略该位置参数；显式给出时优先使用显式值。
+
 ### 9.1 months
 
 ```bash
-lunar months <bsp> <years>
+lunar months [bsp] <years>
   [--mode lunar|gregorian]
   [--format json|txt|csv] [--out <path>] [--tz +08:00|Z|-05:00]
   [--pretty 0|1] [--quiet] [--include-eclipses 0|1]
@@ -381,7 +393,7 @@ lunar months <bsp> <years>
 ### 9.2 calendar
 
 ```bash
-lunar calendar <bsp> [<years>]
+lunar calendar [bsp] [<years>]
   [--format json|txt|ics] [--out <path>] [--tz ...]
   [--include-months 0|1] [--include-eclipses 0|1] [--pretty 0|1] [--quiet]
 ```
@@ -395,7 +407,7 @@ lunar calendar <bsp> [<years>]
 ### 9.3 year
 
 ```bash
-lunar year <bsp> <year>
+lunar year [bsp] <year>
   [--mode lunar|gregorian]
   [--format json|txt|ics] [--out <path>] [--tz ...]
   [--pretty 0|1] [--quiet]
@@ -404,13 +416,23 @@ lunar year <bsp> <year>
 ### 9.4 event
 
 ```bash
-lunar event <bsp> solar-term <code> <year>
-lunar event <bsp> lunar-phase <new_moon|fst_qtr|full_moon|lst_qtr> --near <YYYY-MM-DD>
+lunar event [bsp] solar-term <code> <year>
+lunar event [bsp] lunar-phase <new_moon|fst_qtr|full_moon|lst_qtr> --near <YYYY-MM-DD>
   [--format json|txt|ics] [--out <path>] [--tz ...] [--pretty 0|1] [--quiet] [--eclipse 0|1]
 
 # 也支持直接转发到 eclipse 命令：
-lunar event <bsp> lunar-eclipse --near <YYYY-MM-DD> ...
-lunar event <bsp> solar-eclipse --near <YYYY-MM-DD> ...
+lunar event [bsp] lunar-eclipse --near <YYYY-MM-DD>
+  [--stage any|umb|total] [--sample-min <minutes>]
+  [--point-lat <deg> --point-lon <deg> [--point-height <m>]] [--point-refine 0|1]
+  [--global-vis 0|1] [--global 0|1] [--global-format json|geojson]
+  [--grid-lat-step <deg>] [--grid-lon-step <deg>]
+  [--format json|txt|geojson] [--out <path>] [--tz ...] [--pretty 0|1] [--quiet]
+lunar event [bsp] solar-eclipse --near <YYYY-MM-DD>
+  [--stage any|central] [--sample-min <minutes>]
+  [--point-lat <deg> --point-lon <deg> [--point-height <m>]] [--point-refine 0|1]
+  [--global-vis 0|1] [--global 0|1] [--global-format json|geojson]
+  [--grid-lat-step <deg>] [--grid-lon-step <deg>]
+  [--format json|txt|geojson] [--out <path>] [--tz ...] [--pretty 0|1] [--quiet]
 ```
 
 说明：
@@ -418,6 +440,7 @@ lunar event <bsp> solar-eclipse --near <YYYY-MM-DD> ...
 - `solar-term` 的 `code` 使用 `J1..J12`、`Z1..Z12`。
 - `lunar-phase` 必须提供 `--near`。
 - `--eclipse 1` 用于在满月事件输出中附加月食细节。
+- `lunar-eclipse` / `solar-eclipse` 分类会直接转发到 `eclipse` 命令，因此参数与校验规则和 `eclipse` 保持一致。
 
 ### 9.5 download
 
@@ -429,13 +452,20 @@ lunar download get <id> [--dir <path>] [--quiet]
 ### 9.6 at
 
 ```bash
-lunar at <bsp> <time>
-lunar at <bsp> --time <time>
-lunar at <bsp> --stdin
-lunar at <bsp> --file <path>
+lunar at [bsp] <time>
+lunar at [bsp] --time <time>
+lunar at [bsp] --stdin
+lunar at [bsp] --file <path>
   [--input-tz ...] [--tz ...]
+  [--lunar-day-tz ...]
   [--format json|txt|jsonl] [--out <path>] [--pretty 0|1] [--quiet]
-  [--events 0|1] [--eot-lon <deg>] [--jobs N] [--meta-once 0|1]
+  [--events 0|1] [--eot-lon <deg>]
+  [--trad folk|ziping|purple|xieji]
+  [--year-boundary lichun|lunar_new_year|dongzhi]
+  [--month-boundary solar_term|lunar_first_day]
+  [--leap-month-mode ignore|inherit_previous|split_midway|shift_to_next]
+  [--day-boundary hour23|hour0]
+  [--jobs N] [--meta-once 0|1]
 ```
 
 说明：
@@ -444,18 +474,32 @@ lunar at <bsp> --file <path>
 - 批模式下若同时给位置参数 `<time>`，该位置参数会被忽略。
 - 单次模式下 `--format jsonl` 会自动回退为 `json`。
 - `--jobs` 已接受，但当前执行器仍按顺序运行。
+- `--lunar-day-tz` 控制农历日期映射所用的民用日边界；黄历规则参数与 `day` / `almanac` 共用同一套解析。
 - 默认 `tz/format/pretty` 来自 `lun_cfg.txt`（`default_tz/def_fmt/def_prety`）。
 
 ### 9.7 convert
 
 ```bash
-lunar convert <bsp> <dt_or_tm>
+lunar convert [bsp] <dt_or_tm>
   [--input-tz ...] [--tz ...]
+  [--lunar-day-tz ...]
   [--format json|txt|jsonl] [--out <path>] [--pretty 0|1] [--quiet]
-  [--stdin|--file <path>] [--jobs N] [--meta-once 0|1]
 
-lunar convert <bsp> --from-lunar <lunar_year> <month_no> <day> [--leap 0|1]
-  [--tz ...] [--format json|txt|jsonl] [--out <path>] [--pretty 0|1] [--quiet]
+lunar convert [bsp] --from-lunar <lunar_year> <month_no> <day> [--leap 0|1]
+  [--tz ...] [--lunar-day-tz ...]
+  [--format json|txt|jsonl] [--out <path>] [--pretty 0|1] [--quiet]
+
+lunar convert [bsp] --stdin
+  [--input-tz ...] [--tz ...]
+  [--lunar-day-tz ...]
+  [--format json|txt|jsonl] [--out <path>] [--pretty 0|1] [--quiet]
+  [--jobs N] [--meta-once 0|1]
+
+lunar convert [bsp] --file <path>
+  [--input-tz ...] [--tz ...]
+  [--lunar-day-tz ...]
+  [--format json|txt|jsonl] [--out <path>] [--pretty 0|1] [--quiet]
+  [--jobs N] [--meta-once 0|1]
 ```
 
 说明：
@@ -463,14 +507,21 @@ lunar convert <bsp> --from-lunar <lunar_year> <month_no> <day> [--leap 0|1]
 - `--from-lunar` 模式下不能再传位置参数 `<dt_or_tm>`。
 - `--stdin` 与 `--file` 互斥。
 - 单次模式下 `--format jsonl` 会自动回退为 `json`。
+- `--lunar-day-tz` 同时影响公历转农历与农历转公历时所采用的民用日边界。
 - 默认 `tz/format/pretty` 来自配置。
 
 ### 9.8 day
 
 ```bash
-lunar day <bsp> <YYYY-MM-DD>
-  [--tz ...] [--format json|txt|csv|jsonl] [--out ...] [--pretty 0|1] [--quiet]
+lunar day [bsp] <YYYY-MM-DD>
+  [--tz ...] [--lunar-day-tz ...]
+  [--format json|txt|csv|jsonl] [--out ...] [--pretty 0|1] [--quiet]
   [--at HH:MM[:SS]] [--events 0|1] [--lon <deg>]
+  [--trad folk|ziping|purple|xieji]
+  [--year-boundary lichun|lunar_new_year|dongzhi]
+  [--month-boundary solar_term|lunar_first_day]
+  [--leap-month-mode ignore|inherit_previous|split_midway|shift_to_next]
+  [--day-boundary hour23|hour0]
   [--astro 0|1] [--astro-mode less|all|pick] [--astro-pick id,en,zh,...]
   [--astro-lat deg --astro-lon deg [--astro-height m]]
 ```
@@ -487,8 +538,9 @@ lunar day <bsp> <YYYY-MM-DD>
 ### 9.9 monthview
 
 ```bash
-lunar monthview <bsp> <YYYY-MM>
-  [--tz ...] [--format json|txt|csv] [--out ...] [--pretty 0|1] [--quiet]
+lunar monthview [bsp] <YYYY-MM>
+  [--tz ...] [--lunar-day-tz ...]
+  [--format json|txt|csv] [--out ...] [--pretty 0|1] [--quiet]
   [--astro 0|1] [--astro-mode less|all|pick] [--astro-pick id,en,zh,...]
   [--astro-lat deg --astro-lon deg [--astro-height m]]
 ```
@@ -502,7 +554,7 @@ lunar monthview <bsp> <YYYY-MM>
 ### 9.10 next
 
 ```bash
-lunar next <bsp> --from <time> --count N
+lunar next [bsp] --from <time> --count N
   [--kinds solar_term,lunar_phase,lunar_eclipse,solar_eclipse]
   [--tz ...] [--format json|txt|csv|ics|jsonl]
   [--out ...] [--pretty 0|1] [--quiet] [--eclipse 0|1]
@@ -517,7 +569,7 @@ lunar next <bsp> --from <time> --count N
 ### 9.11 range
 
 ```bash
-lunar range <bsp> --from <time> --to <time>
+lunar range [bsp] --from <time> --to <time>
   [--kinds solar_term,lunar_phase,lunar_eclipse,solar_eclipse]
   [--tz ...] [--format json|txt|csv|ics|jsonl]
   [--out ...] [--pretty 0|1] [--quiet] [--eclipse 0|1]
@@ -532,7 +584,7 @@ lunar range <bsp> --from <time> --to <time>
 ### 9.12 search
 
 ```bash
-lunar search <bsp> <query>
+lunar search [bsp] <query>
   [--from <time>] [--count N] [--tz ...]
   [--format json|txt|csv|ics|jsonl] [--out ...] [--pretty 0|1] [--quiet] [--eclipse 0|1]
 ```
@@ -540,13 +592,13 @@ lunar search <bsp> <query>
 说明：
 
 - 当前仅支持以 `next ...` 开头的 query。
-- 内部实现是转成 `next` 参数再调用 `cmd_next`。
-- 默认值：`from=2025-01-01T00:00:00+08:00`、`count=1`、`format=txt`、`tz=+08:00`、`pretty=1`。
+- 内部会把 query 解析成受限的事件检索条件，而不是把整串文本原样转发给 `next`。
+- 默认值：`from=当前 UTC 时刻`、`count=1`；`tz/format/pretty` 来自配置。
 
 ### 9.13 eclipse
 
 ```bash
-lunar eclipse <bsp> --near <YYYY-MM-DD> [--kind lunar|solar]
+lunar eclipse [bsp] --near <YYYY-MM-DD> [--kind lunar|solar]
   [--stage any|umb|total] (lunar)
   [--stage any|central]   (solar)
   [--sample-min <minutes>]
@@ -562,14 +614,18 @@ lunar eclipse <bsp> --near <YYYY-MM-DD> [--kind lunar|solar]
 - `--near` 必填。
 - `--kind` 默认 `lunar`。
 - `--point-lat` 与 `--point-lon` 必须同时出现。
+- `--point-height`、`--point-refine` 只能和 `--point-lat`、`--point-lon` 一起使用。
+- `--global` 是 `--global-vis` 的兼容别名。
+- `--global-format`、`--grid-lat-step`、`--grid-lon-step` 需要 `--global-vis 1`，或直接使用 `--format geojson`。
 - `--format geojson` 会强制开启全局可见性计算。
 - 默认 `tz/format/pretty` 来自配置（`def_fmt` 非 `json|txt|geojson` 时回退到 `json`）。
 
 ### 9.14 festival
 
 ```bash
-lunar festival <bsp> <year>
-  [--tz ...] [--format json|txt|csv] [--out ...] [--pretty 0|1] [--quiet]
+lunar festival [bsp] <year>
+  [--tz ...] [--lunar-day-tz ...]
+  [--format json|txt|csv] [--out ...] [--pretty 0|1] [--quiet]
 ```
 
 默认 `tz/format/pretty` 来自配置。
@@ -581,8 +637,14 @@ lunar festival <bsp> <year>
 ### 9.15 almanac
 
 ```bash
-lunar almanac <bsp> <YYYY-MM-DD>
-  [--tz ...] [--format json|txt|csv] [--out ...] [--pretty 0|1] [--quiet] [--lon <deg>]
+lunar almanac [bsp] <YYYY-MM-DD>
+  [--tz ...] [--lunar-day-tz ...]
+  [--format json|txt|csv] [--out ...] [--pretty 0|1] [--quiet] [--lon <deg>]
+  [--trad folk|ziping|purple|xieji]
+  [--year-boundary lichun|lunar_new_year|dongzhi]
+  [--month-boundary solar_term|lunar_first_day]
+  [--leap-month-mode ignore|inherit_previous|split_midway|shift_to_next]
+  [--day-boundary hour23|hour0]
 ```
 
 默认 `tz/format/pretty` 来自配置。
@@ -595,7 +657,7 @@ lunar almanac <bsp> <YYYY-MM-DD>
 ### 9.16 info
 
 ```bash
-lunar info <bsp> [--format json|txt] [--out ...] [--pretty 0|1] [--quiet]
+lunar info [bsp] [--format json|txt] [--out ...] [--pretty 0|1] [--quiet]
 ```
 
 说明：
@@ -669,33 +731,31 @@ lunar sky <bsp> --time <time> --lat <deg> --lon <deg>
 - 若 `def_bsp` 存在，会提示是否继续使用
 - 可指定额外目录扫描 `.bsp`
 - 如未找到可用星历，可进入下载界面
+- 若启用 `LUNAR_ENABLE_SERIES_FALLBACK`，交互模式也可改用 `@series`
 
 ### 10.3 菜单
 
 - `1` months
 - `2` calendar
 - `3` at
-- `4` convert
-- `5` day
-- `6` next
-- `7` festival
-- `8` info
-- `9` monthview
-- `10` range
-- `11` search
-- `12` eclipse
-- `13` almanac
-- `14` config
-- `15` completion
+- `4` zodiac
+- `5` convert
+- `6` day
+- `7` next
+- `8` festival
+- `9` info
+- `10` monthview
+- `11` range
+- `12` search
+- `13` eclipse
+- `14` almanac
+- `15` config
+- `16` completion
+- `17` sky
 - `d` 切换/下载 BSP
 - `l` 切换语言
 - `h` 帮助
 - `q` 退出
-
-补充：
-
-- 当前交互菜单已新增 `4 zodiac` 与 `17 sky`。
-- 因 `zodiac` 插入在 `convert` 之前，旧列表中 `convert` 到 `completion` 的序号整体顺延一位。
 
 ## 11. i18n（中简/中繁/英/日/韩）
 
@@ -785,6 +845,7 @@ lunar::core::format_day_output(std::cout, result, "json", true);
 include/lunar/          公共头文件（CLI/C++ API/C API）
 src/cli/                months/calendar/year/event/download 相关实现
 src/query/              at/convert/day/monthview/next/... 相关实现
+src/emscripten/         wasm 预加载脚本与 Worker 包装
 src/i18n/               多语言目录与词条
 src/interact.cpp        交互模式
 src/global_context.cpp  全局配置与自动 BSP 选择
@@ -792,6 +853,9 @@ src/entry.cpp           CLI 顶层参数解析与命令分发
 src/cli.cpp             cli 模块聚合编译入口
 src/query.cpp           query 模块聚合编译入口
 src/c_api.cpp           C API 导出实现
+tests/                  GoogleTest / CTest 用例
+vsop87a/                行星级数回退模型
+elpmpp02/               月球级数回退模型
 lun_cfg.txt             运行时配置文件
 ```
 
@@ -833,7 +897,7 @@ lunar eclipse --near 2025-09-07 --kind lunar --global-vis 1 --global-format geoj
 
 - 本节专门解释结构化输出里的缩写、代号、以及 `*_code` / `*_key` / `*_codes` / `*_mask_hex` 字段。
 - `year`、`month`、`name`、`data`、`events`、`input` 这类语义直白字段不重复展开。
-- 字段名以当前实现 `src/query/core_helpers.cpp`、`src/query/day_formatter.cpp`、`src/cli/writers_output.cpp`、`src/query/cmd_day_mview.cpp`、`src/query/cmd_eclipse.cpp` 为准。
+- 字段名以当前实现 `src/query/core/base.cpp`、`src/query/day_output.cpp`、`src/cli/output.cpp`、`src/query/cmd_day_mview.cpp`、`src/query/cmd_eclipse.cpp` 为准。
 
 ### 17.1 通用时间与采样字段
 
