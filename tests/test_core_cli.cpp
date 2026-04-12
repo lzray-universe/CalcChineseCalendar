@@ -262,7 +262,7 @@ TEST(CApi, RunCaptureCollectsVersionOutput){
 	ASSERT_EQ(0,lunar_run_capture(1,argv));
 	ASSERT_NE(lunar_last_stdout(),nullptr);
 	EXPECT_EQ(std::string(lunar_last_stderr()==nullptr?"":lunar_last_stderr()),"");
-	EXPECT_NE(std::string(lunar_last_stdout()).find(tool_ver()),std::string::npos);
+	EXPECT_NE(std::string(lunar_last_stdout()).find(lunar_tool_ver()),std::string::npos);
 }
 
 TEST(CApi, RunCaptureCollectsJsonOutput){
