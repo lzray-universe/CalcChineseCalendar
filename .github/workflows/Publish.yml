@@ -1,0 +1,230 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag name"
+        required: true
+        type: string
+      prerelease:
+        description: "Is prerelease"
+        required: true
+        type: boolean
+        default: false
+      publish_pypi:
+        description: "Publish Python wheels to PyPI"
+        required: true
+        type: boolean
+        default: false
+      publish_npm:
+        description: "Publish npm package"
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ver.outputs.tag }}
+      package_version: ${{ steps.ver.outputs.package_version }}
+    steps:
+      - name: Derive publish versions
+        id: ver
+        shell: bash
+        run: |
+          set -euxo pipefail
+          tag='${{ inputs.tag }}'
+          safe_tag="${tag//\//-}"
+          safe_tag="${safe_tag// /-}"
+          package_version="${safe_tag#v}"
+          echo "tag=${safe_tag}" >> "$GITHUB_OUTPUT"
+          echo "package_version=${package_version}" >> "$GITHUB_OUTPUT"
+
+  python:
+    needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Apply package version
+        run: python publish/set_version.py "${{ needs.meta.outputs.package_version }}"
+
+      - name: Install cibuildwheel
+        run: python -m pip install --upgrade cibuildwheel
+
+      - name: Build wheels
+        env:
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* cp313-*"
+          CIBW_SKIP: "pp* *-win32 *_i686 *-musllinux_*"
+          CIBW_TEST_COMMAND: >-
+            python -c "import lunar; data=lunar.core_day('@series','2025-06-01');
+            assert data['input']['date']=='2025-06-01'"
+          CMAKE_ARGS: "-DLUNAR_VERSION=${{ needs.meta.outputs.tag }}"
+        run: python -m cibuildwheel publish/python --output-dir wheelhouse
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-wheels-${{ matrix.os }}
+          path: wheelhouse/*
+
+  npm:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Apply package version
+        run: python publish/set_version.py "${{ needs.meta.outputs.package_version }}"
+
+      - name: Setup Emscripten
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 5.0.3
+          "$RUNNER_TEMP/emsdk/emsdk" activate 5.0.3
+
+      - name: Configure npm wasm package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build_publish_npm \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLUNAR_VERSION='${{ needs.meta.outputs.tag }}' \
+            -DLUNAR_ENABLE_SERIES_FALLBACK=ON \
+            -DLUNAR_ENABLE_IPO=OFF \
+            -DLUNAR_ENABLE_FAST_MATH=OFF \
+            -DLUNAR_BUILD_TESTS=OFF \
+            -DLUNAR_BUILD_EXECUTABLE=OFF \
+            -DLUNAR_BUILD_SHARED_LIB=OFF \
+            -DLUNAR_BUILD_NPM_WASM_API=ON
+
+      - name: Build npm wasm package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          cmake --build build_publish_npm --target lunar_npm_api -j
+
+      - name: Stage npm dist
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p publish/npm/dist dist/npm
+          cp build_publish_npm/lunar_api.js publish/npm/dist/
+          cp build_publish_npm/lunar_api.wasm publish/npm/dist/
+
+      - name: Smoke test npm package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          node --input-type=module <<'EOF'
+          import { coreDay } from "./publish/npm/src/index.js";
+
+          const data = await coreDay({
+            ephem: "@series",
+            date: "2025-06-01",
+          });
+          if (data.input.date !== "2025-06-01") {
+            throw new Error("npm smoke test failed");
+          }
+          EOF
+
+      - name: Pack npm package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          npm pack publish/npm --pack-destination dist/npm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: dist/npm/*
+
+  release:
+    needs:
+      - meta
+      - python
+      - npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          prerelease: ${{ inputs.prerelease }}
+          files: artifacts/*
+
+  publish_pypi:
+    if: ${{ inputs.publish_pypi }}
+    needs:
+      - python
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/python
+          pattern: python-wheels-*
+          merge-multiple: true
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/python
+
+  publish_npm:
+    if: ${{ inputs.publish_npm }}
+    needs:
+      - npm
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/npm
+          pattern: npm-package
+          merge-multiple: true
+
+      - name: Publish npm package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          npm publish dist/npm/*.tgz --provenance --access public

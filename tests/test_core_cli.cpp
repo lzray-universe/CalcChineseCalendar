@@ -222,6 +222,64 @@ TEST(CApi, DayAndEotAreCallable){
 	EXPECT_TRUE(std::isfinite(eot.apparent_solar_time_rad));
 }
 
+TEST(CApi, NativeJsonApisPopulateCaptureBuffer){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	ASSERT_EQ(0,lunar_core_day_json(test_ephem().c_str(),"2025-06-01","+08:00",0));
+	ASSERT_NE(lunar_last_stdout(),nullptr);
+	EXPECT_NE(std::string(lunar_last_stdout()).find("\"lunar_year\""),
+			  std::string::npos);
+
+	lunar_hli_rules rules{};
+	lunar_hli_rules_init(&rules);
+	ASSERT_EQ(
+		0,
+		lunar_core_ganzhi_json(
+			test_ephem().c_str(),"2025-09-07","12:00:00","+08:00",&rules,0));
+	ASSERT_NE(lunar_last_stdout(),nullptr);
+	EXPECT_NE(std::string(lunar_last_stdout()).find("\"day\""),
+			  std::string::npos);
+
+	ASSERT_EQ(
+		0,
+		lunar_core_ganzhi_month_json(
+			test_ephem().c_str(),2025,9,"12:00:00","+08:00",&rules,0));
+	ASSERT_NE(lunar_last_stdout(),nullptr);
+	EXPECT_NE(std::string(lunar_last_stdout()).find("\"day_ganzhi\""),
+			  std::string::npos);
+
+	const double jd_utc=greg2jd(2025,3,20,12,0,0.0)-UTC8DAY;
+	ASSERT_EQ(0,lunar_calc_eot_json(test_ephem().c_str(),jd_utc,120.0,0));
+	ASSERT_NE(lunar_last_stdout(),nullptr);
+	EXPECT_NE(std::string(lunar_last_stdout()).find("\"eot_minutes\""),
+			  std::string::npos);
+	EXPECT_EQ(std::string(lunar_last_stderr()==nullptr?"":lunar_last_stderr()),"");
+}
+
+TEST(CApi, RunCaptureCollectsVersionOutput){
+	const char*argv[]={"--version"};
+	ASSERT_EQ(0,lunar_run_capture(1,argv));
+	ASSERT_NE(lunar_last_stdout(),nullptr);
+	EXPECT_EQ(std::string(lunar_last_stderr()==nullptr?"":lunar_last_stderr()),"");
+	EXPECT_NE(std::string(lunar_last_stdout()).find(tool_ver()),std::string::npos);
+}
+
+TEST(CApi, RunCaptureCollectsJsonOutput){
+	const char*argv[]={
+		"config","show",
+		"--format","json",
+		"--pretty","0",
+		"--quiet"
+	};
+	ASSERT_EQ(0,lunar_run_capture(6,argv));
+	ASSERT_NE(lunar_last_stdout(),nullptr);
+	const std::string text=lunar_last_stdout();
+	EXPECT_FALSE(text.empty());
+	EXPECT_EQ(text.front(),'{');
+	EXPECT_NE(text.find("\"def_bsp\""),std::string::npos);
+}
+
 TEST(CliConvert, RoundTripStaysOnSameCivilDate){
 	if(!has_test_ephem()){
 		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";

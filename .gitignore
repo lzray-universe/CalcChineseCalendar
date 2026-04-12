@@ -10,10 +10,13 @@ Thumbs.db
 # CMake out-of-source builds
 /build/
 /build-*/
+/build_*/
 /build_wasm/
 /cmake-build-*/
 /out/
 /package/
+/publish/npm/dist/
+/publish/python/build/
 
 # CMake in-source build files
 /CMakeCache.txt
@@ -53,3 +56,5 @@ Thumbs.db
 # Runtime local files
 /lun_cfg.txt
 *.bsp
+__pycache__/
+*.pyc

@@ -1,0 +1,32 @@
+{
+  "name": "@lzray-universe/lunar",
+  "version": "0.0.0",
+  "description": "ESM package for the lunar ephemeris and calendar engine.",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.js",
+      "types": "./src/index.d.ts"
+    }
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist",
+    "src/index.d.ts",
+    "src/index.js"
+  ],
+  "keywords": [
+    "astronomy",
+    "calendar",
+    "chinese-calendar",
+    "ephemeris",
+    "lunar"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}

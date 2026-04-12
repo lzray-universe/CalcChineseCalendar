@@ -3,8 +3,12 @@
 #include<cstring>
 #include<cstdio>
 #include<exception>
+#include<iostream>
+#include<mutex>
+#include<sstream>
 #include<stdexcept>
 #include<string>
+#include<utility>
 #include<vector>
 
 #include "lunar/app_long.hpp"
@@ -12,10 +16,14 @@
 #include "lunar/cli/main.hpp"
 #include "lunar/core.hpp"
 #include "lunar/entry.hpp"
+#include "lunar/js_writer.hpp"
 
 namespace{
 
 thread_local std::string g_last_error;
+thread_local std::string g_last_stdout;
+thread_local std::string g_last_stderr;
+std::mutex g_capture_mu;
 
 void set_err(const std::string&msg){
 	g_last_error=msg;
@@ -24,6 +32,40 @@ void set_err(const std::string&msg){
 void clr_err(){
 	g_last_error.clear();
 }
+
+void set_capture(std::string out,std::string err){
+	g_last_stdout=std::move(out);
+	g_last_stderr=std::move(err);
+}
+
+void clr_capture(){
+	g_last_stdout.clear();
+	g_last_stderr.clear();
+}
+
+template<typename Fn>
+int write_json_capture(bool pretty,Fn&&fn){
+	std::ostringstream out;
+	JsonWriter w(out,pretty);
+	fn(w);
+	set_capture(out.str(),"");
+	return 0;
+}
+
+class StreamBufSwap{
+public:
+	StreamBufSwap(std::ostream&stream,std::streambuf*next):
+		stream_(stream),
+		prev_(stream.rdbuf(next)){}
+
+	~StreamBufSwap(){
+		stream_.rdbuf(prev_);
+	}
+
+private:
+	std::ostream&stream_;
+	std::streambuf*prev_;
+};
 
 template<typename Enum>
 Enum req_hli_code(int code,const char*name);
@@ -194,6 +236,48 @@ int run_cmd(CmdFn cmd,int argc,const char*const*argv){
 	return cmd(args);
 }
 
+void write_ganzhi_node_json(JsonWriter&w,const GzNode&node){
+	w.obj_begin();
+	w.key("text");
+	w.value(node.text);
+	w.key("index");
+	w.value(gz_index60(node.stem,node.branch));
+	w.key("stem");
+	w.value(node.stem);
+	w.key("branch");
+	w.value(node.branch);
+	w.obj_end();
+}
+
+void write_hli_rule_codes_json(JsonWriter&w,const HliRuleSet&rules){
+	w.key("rule_profile_code");
+	w.value(rules.profile_code);
+	w.key("year_boundary_code");
+	w.value(rules.year_boundary);
+	w.key("month_boundary_code");
+	w.value(rules.month_boundary);
+	w.key("leap_month_mode_code");
+	w.value(rules.leap_month_mode);
+	w.key("day_boundary_code");
+	w.value(rules.day_boundary);
+}
+
+int run_cli_capture(const std::vector<std::string>&args){
+	std::lock_guard<std::mutex> lock(g_capture_mu);
+	std::ostringstream out;
+	std::ostringstream err;
+	StreamBufSwap out_swap(std::cout,out.rdbuf());
+	StreamBufSwap err_swap(std::cerr,err.rdbuf());
+	try{
+		const int rc=run_cli_args(args);
+		set_capture(out.str(),err.str());
+		return rc;
+	}catch(...){
+		set_capture(out.str(),err.str());
+		throw;
+	}
+}
+
 }
 
 extern "C"{
@@ -208,14 +292,32 @@ const char*LUNAR_CALL lunar_last_error(void){
 	return g_last_error.empty()?nullptr:g_last_error.c_str();
 }
 
+const char*LUNAR_CALL lunar_last_stdout(void){
+	return g_last_stdout.empty()?nullptr:g_last_stdout.c_str();
+}
+
+const char*LUNAR_CALL lunar_last_stderr(void){
+	return g_last_stderr.empty()?nullptr:g_last_stderr.c_str();
+}
+
 void LUNAR_CALL lunar_clear_error(void){
 	clr_err();
+	clr_capture();
 }
 
 int LUNAR_CALL lunar_run(int argc,const char*const*argv){
 	return guard([&](){
+		clr_capture();
 		std::vector<std::string> args=mk_args(argc,argv);
 		return run_cli_args(args);
+	});
+}
+
+int LUNAR_CALL lunar_run_capture(int argc,const char*const*argv){
+	return guard([&](){
+		clr_capture();
+		std::vector<std::string> args=mk_args(argc,argv);
+		return run_cli_capture(args);
 	});
 }
 
@@ -252,6 +354,51 @@ int LUNAR_CALL lunar_calc_eot(const char*ephem,double jd_utc,double lon_deg,
 	});
 }
 
+int LUNAR_CALL lunar_calc_eot_json(const char*ephem,double jd_utc,double lon_deg,
+								   int pretty){
+	return guard([&](){
+		clr_capture();
+		if(ephem==nullptr){
+			throw std::invalid_argument("ephem must not be null");
+		}
+		EphRead eph(ephem);
+		AppLon app(eph);
+		EoTData data=app.eot_calc(jd_utc,lon_deg);
+		return write_json_capture(pretty!=0,[&](JsonWriter&w){
+			w.obj_begin();
+			w.key("input");
+			w.obj_begin();
+			w.key("jd_utc");
+			w.value(jd_utc);
+			w.key("lon_deg");
+			w.value(lon_deg);
+			w.obj_end();
+			w.key("data");
+			w.obj_begin();
+			w.key("jd_utc");
+			w.value(data.jd_utc);
+			w.key("jd_tdb");
+			w.value(data.jd_tdb);
+			w.key("lon_deg");
+			w.value(data.lon_deg);
+			w.key("lon_rad");
+			w.value(data.lon_rad);
+			w.key("apparent_solar_time_rad");
+			w.value(data.apparent_solar_time_rad);
+			w.key("mean_solar_time_rad");
+			w.value(data.mean_solar_time_rad);
+			w.key("eot_rad");
+			w.value(data.eot_rad);
+			w.key("eot_minutes");
+			w.value(data.eot_minutes);
+			w.key("eot_seconds");
+			w.value(data.eot_seconds);
+			w.obj_end();
+			w.obj_end();
+		});
+	});
+}
+
 int LUNAR_CALL lunar_core_day(const char*ephem,const char*date,const char*tz,
 							  lunar_day_summary*out){
 	return guard([&](){
@@ -275,6 +422,51 @@ int LUNAR_CALL lunar_core_day(const char*ephem,const char*date,const char*tz,
 		std::snprintf(out->lun_label,sizeof(out->lun_label),"%s",
 					  day.at_data.lunar_date.lun_label.c_str());
 		return 0;
+	});
+}
+
+int LUNAR_CALL lunar_core_day_json(const char*ephem,const char*date,const char*tz,
+								   int pretty){
+	return guard([&](){
+		clr_capture();
+		if(ephem==nullptr||date==nullptr){
+			throw std::invalid_argument("ephem/date must not be null");
+		}
+		lunar::core::DayComputeOptions opt;
+		opt.ephem=ephem;
+		opt.date_text=date;
+		opt.tz=(tz==nullptr||std::string(tz).empty())?"+08:00":std::string(tz);
+		opt.include_events=false;
+		opt.include_astro=false;
+		DayResult day=lunar::core::compute_day(opt);
+		return write_json_capture(pretty!=0,[&](JsonWriter&w){
+			w.obj_begin();
+			w.key("input");
+			w.obj_begin();
+			w.key("date");
+			w.value(day.date_text);
+			w.key("tz");
+			w.value(day.tz);
+			w.obj_end();
+			w.key("data");
+			w.obj_begin();
+			w.key("lunar_year");
+			w.value(day.at_data.lunar_date.lunar_year);
+			w.key("lun_mno");
+			w.value(day.at_data.lunar_date.lun_mno);
+			w.key("lunar_day");
+			w.value(day.at_data.lunar_date.lunar_day);
+			w.key("is_leap");
+			w.value(day.at_data.lunar_date.is_leap);
+			w.key("lun_label");
+			w.value(day.at_data.lunar_date.lun_label);
+			w.key("ill_pct");
+			w.value(day.at_data.ill_pct);
+			w.key("phase_name");
+			w.value(day.at_data.phase_name);
+			w.obj_end();
+			w.obj_end();
+		});
 	});
 }
 
@@ -316,6 +508,47 @@ int LUNAR_CALL lunar_core_ganzhi(const char*ephem,const char*date,
 	});
 }
 
+int LUNAR_CALL lunar_core_ganzhi_json(const char*ephem,const char*date,
+									  const char*at_time,const char*tz,
+									  const lunar_hli_rules*rules,int pretty){
+	return guard([&](){
+		clr_capture();
+		if(ephem==nullptr||date==nullptr){
+			throw std::invalid_argument("ephem/date must not be null");
+		}
+		lunar::core::GanzhiComputeOptions opt;
+		opt.ephem=ephem;
+		opt.date_text=date;
+		opt.at_time=c_api_or_default(at_time,"12:00:00");
+		opt.tz=c_api_or_default(tz,"+08:00");
+		opt.hli_rules=rules_from_c(rules);
+		lunar::core::GanzhiSummary sum=lunar::core::compute_ganzhi(opt);
+		return write_json_capture(pretty!=0,[&](JsonWriter&w){
+			w.obj_begin();
+			w.key("input");
+			w.obj_begin();
+			w.key("date");
+			w.value(opt.date_text);
+			w.key("at_time");
+			w.value(opt.at_time);
+			w.key("tz");
+			w.value(opt.tz);
+			w.obj_end();
+			w.key("data");
+			w.obj_begin();
+			w.key("year");
+			write_ganzhi_node_json(w,sum.year);
+			w.key("month");
+			write_ganzhi_node_json(w,sum.month);
+			w.key("day");
+			write_ganzhi_node_json(w,sum.day);
+			write_hli_rule_codes_json(w,sum.hli_rules);
+			w.obj_end();
+			w.obj_end();
+		});
+	});
+}
+
 int LUNAR_CALL lunar_core_ganzhi_month(
 	const char*ephem,int year,int month,const char*at_time,const char*tz,
 	const lunar_hli_rules*rules,lunar_ganzhi_month_summary*out){
@@ -348,6 +581,66 @@ int LUNAR_CALL lunar_core_ganzhi_month(
 			fill_ganzhi_node(&out->days[i],sum.days[i]);
 		}
 		return 0;
+	});
+}
+
+int LUNAR_CALL lunar_core_ganzhi_month_json(
+	const char*ephem,int year,int month,const char*at_time,const char*tz,
+	const lunar_hli_rules*rules,int pretty){
+	return guard([&](){
+		clr_capture();
+		if(ephem==nullptr){
+			throw std::invalid_argument("ephem must not be null");
+		}
+		lunar::core::GanzhiMonthComputeOptions opt;
+		opt.ephem=ephem;
+		opt.year=year;
+		opt.month=month;
+		opt.at_time=c_api_or_default(at_time,"12:00:00");
+		opt.tz=c_api_or_default(tz,"+08:00");
+		opt.hli_rules=rules_from_c(rules);
+		lunar::core::GanzhiMonthSummary sum=lunar::core::compute_ganzhi_month(opt);
+		if(sum.years.size()!=sum.months.size()||sum.months.size()!=sum.days.size()){
+			throw std::runtime_error("ganzhi month result size mismatch");
+		}
+		return write_json_capture(pretty!=0,[&](JsonWriter&w){
+			w.obj_begin();
+			w.key("input");
+			w.obj_begin();
+			w.key("year");
+			w.value(opt.year);
+			w.key("month");
+			w.value(opt.month);
+			w.key("at_time");
+			w.value(opt.at_time);
+			w.key("tz");
+			w.value(opt.tz);
+			w.obj_end();
+			w.key("data");
+			w.obj_begin();
+			w.key("year");
+			w.value(sum.year);
+			w.key("month");
+			w.value(sum.month);
+			write_hli_rule_codes_json(w,sum.hli_rules);
+			w.key("days");
+			w.arr_begin();
+			for(std::size_t i=0;i<sum.days.size();++i){
+				w.obj_begin();
+				w.key("day");
+				w.value(static_cast<int>(i)+1);
+				w.key("year");
+				write_ganzhi_node_json(w,sum.years[i]);
+				w.key("month");
+				write_ganzhi_node_json(w,sum.months[i]);
+				w.key("day_ganzhi");
+				write_ganzhi_node_json(w,sum.days[i]);
+				w.obj_end();
+			}
+			w.arr_end();
+			w.obj_end();
+			w.obj_end();
+		});
 	});
 }
 

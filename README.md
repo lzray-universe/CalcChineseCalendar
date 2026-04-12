@@ -37,6 +37,27 @@ CalcChineseCalendar 是一个优先使用 JPL DE BSP 星历、在缺失 BSP 时�
 
 </div>
 
+## 目录
+
+- [1. 功能概览](#1-功能概览)
+- [2. 构建](#2-构建)
+- [3. 运行前准备：BSP 星历（可选但优先）](#3-运行前准备bsp-星历可选但优先)
+- [4. CLI 入口与全局参数](#4-cli-入口与全局参数)
+- [5. 自动 BSP 选择机制](#5-自动-bsp-选择机制)
+- [6. 配置文件 `lun_cfg.txt`](#6-配置文件-lun_cfgtxt)
+- [7. 时间格式与时区规则](#7-时间格式与时区规则)
+- [8. 输出格式](#8-输出格式)
+- [9. 命令参考](#9-命令参考)
+- [10. 交互模式](#10-交互模式)
+- [11. i18n（中简/中繁/英/日/韩）](#11-i18n中简中繁英日韩)
+- [12. C++ API（Library-First）](#12-c-api库优先)
+- [13. C API](#13-c-api)
+- [14. 仓库结构](#14-仓库结构)
+- [15. 致谢](#15-致谢)
+- [16. 快速示例](#16-快速示例)
+- [17. 输出字段代号说明](#17-输出字段代号说明)
+- [18. 主要函数与结构体变量说明](#18-主要函数与结构体变量说明)
+
 ## 1. 功能概览
 
 - 农历月枚举：`months`
@@ -211,6 +232,8 @@ lunar download list
 ```bash
 lunar download get de442s --dir .
 ```
+
+若当前网络环境无法直接访问 JPL NAIF 官方站，可改用镜像站 `https://naifproxy.lzray.cloud/` 手动下载对应 BSP 文件；镜像路径与官方目录结构保持一致，例如 `https://naifproxy.lzray.cloud/pub/naif/generic_kernels/spk/planets/de442s.bsp`。
 
 ## 4. CLI 入口与全局参数
 
@@ -448,6 +471,8 @@ lunar event [bsp] solar-eclipse --near <YYYY-MM-DD>
 lunar download list
 lunar download get <id> [--dir <path>] [--quiet]
 ```
+
+若官方 NAIF 站点不可达，可改用镜像站 `https://naifproxy.lzray.cloud/` 手动获取对应 BSP 文件后再通过 `--bsp`、配置文件或工作目录进行加载。
 
 ### 9.6 at
 

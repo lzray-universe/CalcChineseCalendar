@@ -20,9 +20,12 @@ extern "C"{
 
 LUNAR_API const char*LUNAR_CALL lunar_tool_ver(void);
 LUNAR_API const char*LUNAR_CALL lunar_last_error(void);
+LUNAR_API const char*LUNAR_CALL lunar_last_stdout(void);
+LUNAR_API const char*LUNAR_CALL lunar_last_stderr(void);
 LUNAR_API void LUNAR_CALL lunar_clear_error(void);
 
 LUNAR_API int LUNAR_CALL lunar_run(int argc,const char*const*argv);
+LUNAR_API int LUNAR_CALL lunar_run_capture(int argc,const char*const*argv);
 LUNAR_API int LUNAR_CALL lunar_root_batch(const char*ephem,
 										  const char*input_path,
 										  const char*out_path);
@@ -41,6 +44,8 @@ typedef struct lunar_eot_result{
 
 LUNAR_API int LUNAR_CALL lunar_calc_eot(const char*ephem,double jd_utc,
 										double lon_deg,lunar_eot_result*out);
+LUNAR_API int LUNAR_CALL lunar_calc_eot_json(const char*ephem,double jd_utc,
+											 double lon_deg,int pretty);
 
 typedef struct lunar_day_summary{
 	int lunar_year;
@@ -54,6 +59,8 @@ typedef struct lunar_day_summary{
 
 LUNAR_API int LUNAR_CALL lunar_core_day(const char*ephem,const char*date,
 										const char*tz,lunar_day_summary*out);
+LUNAR_API int LUNAR_CALL lunar_core_day_json(const char*ephem,const char*date,
+											 const char*tz,int pretty);
 
 typedef struct lunar_hli_rules{
 	int profile_code;
@@ -101,10 +108,17 @@ LUNAR_API int LUNAR_CALL lunar_core_ganzhi(const char*ephem,const char*date,
 										   const char*at_time,const char*tz,
 										   const lunar_hli_rules*rules,
 										   lunar_ganzhi_summary*out);
+LUNAR_API int LUNAR_CALL lunar_core_ganzhi_json(const char*ephem,const char*date,
+												const char*at_time,const char*tz,
+												const lunar_hli_rules*rules,
+												int pretty);
 
 LUNAR_API int LUNAR_CALL lunar_core_ganzhi_month(
 	const char*ephem,int year,int month,const char*at_time,const char*tz,
 	const lunar_hli_rules*rules,lunar_ganzhi_month_summary*out);
+LUNAR_API int LUNAR_CALL lunar_core_ganzhi_month_json(
+	const char*ephem,int year,int month,const char*at_time,const char*tz,
+	const lunar_hli_rules*rules,int pretty);
 
 LUNAR_API int LUNAR_CALL lunar_cmd_month(int argc,const char*const*argv);
 LUNAR_API int LUNAR_CALL lunar_cmd_cal(int argc,const char*const*argv);
