@@ -12,6 +12,11 @@ on:
         required: true
         type: boolean
         default: false
+      create_github_release:
+        description: "Create GitHub release and upload build artifacts"
+        required: true
+        type: boolean
+        default: false
       publish_pypi:
         description: "Publish Python wheels to PyPI"
         required: true
@@ -166,6 +171,7 @@ jobs:
           path: dist/npm/*
 
   release:
+    if: ${{ inputs.create_github_release }}
     needs:
       - meta
       - python
