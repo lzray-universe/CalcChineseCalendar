@@ -33,7 +33,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.ver.outputs.tag }}
-      package_version: ${{ steps.ver.outputs.package_version }}
     steps:
       - name: Derive publish versions
         id: ver
@@ -43,9 +42,7 @@ jobs:
           tag='${{ inputs.tag }}'
           safe_tag="${tag//\//-}"
           safe_tag="${safe_tag// /-}"
-          package_version="${safe_tag#v}"
           echo "tag=${safe_tag}" >> "$GITHUB_OUTPUT"
-          echo "package_version=${package_version}" >> "$GITHUB_OUTPUT"
 
   python:
     needs: meta
@@ -67,7 +64,7 @@ jobs:
           python-version: "3.12"
 
       - name: Apply package version
-        run: python publish/set_version.py "${{ needs.meta.outputs.package_version }}"
+        run: python publish/set_version.py --from-tag "${{ inputs.tag }}"
 
       - name: Install cibuildwheel
         run: python -m pip install --upgrade cibuildwheel
@@ -75,7 +72,7 @@ jobs:
       - name: Build wheels
         env:
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* cp313-*"
-          CIBW_SKIP: "pp* *-win32 *_i686 *-musllinux_*"
+          CIBW_SKIP: "*-win32 *_i686 *-musllinux_*"
           CIBW_TEST_COMMAND: >-
             python -c "import lunar; data=lunar.core_day('@series','2025-06-01');
             assert data['input']['date']=='2025-06-01'"
@@ -102,7 +99,7 @@ jobs:
           node-version: "20"
 
       - name: Apply package version
-        run: python publish/set_version.py "${{ needs.meta.outputs.package_version }}"
+        run: python publish/set_version.py --from-tag "${{ inputs.tag }}"
 
       - name: Setup Emscripten
         shell: bash
