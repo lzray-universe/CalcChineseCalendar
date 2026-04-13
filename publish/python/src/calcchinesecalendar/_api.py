@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib
 import json
 from typing import Any
 from typing import Iterable
 from typing import Sequence
 
-from . import _lunar_ext
+try:
+    _lunar_ext = importlib.import_module("._lunar_ext", __package__)
+except ImportError:
+    _lunar_ext = importlib.import_module("_lunar_ext")
 from ._version import __version__
 
 

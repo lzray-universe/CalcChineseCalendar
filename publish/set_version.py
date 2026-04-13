@@ -44,6 +44,12 @@ PRERELEASE_RE = re.compile(
     r"(?:[\s._-]*(?P<num>\d+))?",
     flags=re.IGNORECASE,
 )
+PYTHON_VERSION_RE = re.compile(
+    r"^\d+(?:\.\d+)+(?:(?:a|b|rc)\d+|(?:\.dev|\.post)\d+)?$"
+)
+NPM_VERSION_RE = re.compile(
+    r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 
 
 def replace_regex(path: Path, pattern: str, repl: str) -> None:
@@ -52,6 +58,27 @@ def replace_regex(path: Path, pattern: str, repl: str) -> None:
     if count != 1:
         raise RuntimeError(f"failed to update version in {path}")
     path.write_text(updated, encoding="utf-8")
+
+
+def format_python_version(base: str, label: str, number: str | int) -> str:
+    number_text = str(number)
+    if label in {"a", "b", "rc"}:
+        return f"{base}{label}{number_text}"
+    if label == "dev":
+        return f"{base}.dev{number_text}"
+    if label == "post":
+        return f"{base}.post{number_text}"
+    raise ValueError(f"unsupported python prerelease label: {label!r}")
+
+
+def validate_python_version(version: str) -> None:
+    if not PYTHON_VERSION_RE.fullmatch(version):
+        raise ValueError(f"invalid Python package version: {version!r}")
+
+
+def validate_npm_version(version: str) -> None:
+    if not NPM_VERSION_RE.fullmatch(version):
+        raise ValueError(f"invalid npm package version: {version!r}")
 
 
 def derive_versions_from_tag(tag: str, preview: bool = False,
@@ -78,7 +105,7 @@ def derive_versions_from_tag(tag: str, preview: bool = False,
             py_label = CHANNEL_TO_PY_LABEL[preview_channel]
             npm_label = CHANNEL_TO_NPM_LABEL[preview_channel]
             return (
-                f"{base}{py_label}{preview_number}",
+                format_python_version(base, py_label, preview_number),
                 f"{base}-{npm_label}.{preview_number}",
             )
         return base, base
@@ -89,20 +116,22 @@ def derive_versions_from_tag(tag: str, preview: bool = False,
             py_label = CHANNEL_TO_PY_LABEL[preview_channel]
             npm_label = CHANNEL_TO_NPM_LABEL[preview_channel]
             return (
-                f"{base}{py_label}{preview_number}",
+                format_python_version(base, py_label, preview_number),
                 f"{base}-{npm_label}.{preview_number}",
             )
         return base, base
 
     label = PRERELEASE_MAP[pre.group("label").lower()]
     number = pre.group("num") or "1"
-    py_version = f"{base}{label}{number}"
+    py_version = format_python_version(base, label, number)
     npm_label = NPM_PRERELEASE_MAP[label]
     npm_version = f"{base}-{npm_label}.{number}"
     return py_version, npm_version
 
 
 def apply_versions(py_version: str, npm_version: str) -> None:
+    validate_python_version(py_version)
+    validate_npm_version(npm_version)
     replace_regex(PYPROJECT, r'^version = "[^"]+"$', f'version = "{py_version}"')
     PY_VERSION.write_text(f'__version__="{py_version}"\n', encoding="utf-8")
 
