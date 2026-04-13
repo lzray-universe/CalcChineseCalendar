@@ -285,8 +285,8 @@ if(LUNAR_BUILD_PYTHON_MODULE)
         target_compile_options(_lunar_ext PRIVATE /utf-8)
     endif()
     install(TARGETS _lunar_ext
-        LIBRARY DESTINATION lunar
-        RUNTIME DESTINATION lunar
+        LIBRARY DESTINATION calcchinesecalendar
+        RUNTIME DESTINATION calcchinesecalendar
     )
 endif()
 
