@@ -26,6 +26,10 @@
     "lunar"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lzray-universe/CalcChineseCalendar/"
+  },
   "engines": {
     "node": ">=18"
   }
