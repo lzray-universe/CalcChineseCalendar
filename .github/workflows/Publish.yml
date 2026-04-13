@@ -62,9 +62,6 @@ jobs:
           - runner: windows-11-arm
             artifact_name: windows-arm64
             cibw_archs: ARM64
-          - runner: macos-15-intel
-            artifact_name: macos-x86_64
-            cibw_archs: x86_64
           - runner: macos-15
             artifact_name: macos-arm64
             cibw_archs: arm64
@@ -90,7 +87,7 @@ jobs:
           CIBW_SKIP: "*-win32 *_i686 *-musllinux_*"
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_TEST_COMMAND: >-
-            python -c "import lunar; data=lunar.core_day('@series','2025-06-01');
+            python -c "import calcchinesecalendar as ccc; data=ccc.core_day('@series','2025-06-01');
             assert data['input']['date']=='2025-06-01'"
           CMAKE_ARGS: "-DLUNAR_VERSION=${{ needs.meta.outputs.tag }}"
         run: python -m cibuildwheel publish/python --output-dir wheelhouse

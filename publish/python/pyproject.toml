@@ -6,7 +6,7 @@ requires = [
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "calc-chinese-calendar-lunar"
+name = "calcchinesecalendar"
 version = "0.0.0"
 description = "Python bindings for the lunar ephemeris and calendar engine."
 readme = "README.md"
@@ -32,7 +32,7 @@ classifiers = [
 
 [tool.scikit-build]
 cmake.source-dir = "../.."
-wheel.packages = ["src/lunar"]
+wheel.packages = ["src/calcchinesecalendar"]
 cmake.args = [
     "-DLUNAR_BUILD_PYTHON_MODULE=ON",
     "-DLUNAR_BUILD_EXECUTABLE=OFF",

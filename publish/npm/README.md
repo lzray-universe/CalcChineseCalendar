@@ -1,10 +1,10 @@
-# @lzray-universe/lunar
+# calcchinesecalendar
 
-`@lzray-universe/lunar` ships the `lunar` engine as a package-oriented
+`calcchinesecalendar` ships the `lunar` engine as a package-oriented
 WebAssembly module.
 
 ```js
-import { coreDay, createLunar } from "@lzray-universe/lunar";
+import { coreDay, createLunar } from "calcchinesecalendar";
 
 const data = await coreDay({ ephem: "@series", date: "2025-06-01" });
 console.log(data.data.phase_name);

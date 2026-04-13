@@ -1,14 +1,14 @@
-# calc-chinese-calendar-lunar
+# calcchinesecalendar
 
-`calc-chinese-calendar-lunar` packages the `lunar` engine as a native Python
+`calcchinesecalendar` packages the `lunar` engine as a native Python
 extension.
 
-The public module is imported as `lunar`.
+The public module is imported as `calcchinesecalendar`.
 
 ```python
-import lunar
+import calcchinesecalendar
 
-data=lunar.day("@series","2025-06-01")
+data=calcchinesecalendar.day("@series","2025-06-01")
 print(data["data"]["phase_name"])
 ```
 

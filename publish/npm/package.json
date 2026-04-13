@@ -1,5 +1,5 @@
 {
-  "name": "@lzray-universe/lunar",
+  "name": "calcchinesecalendar",
   "version": "0.0.0",
   "description": "ESM package for the lunar ephemeris and calendar engine.",
   "type": "module",

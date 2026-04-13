@@ -8,7 +8,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "publish" / "python" / "pyproject.toml"
-PY_VERSION = ROOT / "publish" / "python" / "src" / "lunar" / "_version.py"
+PY_VERSION = ROOT / "publish" / "python" / "src" / "calcchinesecalendar" / "_version.py"
 NPM_PACKAGE = ROOT / "publish" / "npm" / "package.json"
 
 PRERELEASE_MAP = {
