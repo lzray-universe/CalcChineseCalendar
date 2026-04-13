@@ -12,6 +12,24 @@ on:
         required: true
         type: boolean
         default: false
+      preview_package_version:
+        description: "Append preview version suffix for Python and npm packages"
+        required: true
+        type: boolean
+        default: false
+      preview_channel:
+        description: "Preview channel for Python and npm packages"
+        required: true
+        type: choice
+        options:
+          - rc
+          - beta
+        default: rc
+      preview_number:
+        description: "Preview sequence number for Python and npm packages"
+        required: true
+        type: number
+        default: 1
       create_github_release:
         description: "Create GitHub release and upload build artifacts"
         required: true
@@ -76,7 +94,18 @@ jobs:
           python-version: "3.12"
 
       - name: Apply package version
-        run: python publish/set_version.py --from-tag "${{ inputs.tag }}"
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ${{ inputs.preview_package_version }}; then
+            python publish/set_version.py \
+              --from-tag "${{ inputs.tag }}" \
+              --preview \
+              --preview-channel "${{ inputs.preview_channel }}" \
+              --preview-number "${{ inputs.preview_number }}"
+          else
+            python publish/set_version.py --from-tag "${{ inputs.tag }}"
+          fi
 
       - name: Install cibuildwheel
         run: python -m pip install --upgrade cibuildwheel
@@ -112,7 +141,18 @@ jobs:
           node-version: "20"
 
       - name: Apply package version
-        run: python publish/set_version.py --from-tag "${{ inputs.tag }}"
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ${{ inputs.preview_package_version }}; then
+            python publish/set_version.py \
+              --from-tag "${{ inputs.tag }}" \
+              --preview \
+              --preview-channel "${{ inputs.preview_channel }}" \
+              --preview-number "${{ inputs.preview_number }}"
+          else
+            python publish/set_version.py --from-tag "${{ inputs.tag }}"
+          fi
 
       - name: Setup Emscripten
         shell: bash

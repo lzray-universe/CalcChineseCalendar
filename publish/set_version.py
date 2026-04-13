@@ -23,6 +23,14 @@ PRERELEASE_MAP = {
     "dev": "dev",
     "post": "post",
 }
+CHANNEL_TO_PY_LABEL = {
+    "beta": "b",
+    "rc": "rc",
+}
+CHANNEL_TO_NPM_LABEL = {
+    "beta": "beta",
+    "rc": "rc",
+}
 NPM_PRERELEASE_MAP = {
     "a": "alpha",
     "b": "beta",
@@ -46,7 +54,9 @@ def replace_regex(path: Path, pattern: str, repl: str) -> None:
     path.write_text(updated, encoding="utf-8")
 
 
-def derive_versions_from_tag(tag: str) -> tuple[str, str]:
+def derive_versions_from_tag(tag: str, preview: bool = False,
+                             preview_channel: str = "rc",
+                             preview_number: int = 1) -> tuple[str, str]:
     match = VERSION_CORE_RE.search(tag)
     if match is None:
         raise ValueError(f"tag does not contain a version core: {tag!r}")
@@ -55,14 +65,33 @@ def derive_versions_from_tag(tag: str) -> tuple[str, str]:
     minor = int(match.group("minor"))
     patch = int(match.group("patch") or "0")
     base = f"{major}.{minor}.{patch}"
+    preview_channel = preview_channel.lower()
+    if preview_channel not in CHANNEL_TO_PY_LABEL:
+        raise ValueError(f"unsupported preview channel: {preview_channel!r}")
+    if preview_number < 1:
+        raise ValueError("preview number must be >= 1")
 
     suffix = tag[match.end():].strip()
     suffix = re.sub(r"^[\s._()+-]+", "", suffix)
     if not suffix:
+        if preview:
+            py_label = CHANNEL_TO_PY_LABEL[preview_channel]
+            npm_label = CHANNEL_TO_NPM_LABEL[preview_channel]
+            return (
+                f"{base}{py_label}{preview_number}",
+                f"{base}-{npm_label}.{preview_number}",
+            )
         return base, base
 
     pre = PRERELEASE_RE.match(suffix)
     if pre is None:
+        if preview:
+            py_label = CHANNEL_TO_PY_LABEL[preview_channel]
+            npm_label = CHANNEL_TO_NPM_LABEL[preview_channel]
+            return (
+                f"{base}{py_label}{preview_number}",
+                f"{base}-{npm_label}.{preview_number}",
+            )
         return base, base
 
     label = PRERELEASE_MAP[pre.group("label").lower()]
@@ -87,8 +116,35 @@ def apply_versions(py_version: str, npm_version: str) -> None:
 
 def main() -> int:
     argv = sys.argv[1:]
+    preview = False
+    if "--preview" in argv:
+        preview = True
+        argv = [arg for arg in argv if arg != "--preview"]
+
+    preview_channel = "rc"
+    preview_number = 1
+    if "--preview-channel" in argv:
+        idx = argv.index("--preview-channel")
+        if idx + 1 >= len(argv):
+            print("missing value for --preview-channel", file=sys.stderr)
+            return 2
+        preview_channel = argv[idx + 1].strip().lower()
+        del argv[idx:idx + 2]
+    if "--preview-number" in argv:
+        idx = argv.index("--preview-number")
+        if idx + 1 >= len(argv):
+            print("missing value for --preview-number", file=sys.stderr)
+            return 2
+        try:
+            preview_number = int(argv[idx + 1].strip())
+        except ValueError:
+            print("preview number must be an integer", file=sys.stderr)
+            return 2
+        del argv[idx:idx + 2]
+
     if len(argv) != 1 and not (len(argv) == 2 and argv[0] == "--from-tag"):
-        print("usage: set_version.py <version>\n       set_version.py --from-tag <tag>",
+        print("usage: set_version.py <version> [--preview --preview-channel <beta|rc> --preview-number <n>]\n"
+              "       set_version.py --from-tag <tag> [--preview --preview-channel <beta|rc> --preview-number <n>]",
               file=sys.stderr)
         return 2
 
@@ -97,7 +153,12 @@ def main() -> int:
         if not tag:
             print("tag must not be empty", file=sys.stderr)
             return 2
-        py_version, npm_version = derive_versions_from_tag(tag)
+        py_version, npm_version = derive_versions_from_tag(
+            tag,
+            preview=preview,
+            preview_channel=preview_channel,
+            preview_number=preview_number,
+        )
     else:
         version = argv[0].strip()
         if not version:
