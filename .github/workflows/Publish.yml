@@ -213,7 +213,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          npm pack publish/npm --pack-destination dist/npm
+          npm pack ./publish/npm --pack-destination dist/npm
 
       - uses: actions/upload-artifact@v4
         with:

@@ -17,6 +17,8 @@ Thumbs.db
 /package/
 /publish/npm/dist/
 /publish/python/build/
+/.npm-cache/
+/.pkg-smoke/
 
 # CMake in-source build files
 /CMakeCache.txt
