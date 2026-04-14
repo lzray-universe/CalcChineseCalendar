@@ -1,10 +1,15 @@
-# CalcChineseCalendar（lunar）
+[中文说明](README_zh.md)
 
-CalcChineseCalendar 是一个优先使用 JPL DE BSP 星历、在缺失 BSP 时可自动回退到仓库内置 VSOP87A + ELPMPP02 的历法与天文计算工具，提供：
+# CalcChineseCalendar (lunar)
 
-- 命令行工具 `lunar`
-- 动态库 `lunar_dll`（导出 C API）
-- 面向 C++ 的可复用计算接口（`lunar::core`）
+CalcChineseCalendar is a calendar and astronomy computation tool that prefers JPL DE BSP ephemerides and can automatically fall back to the built-in VSOP87A + ELPMPP02 models when BSP files are unavailable. It provides:
+
+- CLI tool `lunar`
+- Shared library `lunar_dll` (exports the C API)
+- Reusable C++ computation interfaces (`lunar::core`)
+- Python package: `calcchinesecalendar`, install with `pip install calcchinesecalendar` and use via `import calcchinesecalendar`
+- npm package: `calcchinesecalendar`, install with `npm install calcchinesecalendar` and use via `import ... from "calcchinesecalendar"`
+
 <div align="center">
 
   <p>
@@ -37,68 +42,68 @@ CalcChineseCalendar 是一个优先使用 JPL DE BSP 星历、在缺失 BSP 时�
 
 </div>
 
-## 目录
+## Table of Contents
 
-- [1. 功能概览](#1-功能概览)
-- [2. 构建](#2-构建)
-- [3. 运行前准备：BSP 星历（可选但优先）](#3-运行前准备bsp-星历可选但优先)
-- [4. CLI 入口与全局参数](#4-cli-入口与全局参数)
-- [5. 自动 BSP 选择机制](#5-自动-bsp-选择机制)
-- [6. 配置文件 `lun_cfg.txt`](#6-配置文件-lun_cfgtxt)
-- [7. 时间格式与时区规则](#7-时间格式与时区规则)
-- [8. 输出格式](#8-输出格式)
-- [9. 命令参考](#9-命令参考)
-- [10. 交互模式](#10-交互模式)
-- [11. i18n（中简/中繁/英/日/韩）](#11-i18n中简中繁英日韩)
-- [12. C++ API（Library-First）](#12-c-api库优先)
+- [1. Feature Overview](#1-feature-overview)
+- [2. Build](#2-build)
+- [3. Runtime Preparation: BSP Ephemerides (Optional but Preferred)](#3-runtime-preparation-bsp-ephemerides-optional-but-preferred)
+- [4. CLI Entry and Global Options](#4-cli-entry-and-global-options)
+- [5. Automatic BSP Selection](#5-automatic-bsp-selection)
+- [6. Configuration File `lun_cfg.txt`](#6-configuration-file-lun_cfgtxt)
+- [7. Time Format and Timezone Rules](#7-time-format-and-timezone-rules)
+- [8. Output Formats](#8-output-formats)
+- [9. Command Reference](#9-command-reference)
+- [10. Interactive Mode](#10-interactive-mode)
+- [11. i18n (Simplified Chinese / Traditional Chinese / English / Japanese / Korean)](#11-i18n-simplified-chinese--traditional-chinese--english--japanese--korean)
+- [12. C++ API (Library-First)](#12-c-api-library-first)
 - [13. C API](#13-c-api)
-- [14. 仓库结构](#14-仓库结构)
-- [15. 致谢](#15-致谢)
-- [16. 快速示例](#16-快速示例)
-- [17. 输出字段代号说明](#17-输出字段代号说明)
-- [18. 主要函数与结构体变量说明](#18-主要函数与结构体变量说明)
+- [14. Repository Layout](#14-repository-layout)
+- [15. Acknowledgements](#15-acknowledgements)
+- [16. Quick Examples](#16-quick-examples)
+- [17. Output Field Codes](#17-output-field-codes)
+- [18. Main Functions and Structure Fields](#18-main-functions-and-structure-fields)
 
-## 1. 功能概览
+## 1. Feature Overview
 
-- 农历月枚举：`months`
-- 年度节气/月相日历：`calendar`、`year`
-- 单事件求解：`event`
-- 星历下载：`download`
-- 时刻查询与批处理：`at`
-- 公历/农历互转与批处理：`convert`
-- 太阳星座与观测天空位置：`zodiac`、`sky`
-- 单日/单月视图：`day`、`monthview`
-- 事件检索：`next`、`range`、`search`
-- 日月食：`eclipse`
-- 传统节日与黄历摘要：`festival`、`almanac`
-- 星历信息：`info`
-- 配置管理与补全脚本：`config`、`completion`
-- 交互式模式（无参数启动）
+- Enumerate lunar months: `months`
+- Full-year solar term / lunar phase calendars: `calendar`, `year`
+- Solve a single event: `event`
+- Download ephemerides: `download`
+- Query a specific time and batch processing: `at`
+- Gregorian/lunar conversion and batch processing: `convert`
+- Solar zodiac and observed sky positions: `zodiac`, `sky`
+- Single-day / single-month views: `day`, `monthview`
+- Event lookup: `next`, `range`, `search`
+- Lunar and solar eclipses: `eclipse`
+- Traditional festivals and almanac summary: `festival`, `almanac`
+- Ephemeris information: `info`
+- Config management and completion script generation: `config`, `completion`
+- Interactive mode (start with no arguments)
 
-## 2. 构建
+## 2. Build
 
-### 2.1 环境要求
+### 2.1 Requirements
 
 - CMake 3.20+
-- 支持 C++20 的编译器
-- 运行时优先使用 BSP 文件（`.bsp`）；若未找到可自动回退到内置 VSOP87A + ELPMPP02
-- `download get` 需要系统中存在 `curl` 或 `wget`
+- A compiler with C++20 support
+- BSP files (`.bsp`) are preferred at runtime; if not found, the program can automatically fall back to the built-in VSOP87A + ELPMPP02
+- `download get` requires `curl` or `wget` to exist on the system
 
-### 2.2 Windows（Visual Studio）
+### 2.2 Windows (Visual Studio)
 
 ```powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release --parallel
 ```
 
-### 2.3 Linux / macOS（Ninja 示例）
+### 2.3 Linux / macOS (Ninja example)
 
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-### 2.4 WebAssembly（Emscripten）
+### 2.4 WebAssembly (Emscripten)
 
 ```powershell
 git clone https://github.com/emscripten-core/emsdk.git D:\tools\emsdk
@@ -108,20 +113,20 @@ cmd /c "call D:\tools\emsdk\emsdk_env.bat && D:\tools\emsdk\upstream\emscripten\
 cmd /c "call D:\tools\emsdk\emsdk_env.bat && cmake --build build_wasm --parallel"
 ```
 
-说明：
+Notes:
 
-- 产物为 `build_wasm/lunar.js` 与 `build_wasm/lunar.wasm`
-- 兼容包装还会生成 `build_wasm/lunar_worker.js`
-- 保留现有 CLI 入口；Node 下可直接执行 `node build_wasm/lunar.js --version`
-- wasm 构建默认启用异常支持、文件系统支持、`FS`/`callMain` 导出与内存增长
-- Node 下会自动把当前工作目录挂载到 wasm 虚拟文件系统，当前目录内相对 `.bsp` 路径可直接使用
-- Windows 下会自动兼容 `D:\path\to\file.bsp` 这类盘符绝对路径
-- 浏览器 Worker 下可直接使用 `lunar_worker.js`，按 CLI 的 `argv` 方式调用
-- Worker 支持两种输入：`files` 写入内存文件，或 `mounts` 通过 `WORKERFS` 挂载 `File`/`Blob`
-- `lunar_worker.js` 保持 CLI 语义：单次执行后自动退出；下一条命令请新建 Worker
-- 若不需要 BSP，可继续使用 `@series`
+- The outputs are `build_wasm/lunar.js` and `build_wasm/lunar.wasm`
+- The compatibility wrapper also generates `build_wasm/lunar_worker.js`
+- The existing CLI entry is preserved; on Node you can directly run `node build_wasm/lunar.js --version`
+- wasm builds enable exception support, filesystem support, exported `FS`/`callMain`, and memory growth by default
+- On Node, the current working directory is automatically mounted into the wasm virtual filesystem, so relative `.bsp` paths in the current directory can be used directly
+- On Windows, absolute drive-letter paths such as `D:\path\to\file.bsp` are also handled automatically
+- In browser workers, `lunar_worker.js` can be used directly and invoked with CLI-style `argv`
+- The worker supports two input forms: `files` to write in-memory files, or `mounts` to mount `File`/`Blob` through `WORKERFS`
+- `lunar_worker.js` preserves CLI semantics: it exits automatically after a single run; create a new worker for the next command
+- If you do not need BSP, you can keep using `@series`
 
-浏览器 Worker 示例：
+Browser worker example:
 
 ```js
 const worker=new Worker('./lunar_worker.js');
@@ -148,7 +153,7 @@ worker.onmessage=({data})=>{
 };
 ```
 
-浏览器 Worker 也可先写入内存文件：
+Browser workers can also write in-memory files first:
 
 ```js
 worker.postMessage({
@@ -163,37 +168,37 @@ worker.postMessage({
 });
 ```
 
-### 2.5 产物
+### 2.5 Outputs
 
-- 可执行程序：`lunar`
-- 动态库：`lunar_dll`（输出名为 `lunar`，对应平台扩展名）
-- 测试程序：`lunar_tests`（启用 `LUNAR_BUILD_TESTS` 时）
-- wasm 构建还会生成：`lunar.js`、`lunar.wasm`、`lunar_worker.js`
+- Executable: `lunar`
+- Shared library: `lunar_dll` (output name `lunar`, with platform-specific extension)
+- Test executable: `lunar_tests` (when `LUNAR_BUILD_TESTS` is enabled)
+- wasm builds additionally generate: `lunar.js`, `lunar.wasm`, `lunar_worker.js`
 
-### 2.6 可选构建开关
+### 2.6 Optional Build Switches
 
 - `-DLUNAR_ENABLE_DIMENSION_TYPES=ON|OFF`
-  - `ON`（默认）：启用零开销的编译期物理量标签向量类型
-  - `OFF`：退回到普通 `Vec3` 别名，接口行为不变
+  - `ON` (default): enables zero-overhead compile-time dimension-tagged vector types
+  - `OFF`: falls back to the plain `Vec3` alias without changing interface behavior
 - `-DLUNAR_ENABLE_SERIES_FALLBACK=ON|OFF`
-  - `ON`（默认）：未找到 BSP 时自动切换到内置 VSOP87A + ELPMPP02
-  - `OFF`：保持旧行为，必须提供可用 BSP
+  - `ON` (default): automatically switches to built-in VSOP87A + ELPMPP02 when BSP is unavailable
+  - `OFF`: keeps the old behavior and requires a valid BSP
 - `-DLUNAR_ENABLE_THREADS=ON|OFF`
-  - `ON`（默认）：启用内部多线程执行路径
-  - `OFF`：保持单线程，计算结果不变
+  - `ON` (default): enables internal multithreaded execution paths
+  - `OFF`: keeps single-threaded execution without changing results
 - `-DLUNAR_BUILD_TESTS=ON|OFF`
-  - `ON`（默认）：构建 gtest/ctest 测试目标
-  - `OFF`：不构建测试目标
+  - `ON` (default): builds gtest/ctest targets
+  - `OFF`: does not build test targets
 - `-DLUNAR_ENABLE_IPO=ON|OFF`
-  - `ON`（默认）：在 Release / RelWithDebInfo 下启用 IPO/LTO
+  - `ON` (default): enables IPO/LTO under Release / RelWithDebInfo
 - `-DLUNAR_ENABLE_FAST_MATH=ON|OFF`
-  - `OFF`（默认）：保持严格浮点语义
+  - `OFF` (default): keeps strict floating-point semantics
 - `-DLUNAR_VERSION=<text>`
-  - 默认：`test`
-  - `lunar --version`、`info` 和 C API 版本字符串都使用这个值
-- Release 构建应通过 `-DLUNAR_VERSION=<release tag>` 传入版本；未传时统一为 `test`
+  - Default: `test`
+  - `lunar --version`, `info`, and the C API version string all use this value
+- Release builds should pass the version through `-DLUNAR_VERSION=<release tag>`; if omitted, the unified version defaults to `test`
 
-### 2.7 运行测试
+### 2.7 Run Tests
 
 ```bash
 cmake -S . -B build
@@ -201,43 +206,43 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-若使用 Visual Studio 这类多配置生成器，可改为：
+If you use a multi-config generator such as Visual Studio, you can use:
 
 ```powershell
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-若关闭 `LUNAR_ENABLE_SERIES_FALLBACK`，可通过环境变量 `LUNAR_TEST_BSP` 指定测试所用 BSP。
+If `LUNAR_ENABLE_SERIES_FALLBACK` is disabled, you can specify the BSP used by tests through the environment variable `LUNAR_TEST_BSP`.
 
-## 3. 运行前准备：BSP 星历（可选但优先）
+## 3. Runtime Preparation: BSP Ephemerides (Optional but Preferred)
 
-### 3.1 下载列表
+### 3.1 Download List
 
 ```bash
 lunar download list
 ```
 
-当前内置 ID：
+Currently built-in IDs:
 
-- `de440`（约 114MB，1550-2650）
-- `de440s`（约 31MB，1850-2150）
-- `de441p1`（约 1.5GB，-13200-1969）
-- `de441p2`（约 1.5GB，1969-17191）
-- `de442`（约 114MB，1550-2650）
-- `de442s`（约 31MB，1850-2150）
+- `de440` (about 114MB, 1550-2650)
+- `de440s` (about 31MB, 1850-2150)
+- `de441p1` (about 1.5GB, -13200-1969)
+- `de441p2` (about 1.5GB, 1969-17191)
+- `de442` (about 114MB, 1550-2650)
+- `de442s` (about 31MB, 1850-2150)
 
-### 3.2 下载命令
+### 3.2 Download Command
 
 ```bash
 lunar download get de442s --dir .
 ```
 
-若当前网络环境无法直接访问 JPL NAIF 官方站，可改用镜像站 `https://naifproxy.lzray.cloud/` 手动下载对应 BSP 文件；镜像路径与官方目录结构保持一致，例如 `https://naifproxy.lzray.cloud/pub/naif/generic_kernels/spk/planets/de442s.bsp`。
+If your current network environment cannot directly reach the official JPL NAIF site, you can manually download the corresponding BSP file through the mirror `https://naifproxy.lzray.cloud/`. The mirror keeps the same directory structure as the official site, for example `https://naifproxy.lzray.cloud/pub/naif/generic_kernels/spk/planets/de442s.bsp`.
 
-## 4. CLI 入口与全局参数
+## 4. CLI Entry and Global Options
 
-### 4.1 主入口
+### 4.1 Main Entry
 
 ```bash
 lunar --help
@@ -245,14 +250,14 @@ lunar --version
 lunar <command> [args...]
 ```
 
-无参数启动会进入交互模式。
+Starting without arguments enters interactive mode.
 
-### 4.2 全局参数
+### 4.2 Global Options
 
 - `--eclipse-method modern|legacy`
 - `--lang zh|zht|en|ja|ko`
 
-`--lang` 也接受常见别名：
+`--lang` also accepts common aliases:
 
 - `zh-cn`/`cn`/`zh-hans`
 - `zh-tw`/`zh-hk`/`zh-hant`/`tw`/`hk`/`hant`
@@ -260,64 +265,64 @@ lunar <command> [args...]
 - `ja-jp`/`jp`
 - `ko-kr`/`kr`
 
-### 4.3 全局 BSP 覆盖参数
+### 4.3 Global BSP Override
 
-所有需要星历的命令都支持显式指定：
+All commands that require ephemerides support explicit override:
 
 - `--bsp <path>`
 - `--bsp=<path>`
 
-示例：
+Example:
 
 ```bash
 lunar day 2025-06-01 --bsp ./de442.bsp
 ```
 
-### 4.4 兼容语法
+### 4.4 Compatible Syntax
 
-以下可用，等价于 `months`：
+The following is also valid and is equivalent to `months`:
 
 ```bash
 lunar <bsp> <years> [months options...]
 ```
 
-## 5. 自动 BSP 选择机制
+## 5. Automatic BSP Selection
 
-`entry` 会在命令分发前调用 `prep_cmd_args()` 自动补 `bsp`。
+Before command dispatch, `entry` calls `prep_cmd_args()` to auto-fill `bsp`.
 
-说明：
+Notes:
 
-- 下文命令参考中写作 `[bsp]` 的命令，均表示该位置参数可以省略；省略时会走本节自动选择逻辑。
-- `zodiac` 与 `sky` 当前不走这套自动补齐逻辑，仍需显式传入位置参数 `<bsp>`。
+- Commands written as `[bsp]` in the reference below allow that positional argument to be omitted; when omitted, the automatic selection logic in this section is used
+- `zodiac` and `sky` do not currently use this auto-fill behavior and still require an explicit positional `<bsp>`
 
-### 5.1 哪些命令需要 BSP
+### 5.1 Which Commands Require BSP
 
 - `months calendar year event at convert day monthview next range search eclipse festival almanac info`
 
-不需要 BSP 的命令：
+Commands that do not require BSP:
 
 - `download config completion`
 
-### 5.2 候选来源顺序
+### 5.2 Candidate Source Order
 
-按以下顺序收集并去重（仅保留存在的文件）：
+Candidates are collected and deduplicated in the following order, keeping only files that actually exist:
 
 1. `def_bsp`
 2. `bsp_list`
-3. `bsp_dir` 目录下所有 `.bsp`
-4. 当前工作目录下所有 `.bsp`
+3. All `.bsp` files under `bsp_dir`
+4. All `.bsp` files under the current working directory
 
-### 5.3 选择策略
+### 5.3 Selection Strategy
 
-- 若命令可推断时间区间，优先选择“完整覆盖该区间”的 BSP。
-- 若无完整覆盖，选择与区间重叠最多的 BSP。
-- 若无法推断区间，使用候选列表第一个。
-- 若没有可用候选且 `LUNAR_ENABLE_SERIES_FALLBACK=ON`，自动切换到内置 VSOP87A + ELPMPP02。
-- 若没有可用候选且 `LUNAR_ENABLE_SERIES_FALLBACK=OFF`，抛出错误并提示使用 `--bsp` 或 `lunar config set def_bsp`。
+- If the command implies a time range, prefer a BSP that fully covers that range
+- If none fully covers the range, choose the BSP with the largest overlap
+- If no range can be inferred, use the first item in the candidate list
+- If no candidate is available and `LUNAR_ENABLE_SERIES_FALLBACK=ON`, automatically switch to built-in VSOP87A + ELPMPP02
+- If no candidate is available and `LUNAR_ENABLE_SERIES_FALLBACK=OFF`, throw an error and suggest `--bsp` or `lunar config set def_bsp`
 
-## 6. 配置文件 `lun_cfg.txt`
+## 6. Configuration File `lun_cfg.txt`
 
-### 6.1 支持键
+### 6.1 Supported Keys
 
 - `bsp_dir`
 - `def_bsp`
@@ -333,27 +338,27 @@ lunar <bsp> <years> [months options...]
 - `hli_day_boundary`
 - `def_prety`
 
-### 6.2 命令
+### 6.2 Commands
 
 ```bash
 lunar config show [--format json|txt] [--out <path>] [--pretty 0|1] [--quiet]
 lunar config set <key> <value>
 ```
 
-### 6.3 细节
+### 6.3 Details
 
-- `bsp_list` 支持逗号或分号分隔。
-- `def_bsp` 设置后若不在 `bsp_list` 中，会自动追加。
-- `default_lang` 仅允许 `zh|zht|en|ja|ko`。
-- `default_lunar_day_tz` 用于覆盖农历判日日界时区；留空时会按语言默认值自动推断（当前 `ja/ko -> +09:00`，其余为 `+08:00`）。
-- `def_fmt` 允许 `txt|json|csv|jsonl|ics`。
-- `hli_trad`、`hli_year_boundary`、`hli_month_boundary`、`hli_leap_month_mode`、`hli_day_boundary` 会作为 `day` / `almanac` 的默认黄历规则。
-- 上述 `hli_*` 键支持写回稳定英文 key；除 `hli_trad` 外，也支持用 `default` 恢复内建默认。
-- `def_prety` 用 `0|1`。
+- `bsp_list` supports comma-separated or semicolon-separated values
+- If `def_bsp` is set and is not already in `bsp_list`, it is automatically appended
+- `default_lang` only allows `zh|zht|en|ja|ko`
+- `default_lunar_day_tz` overrides the timezone used for lunar day boundaries; if empty, it is inferred from the language default (`ja/ko -> +09:00`, others `+08:00`)
+- `def_fmt` allows `txt|json|csv|jsonl|ics`
+- `hli_trad`, `hli_year_boundary`, `hli_month_boundary`, `hli_leap_month_mode`, and `hli_day_boundary` act as the default almanac rules for `day` / `almanac`
+- The `hli_*` keys above support writing back stable English keys; except for `hli_trad`, they also support `default` to restore built-in defaults
+- `def_prety` uses `0|1`
 
-## 7. 时间格式与时区规则
+## 7. Time Format and Timezone Rules
 
-### 7.1 `parse_iso` 支持
+### 7.1 `parse_iso` Support
 
 - `YYYY-MM-DD`
 - `YYYY-MM-DDZ`
@@ -361,27 +366,27 @@ lunar config set <key> <value>
 - `YYYY-MM-DDTHH:MM`
 - `YYYY-MM-DDTHH:MM:SS`
 - `YYYY-MM-DDTHH:MM:SS.sss`
-- 以上均可带 `Z` 或 `±HH:MM`
+- All of the above may also include `Z` or `±HH:MM`
 
-如果输入不带时区，使用命令参数中的解析时区（如 `--input-tz`）或配置中的 `default_tz`。
+If the input has no timezone suffix, the parser uses the parsing timezone from the command arguments (for example `--input-tz`) or `default_tz` from the config.
 
-### 7.2 `--tz` 与农历判日
+### 7.2 `--tz` and Lunar Day Boundaries
 
-- 多数命令里，`--tz` 只影响显示时区；`zodiac --year` 例外，它同时决定公历年裁剪窗口。
-- 农历判日优先使用命令行 `--lunar-day-tz`；未显式提供时，读取配置 `default_lunar_day_tz`，再缺省时按语言自动推断（当前 `ja/ko -> +09:00`，其余为 `+08:00`）。
+- In most commands, `--tz` only affects the display timezone; `zodiac --year` is an exception and also determines the civil-year clipping window
+- Lunar day boundaries first use the command-line `--lunar-day-tz`; if not explicitly provided, they read `default_lunar_day_tz` from config, and if that is still absent, infer a language-based default (`ja/ko -> +09:00`, others `+08:00`)
 
-## 8. 输出格式
+## 8. Output Formats
 
-命令按各自支持范围可输出：
+Commands may output, depending on their supported scope:
 
 - `txt`
 - `json`
 - `jsonl`
 - `csv`
 - `ics`
-- `geojson`（食相关）
+- `geojson` (eclipse-related)
 
-多数 JSON 输出包含 `meta`，核心字段通常包括：
+Most JSON outputs contain `meta`, and the core fields usually include:
 
 - `tool`
 - `version`
@@ -390,11 +395,11 @@ lunar config set <key> <value>
 - `tz_display`
 - `notes`
 
-## 9. 命令参考
+## 9. Command Reference
 
-说明：
+Notes:
 
-- 本节中写作 `[bsp]` 的命令可省略该位置参数；显式给出时优先使用显式值。
+- Commands written as `[bsp]` in this section may omit that positional argument; if explicitly provided, the explicit value takes precedence
 
 ### 9.1 months
 
@@ -406,12 +411,12 @@ lunar months [bsp] <years>
   [--output <json>] [--output-txt <txt>]   # deprecated
 ```
 
-说明：
+Notes:
 
-- `<years>` 支持：`2025`、`2024-2026`、`2024,2026,2030-2032`。
-- `--include-eclipses 1` 时，`--format csv` 不可直接使用。
-- `--output/--output-txt` 为旧接口；不能与 `--out` 同时使用。
-- 多年计算时若非 `--quiet`，stderr 仅输出年份进度。
+- `<years>` supports `2025`, `2024-2026`, `2024,2026,2030-2032`
+- When `--include-eclipses 1` is enabled, `--format csv` cannot be used directly
+- `--output/--output-txt` are legacy interfaces and cannot be used together with `--out`
+- When computing multiple years and `--quiet` is not set, stderr only outputs year progress
 
 ### 9.2 calendar
 
@@ -421,11 +426,11 @@ lunar calendar [bsp] [<years>]
   [--include-months 0|1] [--include-eclipses 0|1] [--pretty 0|1] [--quiet]
 ```
 
-说明：
+Notes:
 
-- 省略 `<years>` 时默认使用 `2025`。
-- `ics` 仅导出节气和月相事件。
-- 多年计算时若非 `--quiet`，stderr 仅输出年份进度。
+- If `<years>` is omitted, the default is `2025`
+- `ics` only exports solar-term and lunar-phase events
+- When computing multiple years and `--quiet` is not set, stderr only outputs year progress
 
 ### 9.3 year
 
@@ -443,7 +448,7 @@ lunar event [bsp] solar-term <code> <year>
 lunar event [bsp] lunar-phase <new_moon|fst_qtr|full_moon|lst_qtr> --near <YYYY-MM-DD>
   [--format json|txt|ics] [--out <path>] [--tz ...] [--pretty 0|1] [--quiet] [--eclipse 0|1]
 
-# 也支持直接转发到 eclipse 命令：
+# You can also forward directly to the eclipse command:
 lunar event [bsp] lunar-eclipse --near <YYYY-MM-DD>
   [--stage any|umb|total] [--sample-min <minutes>]
   [--point-lat <deg> --point-lon <deg> [--point-height <m>]] [--point-refine 0|1]
@@ -458,12 +463,12 @@ lunar event [bsp] solar-eclipse --near <YYYY-MM-DD>
   [--format json|txt|geojson] [--out <path>] [--tz ...] [--pretty 0|1] [--quiet]
 ```
 
-说明：
+Notes:
 
-- `solar-term` 的 `code` 使用 `J1..J12`、`Z1..Z12`。
-- `lunar-phase` 必须提供 `--near`。
-- `--eclipse 1` 用于在满月事件输出中附加月食细节。
-- `lunar-eclipse` / `solar-eclipse` 分类会直接转发到 `eclipse` 命令，因此参数与校验规则和 `eclipse` 保持一致。
+- `solar-term` uses codes `J1..J12` and `Z1..Z12`
+- `lunar-phase` requires `--near`
+- `--eclipse 1` appends lunar-eclipse detail fields to full-moon event output
+- The `lunar-eclipse` / `solar-eclipse` categories are forwarded directly to `eclipse`, so their parameters and validation rules stay consistent with `eclipse`
 
 ### 9.5 download
 
@@ -472,7 +477,7 @@ lunar download list
 lunar download get <id> [--dir <path>] [--quiet]
 ```
 
-若官方 NAIF 站点不可达，可改用镜像站 `https://naifproxy.lzray.cloud/` 手动获取对应 BSP 文件后再通过 `--bsp`、配置文件或工作目录进行加载。
+If the official NAIF site is unavailable, you can manually obtain the BSP file from the mirror `https://naifproxy.lzray.cloud/` and then load it through `--bsp`, the config file, or the working directory.
 
 ### 9.6 at
 
@@ -493,14 +498,14 @@ lunar at [bsp] --file <path>
   [--jobs N] [--meta-once 0|1]
 ```
 
-说明：
+Notes:
 
-- 批模式：`--stdin` 与 `--file` 互斥。
-- 批模式下若同时给位置参数 `<time>`，该位置参数会被忽略。
-- 单次模式下 `--format jsonl` 会自动回退为 `json`。
-- `--jobs` 已接受，但当前执行器仍按顺序运行。
-- `--lunar-day-tz` 控制农历日期映射所用的民用日边界；黄历规则参数与 `day` / `almanac` 共用同一套解析。
-- 默认 `tz/format/pretty` 来自 `lun_cfg.txt`（`default_tz/def_fmt/def_prety`）。
+- In batch mode, `--stdin` and `--file` are mutually exclusive
+- In batch mode, if a positional `<time>` is provided at the same time, that positional argument is ignored
+- In single-run mode, `--format jsonl` automatically falls back to `json`
+- `--jobs` is accepted, but the current executor still runs sequentially
+- `--lunar-day-tz` controls the civil-day boundary used for lunar date mapping; the almanac rule parameters share the same parser as `day` / `almanac`
+- Default `tz/format/pretty` values come from `lun_cfg.txt` (`default_tz/def_fmt/def_prety`)
 
 ### 9.7 convert
 
@@ -527,13 +532,13 @@ lunar convert [bsp] --file <path>
   [--jobs N] [--meta-once 0|1]
 ```
 
-说明：
+Notes:
 
-- `--from-lunar` 模式下不能再传位置参数 `<dt_or_tm>`。
-- `--stdin` 与 `--file` 互斥。
-- 单次模式下 `--format jsonl` 会自动回退为 `json`。
-- `--lunar-day-tz` 同时影响公历转农历与农历转公历时所采用的民用日边界。
-- 默认 `tz/format/pretty` 来自配置。
+- In `--from-lunar` mode, you cannot also pass the positional `<dt_or_tm>`
+- `--stdin` and `--file` are mutually exclusive
+- In single-run mode, `--format jsonl` automatically falls back to `json`
+- `--lunar-day-tz` affects the civil-day boundary used both for Gregorian-to-lunar and lunar-to-Gregorian conversion
+- Default `tz/format/pretty` values come from config
 
 ### 9.8 day
 
@@ -551,14 +556,14 @@ lunar day [bsp] <YYYY-MM-DD>
   [--astro-lat deg --astro-lon deg [--astro-height m]]
 ```
 
-说明：
+Notes:
 
-- `--astro-lat` 与 `--astro-lon` 必须同时出现。
-- `--astro-height` 只能在已给经纬度时使用。
-- 逻辑实现走 `lunar::core::compute_day` + `lunar::core::format_day_output`。
-- 默认 `tz/format/pretty` 来自配置。
-- 还支持黄历规则补充参数：`--lunar-day-tz`、`--trad`、`--year-boundary`、`--month-boundary`、`--leap-month-mode`、`--day-boundary`。
-- `--trad/--year-boundary/--month-boundary/--leap-month-mode/--day-boundary` 也接受常见 ASCII 别名。
+- `--astro-lat` and `--astro-lon` must appear together
+- `--astro-height` can only be used when latitude and longitude are already provided
+- The implementation path is `lunar::core::compute_day` + `lunar::core::format_day_output`
+- Default `tz/format/pretty` values come from config
+- Additional almanac rule arguments are also supported: `--lunar-day-tz`, `--trad`, `--year-boundary`, `--month-boundary`, `--leap-month-mode`, `--day-boundary`
+- `--trad/--year-boundary/--month-boundary/--leap-month-mode/--day-boundary` also accept common ASCII aliases
 
 ### 9.9 monthview
 
@@ -570,11 +575,11 @@ lunar monthview [bsp] <YYYY-MM>
   [--astro-lat deg --astro-lon deg [--astro-height m]]
 ```
 
-说明：
+Notes:
 
-- `--astro-lat` 与 `--astro-lon` 必须同时出现。
-- 默认 `tz/format/pretty` 来自配置。
-- 还支持 `--lunar-day-tz ...`，用于显式覆盖农历判日日界时区。
+- `--astro-lat` and `--astro-lon` must appear together
+- Default `tz/format/pretty` values come from config
+- `--lunar-day-tz ...` is also supported to explicitly override the lunar day-boundary timezone
 
 ### 9.10 next
 
@@ -585,11 +590,11 @@ lunar next [bsp] --from <time> --count N
   [--out ...] [--pretty 0|1] [--quiet] [--eclipse 0|1]
 ```
 
-说明：
+Notes:
 
-- `--from` 必填，`--count >= 1`。
-- 默认 `kinds` 为四类并集；当前实现的基础事件池来自节气与月相，`--eclipse 1` 可为满月行追加月食细节字段。
-- 默认 `tz/format/pretty` 来自配置。
+- `--from` is required, and `--count >= 1`
+- By default, `kinds` is the union of the four categories; the current base event pool comes from solar terms and lunar phases, and `--eclipse 1` appends lunar-eclipse detail fields for full-moon rows
+- Default `tz/format/pretty` values come from config
 
 ### 9.11 range
 
@@ -600,11 +605,11 @@ lunar range [bsp] --from <time> --to <time>
   [--out ...] [--pretty 0|1] [--quiet] [--eclipse 0|1]
 ```
 
-说明：
+Notes:
 
-- `--from`、`--to` 必填，且 `--to >= --from`。
-- `--kinds` 包含食类时，会加载对应食事件。
-- 默认 `tz/format/pretty` 来自配置。
+- `--from` and `--to` are required, and `--to >= --from`
+- If `--kinds` includes eclipse categories, the corresponding eclipse events are loaded
+- Default `tz/format/pretty` values come from config
 
 ### 9.12 search
 
@@ -614,11 +619,11 @@ lunar search [bsp] <query>
   [--format json|txt|csv|ics|jsonl] [--out ...] [--pretty 0|1] [--quiet] [--eclipse 0|1]
 ```
 
-说明：
+Notes:
 
-- 当前仅支持以 `next ...` 开头的 query。
-- 内部会把 query 解析成受限的事件检索条件，而不是把整串文本原样转发给 `next`。
-- 默认值：`from=当前 UTC 时刻`、`count=1`；`tz/format/pretty` 来自配置。
+- Currently only queries beginning with `next ...` are supported
+- Internally the query is parsed into restricted event-search conditions instead of forwarding the full text directly to `next`
+- Defaults are `from=current UTC time` and `count=1`; `tz/format/pretty` come from config
 
 ### 9.13 eclipse
 
@@ -634,16 +639,16 @@ lunar eclipse [bsp] --near <YYYY-MM-DD> [--kind lunar|solar]
   [--tz ...] [--format json|txt|geojson] [--out ...] [--pretty 0|1] [--quiet]
 ```
 
-说明：
+Notes:
 
-- `--near` 必填。
-- `--kind` 默认 `lunar`。
-- `--point-lat` 与 `--point-lon` 必须同时出现。
-- `--point-height`、`--point-refine` 只能和 `--point-lat`、`--point-lon` 一起使用。
-- `--global` 是 `--global-vis` 的兼容别名。
-- `--global-format`、`--grid-lat-step`、`--grid-lon-step` 需要 `--global-vis 1`，或直接使用 `--format geojson`。
-- `--format geojson` 会强制开启全局可见性计算。
-- 默认 `tz/format/pretty` 来自配置（`def_fmt` 非 `json|txt|geojson` 时回退到 `json`）。
+- `--near` is required
+- `--kind` defaults to `lunar`
+- `--point-lat` and `--point-lon` must appear together
+- `--point-height` and `--point-refine` can only be used together with `--point-lat` and `--point-lon`
+- `--global` is a compatibility alias of `--global-vis`
+- `--global-format`, `--grid-lat-step`, and `--grid-lon-step` require `--global-vis 1`, or using `--format geojson` directly
+- `--format geojson` forces global-visibility computation on
+- Default `tz/format/pretty` values come from config; when `def_fmt` is not `json|txt|geojson`, it falls back to `json`
 
 ### 9.14 festival
 
@@ -653,11 +658,11 @@ lunar festival [bsp] <year>
   [--format json|txt|csv] [--out ...] [--pretty 0|1] [--quiet]
 ```
 
-默认 `tz/format/pretty` 来自配置。
+Default `tz/format/pretty` values come from config.
 
-补充：
+Additional notes:
 
-- 还支持 `--lunar-day-tz ...`，用于显式覆盖农历判日日界时区。
+- `--lunar-day-tz ...` is also supported to explicitly override the lunar day-boundary timezone
 
 ### 9.15 almanac
 
@@ -672,12 +677,12 @@ lunar almanac [bsp] <YYYY-MM-DD>
   [--day-boundary hour23|hour0]
 ```
 
-默认 `tz/format/pretty` 来自配置。
+Default `tz/format/pretty` values come from config.
 
-补充：
+Additional notes:
 
-- 还支持 `--lunar-day-tz`、`--trad`、`--year-boundary`、`--month-boundary`、`--leap-month-mode`、`--day-boundary`。
-- `--trad xieji`、`--trad old_almanac` 等常见别名都可用；各类 boundary / mode 参数也接受稳定英文 key 与常见 ASCII 别名。
+- `--lunar-day-tz`, `--trad`, `--year-boundary`, `--month-boundary`, `--leap-month-mode`, and `--day-boundary` are also supported
+- Common aliases such as `--trad xieji` and `--trad old_almanac` are available; the various boundary / mode parameters also accept stable English keys and common ASCII aliases
 
 ### 9.16 info
 
@@ -685,10 +690,10 @@ lunar almanac [bsp] <YYYY-MM-DD>
 lunar info [bsp] [--format json|txt] [--out ...] [--pretty 0|1] [--quiet]
 ```
 
-说明：
+Notes:
 
-- 默认格式固定为 `txt`（不读取 `def_fmt`）。
-- 输出包含文件存在性、大小、SPK 覆盖区间等信息。
+- The default format is always `txt` and does not read `def_fmt`
+- Output includes file existence, size, SPK coverage interval, and related information
 
 ### 9.17 config
 
@@ -703,7 +708,7 @@ lunar config set <key> <value>
 lunar completion bash|zsh|fish|powershell
 ```
 
-脚本输出到 stdout，可自行重定向到文件。
+The script is written to stdout and can be redirected to a file.
 
 ### 9.19 zodiac
 
@@ -717,14 +722,14 @@ lunar zodiac <bsp> --year <year>
   [--format json|txt|csv] [--out ...] [--pretty 0|1] [--quiet]
 ```
 
-说明：
+Notes:
 
-- 这两个命令当前仍通过位置参数 `<bsp>` 指定星历，不走前文 `day/range/...` 那套自动补 BSP 语义。
-- `--time` 与 `--year` 二选一。
-- `--input-tz` 仅在 `--time` 模式下有效。
-- `--time` 模式输出当前时刻所属太阳星座、黄经区间边界、已过时长与剩余时长。
-- `--year` 模式输出该显示时区下公历年的 12 段星座区间摘要，以及每段在该年窗口内的截取时长。
-- 太阳星座按地心太阳视黄经计算，已含光行时修正。
+- These two commands still specify the ephemeris through the positional `<bsp>` argument and do not use the earlier auto-fill semantics used by `day/range/...`
+- Choose one of `--time` or `--year`
+- `--input-tz` is only valid in `--time` mode
+- `--time` mode outputs the current solar zodiac, ecliptic boundary interval, elapsed time, and remaining time at the given instant
+- `--year` mode outputs the 12 zodiac intervals clipped to the civil-year window under the current display timezone, together with the clipped duration of each interval
+- Solar zodiac is calculated from the geocentric apparent solar ecliptic longitude, including light-time correction
 
 ### 9.20 sky
 
@@ -736,29 +741,29 @@ lunar sky <bsp> --time <time> --lat <deg> --lon <deg>
   [--format json|txt|csv] [--out ...] [--pretty 0|1] [--quiet]
 ```
 
-说明：
+Notes:
 
-- 当前仍通过位置参数 `<bsp>` 指定星历。
-- 输出为指定时刻、指定观测点的 topocentric apparent position。
-- `--lat` 与 `--lon` 必须同时提供。
-- `--mode pick` 时可用 `--pick` 指定输出子集，例如 `sun,moon,Spica`。
-- 太阳系目标会排在星表恒星之前输出。
+- This command still specifies the ephemeris through the positional `<bsp>` argument
+- Output is the topocentric apparent position at the given time and observer site
+- `--lat` and `--lon` must be provided together
+- In `--mode pick`, you can use `--pick` to specify a subset such as `sun,moon,Spica`
+- Solar-system targets are output before catalog stars
 
-## 10. 交互模式
+## 10. Interactive Mode
 
-### 10.1 启动
+### 10.1 Start
 
-直接运行 `lunar`（无参数）。
+Run `lunar` directly with no arguments.
 
-### 10.2 启动流程
+### 10.2 Startup Flow
 
-- 读取 `lun_cfg.txt`
-- 若 `def_bsp` 存在，会提示是否继续使用
-- 可指定额外目录扫描 `.bsp`
-- 如未找到可用星历，可进入下载界面
-- 若启用 `LUNAR_ENABLE_SERIES_FALLBACK`，交互模式也可改用 `@series`
+- Read `lun_cfg.txt`
+- If `def_bsp` exists, prompt whether to continue using it
+- Optionally specify an extra directory to scan for `.bsp`
+- If no usable ephemeris is found, enter the download screen
+- If `LUNAR_ENABLE_SERIES_FALLBACK` is enabled, interactive mode can also switch to `@series`
 
-### 10.3 菜单
+### 10.3 Menu
 
 - `1` months
 - `2` calendar
@@ -777,40 +782,40 @@ lunar sky <bsp> --time <time> --lat <deg> --lon <deg>
 - `15` config
 - `16` completion
 - `17` sky
-- `d` 切换/下载 BSP
-- `l` 切换语言
-- `h` 帮助
-- `q` 退出
+- `d` switch / download BSP
+- `l` switch language
+- `h` help
+- `q` quit
 
-## 11. i18n（中简/中繁/英/日/韩）
+## 11. i18n (Simplified Chinese / Traditional Chinese / English / Japanese / Korean)
 
-### 11.1 语言来源
+### 11.1 Language Sources
 
-- 命令行：`--lang zh|zht|en|ja|ko`
-- 配置默认：`default_lang`
-- 交互模式：主菜单 `l` 可即时切换并写回 `default_lang`
+- Command line: `--lang zh|zht|en|ja|ko`
+- Config default: `default_lang`
+- Interactive mode: `l` in the main menu can switch immediately and write back to `default_lang`
 
-优先级：命令行高于配置默认。
+Priority: command line overrides config default.
 
-### 11.2 覆盖范围
+### 11.2 Coverage
 
-- 交互界面文案（`src/i18n/catalog_interact.cpp`）
-- 事件名称翻译（`src/i18n/catalog_event.cpp`）
-- 星体/天象相关文案（`src/i18n/catalog_astro.cpp`）
-- 黄历字段翻译（`src/i18n/catalog_almanac.cpp`）
-- 部分 CLI 提示与注释
+- Interactive UI text (`src/i18n/catalog_interact.cpp`)
+- Event name translation (`src/i18n/catalog_event.cpp`)
+- Body / astronomy-related text (`src/i18n/catalog_astro.cpp`)
+- Almanac field translation (`src/i18n/catalog_almanac.cpp`)
+- Some CLI prompts and notes
 
-结构化 JSON 的键名保持稳定，不随语言改变。
+Structured JSON key names remain stable and do not change with language.
 
-## 12. C++ API（Library-First）
+## 12. C++ API (Library-First)
 
-### 12.1 头文件
+### 12.1 Headers
 
 - `include/lunar/core.hpp`
 - `include/lunar/models.hpp`
 - `include/lunar/day_formatter.hpp`
 
-### 12.2 典型调用
+### 12.2 Typical Call
 
 ```cpp
 #include "lunar/core.hpp"
@@ -826,13 +831,13 @@ DayResult result = lunar::core::compute_day(opt);
 lunar::core::format_day_output(std::cout, result, "json", true);
 ```
 
-`AtData`、`DayResult` 已公开在 `include/lunar/models.hpp`。
+`AtData` and `DayResult` are publicly declared in `include/lunar/models.hpp`.
 
 ## 13. C API
 
-头文件：`include/lunar/c_api.h`
+Header: `include/lunar/c_api.h`
 
-### 13.1 通用接口
+### 13.1 Common Interfaces
 
 - `lunar_tool_ver`
 - `lunar_last_error`
@@ -840,418 +845,418 @@ lunar::core::format_day_output(std::cout, result, "json", true);
 - `lunar_run`
 - `lunar_root_batch`
 
-### 13.2 核心计算接口
+### 13.2 Core Computation Interfaces
 
 - `lunar_calc_eot`
 - `lunar_core_day`
 
-### 13.3 命令包装接口
+### 13.3 Command Wrapper Interfaces
 
-已提供包装：
+Currently wrapped:
 
 - `month cal year event dl at conv zodiac day mview next range search fest alm info cfg comp`
 
-说明：`eclipse` 当前未单独导出 `lunar_cmd_eclipse`，可通过 `lunar_run` 调用。
+Note: `eclipse` is not currently exported as a standalone `lunar_cmd_eclipse`; use `lunar_run` instead.
 
-补充：
+Additional notes:
 
-- 现已额外导出 `zodiac` 包装：`lunar_cmd_zodiac`、`lunar_use_zodiac`。
-- `sky` 目前仍建议通过 `lunar_run` 调用。
+- Extra `zodiac` wrappers are now exported as `lunar_cmd_zodiac` and `lunar_use_zodiac`
+- `sky` is still recommended to be called through `lunar_run`
 
-### 13.4 返回码
+### 13.4 Return Codes
 
-- `0`：成功
-- `2`：参数错误（`std::invalid_argument`）
-- `1`：其他错误
+- `0`: success
+- `2`: argument error (`std::invalid_argument`)
+- `1`: other errors
 
-## 14. 仓库结构
+## 14. Repository Layout
 
 ```text
-include/lunar/          公共头文件（CLI/C++ API/C API）
-src/cli/                months/calendar/year/event/download 相关实现
-src/query/              at/convert/day/monthview/next/... 相关实现
-src/emscripten/         wasm 预加载脚本与 Worker 包装
-src/i18n/               多语言目录与词条
-src/interact.cpp        交互模式
-src/global_context.cpp  全局配置与自动 BSP 选择
-src/entry.cpp           CLI 顶层参数解析与命令分发
-src/cli.cpp             cli 模块聚合编译入口
-src/query.cpp           query 模块聚合编译入口
-src/c_api.cpp           C API 导出实现
-tests/                  GoogleTest / CTest 用例
-vsop87a/                行星级数回退模型
-elpmpp02/               月球级数回退模型
-lun_cfg.txt             运行时配置文件
+include/lunar/          Public headers (CLI/C++ API/C API)
+src/cli/                months/calendar/year/event/download implementation
+src/query/              at/convert/day/monthview/next/... implementation
+src/emscripten/         wasm preload scripts and worker wrapper
+src/i18n/               i18n catalogs and entries
+src/interact.cpp        Interactive mode
+src/global_context.cpp  Global config and automatic BSP selection
+src/entry.cpp           Top-level CLI argument parsing and command dispatch
+src/cli.cpp             Aggregated build entry for the cli module
+src/query.cpp           Aggregated build entry for the query module
+src/c_api.cpp           C API export implementation
+tests/                  GoogleTest / CTest cases
+vsop87a/                Planetary series fallback model
+elpmpp02/               Lunar series fallback model
+lun_cfg.txt             Runtime config file
 ```
 
-## 15. 致谢
+## 15. Acknowledgements
 
-- 感谢 [@ytliu0](https://github.com/ytliu0) 在中国历法与天文计算相关资料上的长期贡献。
-- 感谢 JPL NAIF 公开发布 DE 系列 BSP 星历文件，为本项目提供高质量基础数据。
-- 感谢 Hipparcos（HIP）星表与相关公开整理数据，为项目中的恒星条目与编号体系提供参考基础。
+- Thanks to [@ytliu0](https://github.com/ytliu0) for long-term contributions to Chinese calendar and astronomical calculation materials
+- Thanks to JPL NAIF for publicly releasing the DE BSP ephemerides that provide high-quality base data for this project
+- Thanks to the Hipparcos (HIP) catalog and related public data compilations, which serve as the reference basis for the star entries and numbering system used by this project
 
-## 16. 快速示例
+## 16. Quick Examples
 
 ```bash
-# 设置默认星历和语言
+# Set the default ephemeris and language
 lunar config set def_bsp ./de442.bsp
 lunar config set default_lang zh
 
-# 新语法：不再手动输入 <bsp>
+# New syntax: no need to enter <bsp> manually
 lunar day 2025-06-01 --format json
 
-# 覆盖本次使用的星历
+# Override the ephemeris for this run
 lunar day 2025-06-01 --bsp ./de440s.bsp --format txt
 
-# 区间事件
+# Range events
 lunar range --from 2025-01-01 --to 2025-12-31 --format json --kinds solar_term,lunar_phase
 
-# 太阳星座
+# Solar zodiac
 lunar zodiac ./de442.bsp --time 2025-03-20T18:01:00+08:00 --format json
 
-# 指定地点观星
+# Sky positions at a specific site
 lunar sky ./de442.bsp --time 2025-06-01T20:00 --input-tz +08:00 --lat 31.23 --lon 121.47 --mode pick --pick sun,moon,Spica
 
-# 食计算
+# Eclipse calculation
 lunar eclipse --near 2025-09-07 --kind lunar --global-vis 1 --global-format geojson --format json
 ```
 
-## 17. 输出字段代号说明
+## 17. Output Field Codes
 
-说明：
+Notes:
 
-- 本节专门解释结构化输出里的缩写、代号、以及 `*_code` / `*_key` / `*_codes` / `*_mask_hex` 字段。
-- `year`、`month`、`name`、`data`、`events`、`input` 这类语义直白字段不重复展开。
-- 字段名以当前实现 `src/query/core/base.cpp`、`src/query/day_output.cpp`、`src/cli/output.cpp`、`src/query/cmd_day_mview.cpp`、`src/query/cmd_eclipse.cpp` 为准。
+- This section specifically explains abbreviations, codes, and fields such as `*_code`, `*_key`, `*_codes`, and `*_mask_hex` in structured output
+- Obvious semantic fields such as `year`, `month`, `name`, `data`, `events`, and `input` are not repeated here
+- Field names follow the current implementation in `src/query/core/base.cpp`, `src/query/day_output.cpp`, `src/cli/output.cpp`, `src/query/cmd_day_mview.cpp`, and `src/query/cmd_eclipse.cpp`
 
-### 17.1 通用时间与采样字段
+### 17.1 Common Time and Sampling Fields
 
-| 字段 | 主要出现处 | 说明 |
+| Field | Main locations | Description |
 | --- | --- | --- |
-| `jd_utc` | 通用 | UTC 儒略日。 |
-| `jd_tdb` | 通用 | TDB 儒略日。 |
-| `utc_iso` | 通用 | UTC ISO 8601 时间。 |
-| `loc_iso` | 通用 | 按当前显示时区转换后的 ISO 8601 时间。 |
-| `tz_display` | `meta` | 当前输出采用的显示时区。 |
-| `input_tz` | `at.input` | 原始输入字符串的解析时区。 |
-| `lunar_day_tz` | `at/day/almanac/monthview` | 农历判日时区。 |
-| `smp_time` | `day.input` | `day` 命令在该日内取样的时刻，默认 `12:00:00`。 |
-| `smp_jdutc` | `day.input` | `day` 取样点的 UTC 儒略日。 |
-| `smp_uiso` | `day.data` | `day` 取样点的 UTC ISO 时间。 |
-| `smp_liso` | `day.data` | `day` 取样点在显示时区下的 ISO 时间。 |
-| `st_jdutc` / `ed_jdutc` | `months` | 农历月起止时刻的 UTC 儒略日。 |
-| `st_utc` / `ed_utc` | `months` | 农历月起止时刻的 UTC ISO 时间。 |
-| `st_loc` / `ed_loc` | `months` | 农历月起止时刻在显示时区下的 ISO 时间。 |
-| `jd_start_utc` / `jd_end_utc` | `eclipse.global_vis` | 全局可见性采样窗口起止 UTC 儒略日。 |
-| `utc_start_iso` / `utc_end_iso` | `eclipse.global_vis` | 全局可见性采样窗口起止 UTC ISO 时间。 |
-| `loc_start_iso` / `loc_end_iso` | `eclipse.global_vis` | 全局可见性采样窗口起止本地 ISO 时间。 |
+| `jd_utc` | General | UTC Julian day. |
+| `jd_tdb` | General | TDB Julian day. |
+| `utc_iso` | General | UTC ISO 8601 time. |
+| `loc_iso` | General | ISO 8601 time converted into the current display timezone. |
+| `tz_display` | `meta` | Display timezone used by the current output. |
+| `input_tz` | `at.input` | Parsing timezone applied to the original input string. |
+| `lunar_day_tz` | `at/day/almanac/monthview` | Timezone used for lunar day boundaries. |
+| `smp_time` | `day.input` | Sampling time used by `day` within that date, default `12:00:00`. |
+| `smp_jdutc` | `day.input` | UTC Julian day of the `day` sample point. |
+| `smp_uiso` | `day.data` | UTC ISO time of the `day` sample point. |
+| `smp_liso` | `day.data` | ISO time of the `day` sample point under the display timezone. |
+| `st_jdutc` / `ed_jdutc` | `months` | UTC Julian day of the lunar month start / end. |
+| `st_utc` / `ed_utc` | `months` | UTC ISO time of the lunar month start / end. |
+| `st_loc` / `ed_loc` | `months` | Local ISO time of the lunar month start / end under the display timezone. |
+| `jd_start_utc` / `jd_end_utc` | `eclipse.global_vis` | Start / end UTC Julian day of the global-visibility sampling window. |
+| `utc_start_iso` / `utc_end_iso` | `eclipse.global_vis` | Start / end UTC ISO time of the global-visibility sampling window. |
+| `loc_start_iso` / `loc_end_iso` | `eclipse.global_vis` | Start / end local ISO time of the global-visibility sampling window. |
 
-### 17.2 天文几何与月相字段
+### 17.2 Astronomical Geometry and Lunar-Phase Fields
 
-| 字段 | 主要出现处 | 说明 |
+| Field | Main locations | Description |
 | --- | --- | --- |
-| `lam_s` / `sun_lam` | `at.data` | 太阳视黄经，单位弧度。 |
-| `lam_m` / `moon_lam` | `at.data` | 月亮视黄经，单位弧度。 |
-| `elong` / `elongation_rad` | `at.data` | 日月黄经差，单位弧度。 |
-| `elong_deg` / `elongation_deg` | `at.data` | 日月黄经差，单位度。 |
-| `ill_frac` | `at/day` | 月面照亮比例，范围一般为 `0..1`。 |
-| `ill_pct` | `at/day/monthview` | 月面照亮百分比。 |
-| `phase_name` | `at/day` | 月相名称。 |
-| `moon_dist_km` | `event/eclipse` | 地月距离，单位公里。 |
-| `moon_xg` | `at/day` | 月亮所在星官摘要对象。 |
-| `moon_xg_region` | `monthview` | 月亮所在星官区域名。 |
-| `moon_xg_star` | `monthview` | 用于匹配该星官的参考恒星名。 |
-| `sep_deg` / `moon_xg_sep_deg` | `moon_xg` / `monthview` | 月亮与参考恒星的角距离，单位度。 |
-| `eot` | `at.data` | 均时差对象。 |
-| `eot_lon_deg` | `at.input` | 计算均时差时采用的经度，单位度。 |
-| `lon_deg` | `day.input` / `huangli` / `eot` | 黄历与真太阳时计算所用经度，单位度。 |
-| `eot_minutes` | `eot` / `huangli` | 均时差，单位分钟。 |
-| `eot_seconds` | `eot` | 均时差，单位秒。 |
-| `true_solar_minutes` | `huangli` | 当地真太阳时折算后的分钟数。 |
-| `ra_deg` | `sky/eclipse` | 赤经，单位度。 |
-| `dec_deg` | `sky/eclipse` | 赤纬，单位度。 |
-| `az_deg` | `sky` | 方位角，单位度。 |
-| `alt_deg` | `sky` | 高度角，单位度。 |
-| `mag_v` | `sky` | 视星等（V 波段）。 |
-| `region` | `sky` | 星官或所属区域名称。 |
-| `is_solar_system` | `sky` | 是否为太阳系目标。 |
-| `is_juxing` | `sky` | 是否为聚星条目。 |
-| `sun_lam_deg` | `zodiac` | 太阳视黄经，单位度。 |
-| `sign_index` / `sign_order` | `zodiac` | 星座零基序号 / 从 1 开始的显示序号。 |
-| `sign_code` / `sign_name` | `zodiac` | 稳定星座代号 / 当前语言名称。 |
-| `term_code` | `zodiac` | 与该星座起点对应的节气代号。 |
-| `start_lambda_deg` / `end_lambda_deg` | `zodiac` | 该星座黄经区间边界，单位度。 |
-| `sign_offset_deg` | `zodiac.point` | 当前时刻在本星座区间内已推进的黄经偏移，单位度。 |
-| `elapsed_sec` / `remain_sec` / `span_sec` | `zodiac.point` | 已过 / 剩余 / 总时长，单位秒。 |
-| `interval_count` | `zodiac.year` | 年摘要中的区间数量，通常为 12。 |
-| `in_year_start_loc_iso` / `in_year_end_loc_iso` | `zodiac.year` | 该星座区间在当前显示时区对应公历年窗口内的本地起止时间。 |
-| `in_year_dur_sec` / `in_year_dur_days` | `zodiac.year` | 该区间落入该公历年窗口内的持续时间。 |
-| `clipped_start` / `clipped_end` | `zodiac.year` | 区间起点 / 终点是否被年窗口裁剪。 |
-| `sd_deg` | `eclipse` | 视半径角，单位度。 |
-| `ehp_deg` | `eclipse` | 赤道地平视差，单位度。 |
+| `lam_s` / `sun_lam` | `at.data` | Apparent solar ecliptic longitude in radians. |
+| `lam_m` / `moon_lam` | `at.data` | Apparent lunar ecliptic longitude in radians. |
+| `elong` / `elongation_rad` | `at.data` | Solar-lunar ecliptic longitude difference in radians. |
+| `elong_deg` / `elongation_deg` | `at.data` | Solar-lunar ecliptic longitude difference in degrees. |
+| `ill_frac` | `at/day` | Illuminated lunar fraction, usually within `0..1`. |
+| `ill_pct` | `at/day/monthview` | Illuminated lunar percentage. |
+| `phase_name` | `at/day` | Lunar phase name. |
+| `moon_dist_km` | `event/eclipse` | Earth-Moon distance in kilometers. |
+| `moon_xg` | `at/day` | Summary object for the moon's star-lodge position. |
+| `moon_xg_region` | `monthview` | Name of the moon's star-lodge region. |
+| `moon_xg_star` | `monthview` | Reference star name used to match that region. |
+| `sep_deg` / `moon_xg_sep_deg` | `moon_xg` / `monthview` | Angular separation between the moon and the reference star, in degrees. |
+| `eot` | `at.data` | Equation-of-time object. |
+| `eot_lon_deg` | `at.input` | Longitude in degrees used when calculating the equation of time. |
+| `lon_deg` | `day.input` / `huangli` / `eot` | Longitude in degrees used by almanac and true-solar-time calculations. |
+| `eot_minutes` | `eot` / `huangli` | Equation of time in minutes. |
+| `eot_seconds` | `eot` | Equation of time in seconds. |
+| `true_solar_minutes` | `huangli` | Local true solar time expressed as minutes. |
+| `ra_deg` | `sky/eclipse` | Right ascension in degrees. |
+| `dec_deg` | `sky/eclipse` | Declination in degrees. |
+| `az_deg` | `sky` | Azimuth in degrees. |
+| `alt_deg` | `sky` | Altitude in degrees. |
+| `mag_v` | `sky` | Apparent magnitude in the V band. |
+| `region` | `sky` | Star-lodge or region name. |
+| `is_solar_system` | `sky` | Whether the target belongs to the solar system. |
+| `is_juxing` | `sky` | Whether the entry is a grouped-star record. |
+| `sun_lam_deg` | `zodiac` | Apparent solar ecliptic longitude in degrees. |
+| `sign_index` / `sign_order` | `zodiac` | Zero-based sign index / one-based display order. |
+| `sign_code` / `sign_name` | `zodiac` | Stable sign code / localized sign name. |
+| `term_code` | `zodiac` | Solar-term code corresponding to the sign start. |
+| `start_lambda_deg` / `end_lambda_deg` | `zodiac` | Ecliptic longitude boundaries of that sign interval, in degrees. |
+| `sign_offset_deg` | `zodiac.point` | Ecliptic longitude offset already traversed inside the current sign interval, in degrees. |
+| `elapsed_sec` / `remain_sec` / `span_sec` | `zodiac.point` | Elapsed / remaining / total duration in seconds. |
+| `interval_count` | `zodiac.year` | Number of intervals in the year summary, usually 12. |
+| `in_year_start_loc_iso` / `in_year_end_loc_iso` | `zodiac.year` | Local start / end time of that sign interval clipped to the civil-year window of the current display timezone. |
+| `in_year_dur_sec` / `in_year_dur_days` | `zodiac.year` | Duration of that interval inside the current civil-year window. |
+| `clipped_start` / `clipped_end` | `zodiac.year` | Whether the interval start / end is clipped by the year window. |
+| `sd_deg` | `eclipse` | Apparent semidiameter in degrees. |
+| `ehp_deg` | `eclipse` | Equatorial horizontal parallax in degrees. |
 
-### 17.3 农历、干支、八字字段
+### 17.3 Lunar Date, Ganzhi, and Bazi Fields
 
-| 字段 | 主要出现处 | 说明 |
+| Field | Main locations | Description |
 | --- | --- | --- |
-| `lun_mno` | `lunar_date` | 农历月序号。 |
-| `lun_mlab` / `lun_m_label` | `lunar_date` / `monthview.csv` | 农历月文字标签，如正月、闰二月。 |
-| `lun_label` | `lunar_date` / `monthview` | 完整农历日期标签。 |
-| `is_leap` | 通用 | 是否闰月，布尔或 `0/1`。 |
-| `gz` | 黄历/干支 | 干支简称，字段中常见于 `m_gz`、`d_gz`、`h_gz`。 |
-| `y_lun_gz` / `year_lunar` | `day.csv` / `huangli` | 以农历新年换算的年干支。 |
-| `y_lchun_gz` / `year_lchun` | `day.csv` / `huangli` | 以立春换算的年干支。 |
-| `y_rule_gz` / `year_rule` | `day.csv` / `huangli` | 按当前规则集真正采用的年干支。 |
-| `m_gz` / `month` | `day.csv` / `huangli` | 月干支。 |
-| `d_gz` / `day` | `day.csv` / `huangli` | 日干支。 |
-| `h_gz` / `hour_clock` | `day.csv` / `huangli` | 按钟表时计算的时干支。 |
-| `h_true_gz` / `hour_true_solar` | `day.csv` / `huangli` | 按真太阳时计算的时干支。 |
-| `index` | `GzNode` 输出 | 60 甲子序号。 |
-| `stem` | `GzNode` 输出 | 天干序号。 |
-| `branch` | `GzNode` 输出 | 地支序号。 |
-| `bazi_clock` | `huangli` | 按钟表时生成的八字串。 |
-| `bazi_true` | `huangli` | 按真太阳时生成的八字串。 |
+| `lun_mno` | `lunar_date` | Lunar month number. |
+| `lun_mlab` / `lun_m_label` | `lunar_date` / `monthview.csv` | Lunar month label text, such as First Month or Leap Second Month. |
+| `lun_label` | `lunar_date` / `monthview` | Full lunar date label. |
+| `is_leap` | General | Whether the month is leap; boolean or `0/1`. |
+| `gz` | almanac/ganzhi | Short Ganzhi text, commonly seen in fields such as `m_gz`, `d_gz`, and `h_gz`. |
+| `y_lun_gz` / `year_lunar` | `day.csv` / `huangli` | Year Ganzhi computed using the lunar new year. |
+| `y_lchun_gz` / `year_lchun` | `day.csv` / `huangli` | Year Ganzhi computed using Li Chun. |
+| `y_rule_gz` / `year_rule` | `day.csv` / `huangli` | Year Ganzhi actually used by the current rule set. |
+| `m_gz` / `month` | `day.csv` / `huangli` | Month Ganzhi. |
+| `d_gz` / `day` | `day.csv` / `huangli` | Day Ganzhi. |
+| `h_gz` / `hour_clock` | `day.csv` / `huangli` | Hour Ganzhi based on clock time. |
+| `h_true_gz` / `hour_true_solar` | `day.csv` / `huangli` | Hour Ganzhi based on true solar time. |
+| `index` | `GzNode` output | Index within the 60-cycle Ganzhi sequence. |
+| `stem` | `GzNode` output | Heavenly stem index. |
+| `branch` | `GzNode` output | Earthly branch index. |
+| `bazi_clock` | `huangli` | Bazi string generated from clock time. |
+| `bazi_true` | `huangli` | Bazi string generated from true solar time. |
 
-### 17.4 黄历、神煞、宜忌字段
+### 17.4 Almanac, Deities, and Yi/Ji Fields
 
-| 字段 | 主要出现处 | 说明 |
+| Field | Main locations | Description |
 | --- | --- | --- |
-| `rule_profile` | `huangli` | 黄历规则档位名称。 |
-| `year_boundary` | `huangli` | 年柱换年规则。 |
-| `month_boundary` | `huangli` | 月柱换月规则。 |
-| `leap_month_mode` | `huangli` | 闰月在月柱中的处理方式。 |
-| `day_boundary` | `huangli` | 日柱换日规则。 |
-| `jianchu` | `huangli` | 建除十二值。 |
-| `duty_god` | `huangli` | 当日值神。 |
-| `duty_is_yellow` | `huangli` | 值神是否属于黄道。 |
-| `duty_tag` | `huangli` | 值神简类标签。 |
-| `clash` | `huangli` | 当日冲支说明。 |
-| `chong_sha` | `huangli` | 冲煞合并说明。 |
-| `zodiac_day` | `huangli` | 值日生肖。 |
-| `six_he` | `huangli` | 六合对应支。 |
-| `three_he` | `huangli` | 三合组。 |
-| `pengzu` | `huangli` | 彭祖百忌。 |
-| `nayin` | `huangli` | 纳音。 |
-| `wuxing_day` / `wx_day` | `huangli` / 结构体 | 当日五行。 |
-| `fetal_god` | `huangli` | 胎神方位说明。 |
-| `meridian` | `huangli` | 值日经络。 |
-| `lucky_dir` | `huangli` | 喜神方位。 |
-| `wealth_dir` | `huangli` | 财神方位。 |
-| `mascot_dir` | `huangli` | 福神方位。 |
-| `sun_noble_dir` | `huangli` | 阳贵神方位。 |
-| `moon_noble_dir` | `huangli` | 阴贵神方位。 |
-| `xiu28` | `huangli` | 二十八宿名。 |
-| `xiu28_mod28` | `huangli` | 按模 28 规则得到的宿序文字。 |
-| `xiu_star` | `huangli` | 二十八宿稳定标识。 |
-| `good_gods` | `huangli` | 吉神名称数组。 |
-| `bad_gods` | `huangli` | 凶煞名称数组。 |
-| `yi` | `huangli` | 宜事项数组。 |
-| `ji` | `huangli` | 忌事项数组。 |
-| `yi_ji_level` | `huangli` | 宜忌强弱级别。 |
-| `yi_ji_rule` | `huangli` | 宜忌判定规则说明。 |
-| `hour_jx` | `huangli` | 时辰吉凶数组。 |
-| `slot` | `hour_jx` | 时辰槽位，如子时、丑时。 |
-| `slot_index` | `hour_jx` | 时辰槽位序号。 |
-| `gz_index` | `hour_jx` | 该时辰干支的 60 甲子序号。 |
-| `luck` | `hour_jx` | 时辰吉凶文字。 |
-| `is_bad` | `hour_jx` | 该时辰是否凶。 |
+| `rule_profile` | `huangli` | Name of the almanac rule profile. |
+| `year_boundary` | `huangli` | Rule used to change the year pillar. |
+| `month_boundary` | `huangli` | Rule used to change the month pillar. |
+| `leap_month_mode` | `huangli` | How leap months are handled in the month pillar. |
+| `day_boundary` | `huangli` | Rule used to change the day pillar. |
+| `jianchu` | `huangli` | One of the twelve Jianchu values. |
+| `duty_god` | `huangli` | The day's duty deity. |
+| `duty_is_yellow` | `huangli` | Whether the duty deity belongs to the yellow path. |
+| `duty_tag` | `huangli` | Simplified category tag of the duty deity. |
+| `clash` | `huangli` | Clash description for the day branch. |
+| `chong_sha` | `huangli` | Combined clash-and-sha description. |
+| `zodiac_day` | `huangli` | Zodiac animal of the day. |
+| `six_he` | `huangli` | Corresponding branch in the six-harmony pair. |
+| `three_he` | `huangli` | Three-harmony group. |
+| `pengzu` | `huangli` | Pengzu taboo text. |
+| `nayin` | `huangli` | Nayin. |
+| `wuxing_day` / `wx_day` | `huangli` / struct | Five-element description for the day. |
+| `fetal_god` | `huangli` | Fetal deity direction description. |
+| `meridian` | `huangli` | Meridian assigned to the day. |
+| `lucky_dir` | `huangli` | Lucky deity direction. |
+| `wealth_dir` | `huangli` | Wealth deity direction. |
+| `mascot_dir` | `huangli` | Fortune deity direction. |
+| `sun_noble_dir` | `huangli` | Yang noble deity direction. |
+| `moon_noble_dir` | `huangli` | Yin noble deity direction. |
+| `xiu28` | `huangli` | Name of the 28 xiu. |
+| `xiu28_mod28` | `huangli` | Xiu-order text produced by the mod-28 rule. |
+| `xiu_star` | `huangli` | Stable identifier of the 28-xiu star. |
+| `good_gods` | `huangli` | Array of auspicious deity names. |
+| `bad_gods` | `huangli` | Array of inauspicious deity names. |
+| `yi` | `huangli` | Array of recommended activities. |
+| `ji` | `huangli` | Array of forbidden activities. |
+| `yi_ji_level` | `huangli` | Strength level of the Yi/Ji result. |
+| `yi_ji_rule` | `huangli` | Rule description used to determine Yi/Ji. |
+| `hour_jx` | `huangli` | Array of hourly luck results. |
+| `slot` | `hour_jx` | Time slot label, such as Zi hour or Chou hour. |
+| `slot_index` | `hour_jx` | Index of the time slot. |
+| `gz_index` | `hour_jx` | 60-cycle Ganzhi index of that hour slot. |
+| `luck` | `hour_jx` | Hourly luck text. |
+| `is_bad` | `hour_jx` | Whether that hour slot is inauspicious. |
 
-### 17.5 事件、邻近事件与汇总字段
+### 17.5 Event, Nearby Event, and Summary Fields
 
-| 字段 | 主要出现处 | 说明 |
+| Field | Main locations | Description |
 | --- | --- | --- |
-| `kind` | `event` / `near_ev` / `eclipse` | 机器可判定的事件类别。 |
-| `code` | `event` / `near_ev` | 该事件类别下的稳定代号。 |
-| `st_prev` / `st_next` | `near_ev` | 前一个 / 后一个节气事件。 |
-| `lp_prev` / `lp_next` | `near_ev` | 前一个 / 后一个月相事件。 |
-| `ev_sum` | `monthview` | 当日事件名称汇总，使用 `|` 连接。 |
-| `astro_ev_sum` | `monthview` | 当日天象事件名称汇总，使用 `|` 连接。 |
-| `stage_window` | `eclipse.visibility` | 可见性统计所采用的阶段窗口，如 `any`、`umb`、`total`、`central`。 |
-| `sample_count` | `eclipse.visibility` | 可见性采样次数。 |
-| `first_visible` / `last_visible` | `eclipse.visibility` | 本地点或网格点最早 / 最晚可见时刻。 |
-| `visible` | `eclipse.visibility` | 是否可见。 |
-| `has_eclipse` | `solar.point_vis` | 该地点是否实际发生日食。 |
-| `central` | `solar.point_vis` | 该地点是否处于中心食路径。 |
+| `kind` | `event` / `near_ev` / `eclipse` | Machine-usable event category. |
+| `code` | `event` / `near_ev` | Stable code inside that event category. |
+| `st_prev` / `st_next` | `near_ev` | Previous / next solar-term event. |
+| `lp_prev` / `lp_next` | `near_ev` | Previous / next lunar-phase event. |
+| `ev_sum` | `monthview` | Daily event-name summary joined by `|`. |
+| `astro_ev_sum` | `monthview` | Daily astronomy-event summary joined by `|`. |
+| `stage_window` | `eclipse.visibility` | Stage window used by visibility statistics, such as `any`, `umb`, `total`, or `central`. |
+| `sample_count` | `eclipse.visibility` | Number of visibility samples. |
+| `first_visible` / `last_visible` | `eclipse.visibility` | Earliest / latest visible instant at the site or grid point. |
+| `visible` | `eclipse.visibility` | Whether it is visible. |
+| `has_eclipse` | `solar.point_vis` | Whether an actual solar eclipse occurs at the site. |
+| `central` | `solar.point_vis` | Whether the site lies on the central eclipse path. |
 
-### 17.6 食相关字段
+### 17.6 Eclipse-Related Fields
 
-| 字段 | 主要出现处 | 说明 |
+| Field | Main locations | Description |
 | --- | --- | --- |
-| `pen_mag` | `lunar_eclipse` | 半影食分。 |
-| `umb_mag` | `lunar_eclipse` | 本影食分。 |
-| `mag` | `solar_eclipse` | 日食食分。 |
-| `obscuration` | `solar_eclipse` | 太阳被遮蔽面积比例。 |
-| `gamma` | `lunar_eclipse` / `solar_eclipse` | 食中心相对影轴的归一化偏距。 |
-| `eps_deg` | `lunar_eclipse` | 月食几何角参数，单位度。 |
-| `rp_re` | `eclipse` | 影区半径参数，单位地球半径。 |
-| `ru_re` | `eclipse` | 另一组影区半径参数，单位地球半径。 |
-| `opp_rp_re` / `opp_ru_re` | `lunar_eclipse` | 对冲时刻的影区半径参数，单位地球半径。 |
-| `dur_pen_sec` | `lunar_eclipse` | 半影阶段时长，单位秒。 |
-| `dur_umb_sec` | `lunar_eclipse` | 本影阶段时长，单位秒。 |
-| `dur_tot_sec` | `lunar_eclipse` | 全食阶段时长，单位秒。 |
-| `dt_max_sec` | `eclipse` | 最大食时刻的 `TDB-UTC` 差值，单位秒。 |
-| `sep_max_deg` | `solar_eclipse` | 最大食时日月中心角距，单位度。 |
-| `sun_sd_max_deg` | `solar_eclipse` | 最大食时太阳视半径角，单位度。 |
-| `moon_sd_max_deg` | `solar_eclipse` | 最大食时月亮视半径角，单位度。 |
-| `sun_geo` / `moon_geo` | `lunar_eclipse` | 太阳 / 月亮几何参数对象。 |
-| `lib` | `lunar_eclipse` | 月面天平动参数对象。 |
-| `l_deg` / `b_deg` / `c_deg` | `lib` | 月面天平动角参数，单位度。 |
-| `p1` / `u1` / `u2` / `u3` / `u4` / `p4` | `lunar_eclipse` | 月食各接触时刻节点对象。 |
-| `opp` | `lunar_eclipse` | 望 / 对冲时刻节点对象。 |
-| `max` | `eclipse` | 食甚节点对象。 |
-| `c1` / `c2` / `c3` / `c4` | `solar.point_vis` | 日食初亏 / 食既 / 生光 / 复圆节点对象。 |
-| `c1_loc` / `c2_loc` / `max_loc` / `c3_loc` / `c4_loc` | `solar_eclipse` | 日食各节点在显示时区下的本地时间。 |
-| `zen_lat_deg` / `zen_lon_deg` | `eclipse.node` | 对应节点的天顶点纬度 / 经度。 |
-| `pa_deg` | `eclipse.node` | 对应节点的位置角。 |
-| `axis_deg` | `eclipse.node` | 对应节点的轴角参数。 |
-| `max_mag` | `solar.point_vis` / `solar.global_vis` | 本地点或网格点的最大食分。 |
-| `max_obscuration` | `solar.point_vis` | 本地点的最大遮蔽面积比例。 |
-| `max_sun_alt_deg` | `solar.point_vis` / `solar.global_vis` | 最大食时太阳高度角。 |
+| `pen_mag` | `lunar_eclipse` | Penumbral magnitude. |
+| `umb_mag` | `lunar_eclipse` | Umbral magnitude. |
+| `mag` | `solar_eclipse` | Solar-eclipse magnitude. |
+| `obscuration` | `solar_eclipse` | Fraction of the solar disk obscured. |
+| `gamma` | `lunar_eclipse` / `solar_eclipse` | Normalized offset of eclipse center relative to the shadow axis. |
+| `eps_deg` | `lunar_eclipse` | Geometric angle parameter of the lunar eclipse, in degrees. |
+| `rp_re` | `eclipse` | Shadow-zone radius parameter in Earth radii. |
+| `ru_re` | `eclipse` | Another shadow-zone radius parameter in Earth radii. |
+| `opp_rp_re` / `opp_ru_re` | `lunar_eclipse` | Shadow-zone radius parameters at opposition, in Earth radii. |
+| `dur_pen_sec` | `lunar_eclipse` | Duration of the penumbral stage in seconds. |
+| `dur_umb_sec` | `lunar_eclipse` | Duration of the umbral stage in seconds. |
+| `dur_tot_sec` | `lunar_eclipse` | Duration of totality in seconds. |
+| `dt_max_sec` | `eclipse` | `TDB-UTC` difference at maximum eclipse, in seconds. |
+| `sep_max_deg` | `solar_eclipse` | Angular separation between sun and moon centers at maximum eclipse, in degrees. |
+| `sun_sd_max_deg` | `solar_eclipse` | Apparent solar semidiameter at maximum eclipse, in degrees. |
+| `moon_sd_max_deg` | `solar_eclipse` | Apparent lunar semidiameter at maximum eclipse, in degrees. |
+| `sun_geo` / `moon_geo` | `lunar_eclipse` | Geometric-parameter objects for the sun / moon. |
+| `lib` | `lunar_eclipse` | Lunar libration parameter object. |
+| `l_deg` / `b_deg` / `c_deg` | `lib` | Lunar libration angular parameters, in degrees. |
+| `p1` / `u1` / `u2` / `u3` / `u4` / `p4` | `lunar_eclipse` | Node objects for each contact instant of the lunar eclipse. |
+| `opp` | `lunar_eclipse` | Node object for full moon / opposition. |
+| `max` | `eclipse` | Node object for maximum eclipse. |
+| `c1` / `c2` / `c3` / `c4` | `solar.point_vis` | Node objects for first contact / second contact / third contact / fourth contact of the solar eclipse. |
+| `c1_loc` / `c2_loc` / `max_loc` / `c3_loc` / `c4_loc` | `solar_eclipse` | Local times of each solar-eclipse node under the display timezone. |
+| `zen_lat_deg` / `zen_lon_deg` | `eclipse.node` | Zenith latitude / longitude corresponding to that node. |
+| `pa_deg` | `eclipse.node` | Position angle of that node. |
+| `axis_deg` | `eclipse.node` | Axis-angle parameter of that node. |
+| `max_mag` | `solar.point_vis` / `solar.global_vis` | Maximum eclipse magnitude at the site or grid point. |
+| `max_obscuration` | `solar.point_vis` | Maximum obscuration fraction at the site. |
+| `max_sun_alt_deg` | `solar.point_vis` / `solar.global_vis` | Solar altitude at maximum eclipse. |
 
-### 17.7 code / key / mask 字段
+### 17.7 `code` / `key` / `mask` Fields
 
-| 字段 | 对应文本字段 | 说明 |
+| Field | Corresponding text field | Description |
 | --- | --- | --- |
-| `rule_profile_code` | `rule_profile` | 黄历规则档位的整数枚举值。 |
-| `rule_profile_key` | `rule_profile` | 黄历规则档位的稳定英文键。 |
-| `year_boundary_code` | `year_boundary` | 年柱换年规则的整数枚举值。 |
-| `year_boundary_key` | `year_boundary` | 年柱换年规则的稳定英文键。 |
-| `month_boundary_code` | `month_boundary` | 月柱换月规则的整数枚举值。 |
-| `month_boundary_key` | `month_boundary` | 月柱换月规则的稳定英文键。 |
-| `leap_month_mode_code` | `leap_month_mode` | 闰月处理规则的整数枚举值。 |
-| `leap_month_mode_key` | `leap_month_mode` | 闰月处理规则的稳定英文键。 |
-| `day_boundary_code` | `day_boundary` | 日柱换日规则的整数枚举值。 |
-| `day_boundary_key` | `day_boundary` | 日柱换日规则的稳定英文键。 |
-| `jianchu_code` | `jianchu` | 建除十二值的整数代号。 |
-| `duty_god_code` | `duty_god` | 值神的整数代号。 |
-| `duty_tag_code` | `duty_tag` | 值神大类标签代号。 |
-| `clash_branch_code` | `clash` | 冲支所对应的地支代号。 |
-| `sha_dir_code` | `chong_sha` | 煞方方向代号。 |
-| `zodiac_day_code` | `zodiac_day` | 值日生肖代号。 |
-| `six_he_branch_code` | `six_he` | 六合对应地支代号。 |
-| `three_he_group_code` | `three_he` | 三合组代号。 |
-| `nayin_code` | `nayin` | 纳音代号。 |
-| `fetal_god_code` | `fetal_god` | 胎神方位代号。 |
-| `meridian_code` | `meridian` | 经络代号。 |
-| `lucky_dir_code` | `lucky_dir` | 喜神方位代号。 |
-| `wealth_dir_code` | `wealth_dir` | 财神方位代号。 |
-| `mascot_dir_code` | `mascot_dir` | 福神方位代号。 |
-| `sun_noble_dir_code` | `sun_noble_dir` | 阳贵神方位代号。 |
-| `moon_noble_dir_code` | `moon_noble_dir` | 阴贵神方位代号。 |
-| `xiu28_code` | `xiu28` | 二十八宿代号。 |
-| `xiu28_mod28_code` | `xiu28_mod28` | 模 28 宿序代号。 |
-| `good_god_codes` | `good_gods` | 吉神名称数组对应的整数代号数组。 |
-| `bad_god_codes` | `bad_gods` | 凶煞名称数组对应的整数代号数组。 |
-| `yi_codes` | `yi` | 宜事项数组对应的整数代号数组。 |
-| `ji_codes` | `ji` | 忌事项数组对应的整数代号数组。 |
-| `good_god_mask_hex` | `good_gods` | 吉神位图，十六进制字符串。 |
-| `bad_god_mask_hex` | `bad_gods` | 凶煞位图，十六进制字符串。 |
-| `yi_mask_hex` | `yi` | 宜事项位图数组，十六进制字符串数组。 |
-| `ji_mask_hex` | `ji` | 忌事项位图数组，十六进制字符串数组。 |
-| `yi_ji_rule_code` | `yi_ji_rule` | 宜忌判定规则代号。 |
+| `rule_profile_code` | `rule_profile` | Integer enum value of the almanac rule profile. |
+| `rule_profile_key` | `rule_profile` | Stable English key of the almanac rule profile. |
+| `year_boundary_code` | `year_boundary` | Integer enum value of the year-boundary rule. |
+| `year_boundary_key` | `year_boundary` | Stable English key of the year-boundary rule. |
+| `month_boundary_code` | `month_boundary` | Integer enum value of the month-boundary rule. |
+| `month_boundary_key` | `month_boundary` | Stable English key of the month-boundary rule. |
+| `leap_month_mode_code` | `leap_month_mode` | Integer enum value of the leap-month handling rule. |
+| `leap_month_mode_key` | `leap_month_mode` | Stable English key of the leap-month handling rule. |
+| `day_boundary_code` | `day_boundary` | Integer enum value of the day-boundary rule. |
+| `day_boundary_key` | `day_boundary` | Stable English key of the day-boundary rule. |
+| `jianchu_code` | `jianchu` | Integer code of the Jianchu value. |
+| `duty_god_code` | `duty_god` | Integer code of the duty deity. |
+| `duty_tag_code` | `duty_tag` | Code of the broad duty-tag category. |
+| `clash_branch_code` | `clash` | Earthly branch code corresponding to the clash branch. |
+| `sha_dir_code` | `chong_sha` | Direction code of the Sha direction. |
+| `zodiac_day_code` | `zodiac_day` | Zodiac-animal code of the day. |
+| `six_he_branch_code` | `six_he` | Earthly branch code of the six-harmony counterpart. |
+| `three_he_group_code` | `three_he` | Code of the three-harmony group. |
+| `nayin_code` | `nayin` | Nayin code. |
+| `fetal_god_code` | `fetal_god` | Direction code of the fetal deity. |
+| `meridian_code` | `meridian` | Meridian code. |
+| `lucky_dir_code` | `lucky_dir` | Lucky deity direction code. |
+| `wealth_dir_code` | `wealth_dir` | Wealth deity direction code. |
+| `mascot_dir_code` | `mascot_dir` | Fortune deity direction code. |
+| `sun_noble_dir_code` | `sun_noble_dir` | Yang noble deity direction code. |
+| `moon_noble_dir_code` | `moon_noble_dir` | Yin noble deity direction code. |
+| `xiu28_code` | `xiu28` | 28-xiu code. |
+| `xiu28_mod28_code` | `xiu28_mod28` | mod-28 xiu-order code. |
+| `good_god_codes` | `good_gods` | Integer-code array corresponding to the array of auspicious deity names. |
+| `bad_god_codes` | `bad_gods` | Integer-code array corresponding to the array of inauspicious deity names. |
+| `yi_codes` | `yi` | Integer-code array corresponding to the array of recommended activities. |
+| `ji_codes` | `ji` | Integer-code array corresponding to the array of forbidden activities. |
+| `good_god_mask_hex` | `good_gods` | Bitmap of auspicious deities as a hexadecimal string. |
+| `bad_god_mask_hex` | `bad_gods` | Bitmap of inauspicious deities as a hexadecimal string. |
+| `yi_mask_hex` | `yi` | Bitmap array of recommended activities as hexadecimal strings. |
+| `ji_mask_hex` | `ji` | Bitmap array of forbidden activities as hexadecimal strings. |
+| `yi_ji_rule_code` | `yi_ji_rule` | Code of the Yi/Ji decision rule. |
 
-## 18. 主要函数与结构体变量说明
+## 18. Main Functions and Structure Fields
 
-说明：
+Notes:
 
-- 本节只列公共头文件和 README 当前直接涉及的主接口，不展开内部小工具函数。
-- 接口声明以 `include/lunar/core.hpp`、`include/lunar/models.hpp`、`include/lunar/cli.hpp`、`include/lunar/cli_query.hpp`、`include/lunar/day_formatter.hpp`、`include/lunar/c_api.h` 为准。
+- This section only lists public headers and the main interfaces directly involved in the current README; small internal helper functions are not expanded
+- Interface declarations follow `include/lunar/core.hpp`, `include/lunar/models.hpp`, `include/lunar/cli.hpp`, `include/lunar/cli_query.hpp`, `include/lunar/day_formatter.hpp`, and `include/lunar/c_api.h`
 
-### 18.1 主要函数
+### 18.1 Main Functions
 
-| 函数 | 位置 | 作用 |
+| Function | Location | Purpose |
 | --- | --- | --- |
-| `run_cli_args` | `include/lunar/entry.hpp` | CLI 总入口，接收参数数组后完成顶层分发。 |
-| `cli_month` / `cli_cal` / `cli_year` / `cli_event` / `cli_dl` | `include/lunar/cli.hpp` | 旧式 CLI 参数结构体入口。 |
-| `cli_at` / `cli_conv` | `include/lunar/cli_query.hpp` | `at` / `convert` 的旧式 CLI 参数结构体入口。 |
-| `cmd_month` / `cmd_cal` / `cmd_year` / `cmd_event` / `cmd_dl` | `include/lunar/cli.hpp` | 直接接收字符串数组的命令入口。 |
-| `cmd_at` / `cmd_conv` / `cmd_zodiac` / `cmd_sky` / `cmd_day` / `cmd_mview` / `cmd_next` / `cmd_range` / `cmd_search` / `cmd_eclipse` / `cmd_fest` / `cmd_alm` / `cmd_info` / `cmd_cfg` / `cmd_comp` | `include/lunar/cli_query.hpp` | 各子命令的直接入口。 |
-| `lunar::calc_sky_pos` | `include/lunar/star.hpp` | 计算指定时刻、指定观测点的天空位置列表。 |
-| `calc_solar_zodiac_at` / `calc_solar_zodiac_year` | `include/lunar/solar_zodiac.hpp` | 计算单时刻太阳星座或全年星座区间摘要。 |
-| `lunar::core::compute_day` | `include/lunar/core.hpp` | 计算某一天的农历、黄历、月相、事件与可选天象信息。 |
-| `lunar::core::format_day_output` | `include/lunar/day_formatter.hpp` | 把 `DayResult` 输出成 `json/txt/csv/jsonl`。 |
-| `lunar::core::compute_ganzhi` | `include/lunar/core.hpp` | 计算单个时刻的年、月、日干支摘要。 |
-| `lunar::core::compute_ganzhi_month` | `include/lunar/core.hpp` | 计算整月逐日干支摘要。 |
-| `lunar_tool_ver` | `include/lunar/c_api.h` | 返回库 / 工具版本字符串。 |
-| `lunar_last_error` / `lunar_clear_error` | `include/lunar/c_api.h` | 读取或清空 C API 最近一次错误信息。 |
-| `lunar_run` | `include/lunar/c_api.h` | C 方式调用 CLI 总入口。 |
-| `lunar_root_batch` | `include/lunar/c_api.h` | 批量根求解入口。 |
-| `lunar_calc_eot` | `include/lunar/c_api.h` | 计算均时差并写入 `lunar_eot_result`。 |
-| `lunar_core_day` | `include/lunar/c_api.h` | 计算单日核心摘要并写入 `lunar_day_summary`。 |
-| `lunar_hli_rules_init` | `include/lunar/c_api.h` | 用默认值初始化 `lunar_hli_rules`。 |
-| `lunar_core_ganzhi` | `include/lunar/c_api.h` | 计算单个时刻干支摘要并写入 `lunar_ganzhi_summary`。 |
-| `lunar_core_ganzhi_month` | `include/lunar/c_api.h` | 计算整月干支摘要并写入 `lunar_ganzhi_month_summary`。 |
+| `run_cli_args` | `include/lunar/entry.hpp` | Top-level CLI entry that receives an argument array and performs top-level dispatch. |
+| `cli_month` / `cli_cal` / `cli_year` / `cli_event` / `cli_dl` | `include/lunar/cli.hpp` | Legacy CLI entries that use argument structs. |
+| `cli_at` / `cli_conv` | `include/lunar/cli_query.hpp` | Legacy CLI entries with argument structs for `at` / `convert`. |
+| `cmd_month` / `cmd_cal` / `cmd_year` / `cmd_event` / `cmd_dl` | `include/lunar/cli.hpp` | Command entries that directly receive string arrays. |
+| `cmd_at` / `cmd_conv` / `cmd_zodiac` / `cmd_sky` / `cmd_day` / `cmd_mview` / `cmd_next` / `cmd_range` / `cmd_search` / `cmd_eclipse` / `cmd_fest` / `cmd_alm` / `cmd_info` / `cmd_cfg` / `cmd_comp` | `include/lunar/cli_query.hpp` | Direct entries of each subcommand. |
+| `lunar::calc_sky_pos` | `include/lunar/star.hpp` | Computes the sky-position list for a given time and observer site. |
+| `calc_solar_zodiac_at` / `calc_solar_zodiac_year` | `include/lunar/solar_zodiac.hpp` | Computes the solar zodiac at a single instant or a full-year zodiac interval summary. |
+| `lunar::core::compute_day` | `include/lunar/core.hpp` | Computes lunar date, almanac, lunar phase, events, and optional astronomy data for a given day. |
+| `lunar::core::format_day_output` | `include/lunar/day_formatter.hpp` | Formats `DayResult` as `json/txt/csv/jsonl`. |
+| `lunar::core::compute_ganzhi` | `include/lunar/core.hpp` | Computes the year/month/day Ganzhi summary for a single instant. |
+| `lunar::core::compute_ganzhi_month` | `include/lunar/core.hpp` | Computes the day-by-day Ganzhi summary for an entire month. |
+| `lunar_tool_ver` | `include/lunar/c_api.h` | Returns the library / tool version string. |
+| `lunar_last_error` / `lunar_clear_error` | `include/lunar/c_api.h` | Reads or clears the latest C API error message. |
+| `lunar_run` | `include/lunar/c_api.h` | Calls the top-level CLI entry in C style. |
+| `lunar_root_batch` | `include/lunar/c_api.h` | Batch root-solving entry. |
+| `lunar_calc_eot` | `include/lunar/c_api.h` | Computes the equation of time and writes it into `lunar_eot_result`. |
+| `lunar_core_day` | `include/lunar/c_api.h` | Computes the single-day core summary and writes it into `lunar_day_summary`. |
+| `lunar_hli_rules_init` | `include/lunar/c_api.h` | Initializes `lunar_hli_rules` with default values. |
+| `lunar_core_ganzhi` | `include/lunar/c_api.h` | Computes the Ganzhi summary for a single instant and writes it into `lunar_ganzhi_summary`. |
+| `lunar_core_ganzhi_month` | `include/lunar/c_api.h` | Computes the month-long Ganzhi summary and writes it into `lunar_ganzhi_month_summary`. |
 
-### 18.2 CLI 参数结构体
+### 18.2 CLI Argument Structures
 
-| 结构体 | 关键变量 | 说明 |
+| Structure | Key fields | Description |
 | --- | --- | --- |
-| `MonthsArgs` | `ephem`、`years`、`mode`、`format`、`out`、`tz`、`pretty`、`quiet` | `months` 命令参数。 |
-| `CalArgs` | `ephem`、`years_arg`、`has_years`、`format`、`inc_month`、`tz` | `calendar` 命令参数。 |
-| `YearArgs` | `ephem`、`year`、`mode`、`format`、`tz` | `year` 命令参数。 |
-| `EventArgs` | `ephem`、`category`、`code`、`year`、`near_date`、`format`、`tz` | `event` 命令参数。 |
-| `DlArgs` | `action`、`id`、`dir`、`quiet` | 下载命令参数。 |
-| `AtArgs` | `ephem`、`time_raw`、`input_tz`、`tz`、`lunar_day_tz`、`calc_eot`、`eot_lon_deg`、`hli_rules`、`jobs` | `at` 命令参数。 |
-| `ConvArgs` | `ephem`、`in_value`、`from_lunar`、`lunar_year`、`lun_mno`、`lunar_day`、`leap`、`tz`、`lunar_day_tz` | `convert` 命令参数。 |
+| `MonthsArgs` | `ephem`, `years`, `mode`, `format`, `out`, `tz`, `pretty`, `quiet` | Parameters of the `months` command. |
+| `CalArgs` | `ephem`, `years_arg`, `has_years`, `format`, `inc_month`, `tz` | Parameters of the `calendar` command. |
+| `YearArgs` | `ephem`, `year`, `mode`, `format`, `tz` | Parameters of the `year` command. |
+| `EventArgs` | `ephem`, `category`, `code`, `year`, `near_date`, `format`, `tz` | Parameters of the `event` command. |
+| `DlArgs` | `action`, `id`, `dir`, `quiet` | Parameters of the download command. |
+| `AtArgs` | `ephem`, `time_raw`, `input_tz`, `tz`, `lunar_day_tz`, `calc_eot`, `eot_lon_deg`, `hli_rules`, `jobs` | Parameters of the `at` command. |
+| `ConvArgs` | `ephem`, `in_value`, `from_lunar`, `lunar_year`, `lun_mno`, `lunar_day`, `leap`, `tz`, `lunar_day_tz` | Parameters of the `convert` command. |
 
-### 18.3 C++ 计算选项与结果结构体
+### 18.3 C++ Computation Option and Result Structures
 
-| 结构体 | 关键变量 | 说明 |
+| Structure | Key fields | Description |
 | --- | --- | --- |
-| `GanzhiComputeOptions` | `ephem`、`date_text`、`at_time`、`tz`、`lunar_day_tz`、`hli_rules` | 单个时刻干支计算输入。 |
-| `GanzhiSummary` | `year`、`month`、`day`、`hli_rules` | 单个时刻干支计算结果。 |
-| `GanzhiMonthComputeOptions` | `ephem`、`year`、`month`、`at_time`、`tz`、`lunar_day_tz`、`hli_rules` | 整月干支计算输入。 |
-| `GanzhiMonthSummary` | `year`、`month`、`years`、`months`、`days`、`hli_rules` | 整月逐日干支结果。 |
-| `DayComputeOptions` | `ephem`、`date_text`、`at_time`、`tz`、`lunar_day_tz`、`include_events`、`include_astro`、`astro_mode_text`、`astro_pick_csv`、`astro_lat_deg`、`astro_lon_deg`、`astro_height_m`、`has_astro_site`、`hli_lon_deg`、`hli_rules` | `compute_day` 的完整输入。 |
-| `DayResult` | `ephem`、`date_text`、`at_time`、`tz`、`lunar_day_tz`、`hli_lon_deg`、`astro_obs`、`at_data`、`day_events`、`astro_events` | `compute_day` 的完整结果。 |
+| `GanzhiComputeOptions` | `ephem`, `date_text`, `at_time`, `tz`, `lunar_day_tz`, `hli_rules` | Input of single-instant Ganzhi computation. |
+| `GanzhiSummary` | `year`, `month`, `day`, `hli_rules` | Result of single-instant Ganzhi computation. |
+| `GanzhiMonthComputeOptions` | `ephem`, `year`, `month`, `at_time`, `tz`, `lunar_day_tz`, `hli_rules` | Input of month-long Ganzhi computation. |
+| `GanzhiMonthSummary` | `year`, `month`, `years`, `months`, `days`, `hli_rules` | Day-by-day Ganzhi result for a whole month. |
+| `DayComputeOptions` | `ephem`, `date_text`, `at_time`, `tz`, `lunar_day_tz`, `include_events`, `include_astro`, `astro_mode_text`, `astro_pick_csv`, `astro_lat_deg`, `astro_lon_deg`, `astro_height_m`, `has_astro_site`, `hli_lon_deg`, `hli_rules` | Full input of `compute_day`. |
+| `DayResult` | `ephem`, `date_text`, `at_time`, `tz`, `lunar_day_tz`, `hli_lon_deg`, `astro_obs`, `at_data`, `day_events`, `astro_events` | Full result of `compute_day`. |
 
-### 18.4 主要数据结构体
+### 18.4 Main Data Structures
 
-| 结构体 | 关键变量 | 说明 |
+| Structure | Key fields | Description |
 | --- | --- | --- |
-| `LunDate` | `lunar_year`、`lun_mno`、`is_leap`、`lun_mlab`、`lunar_day`、`lun_label`、`cst_year`、`cst_month`、`cst_day`、`cstday_jd` | 农历日期对象，同时保留用于判日的民用日信息。 |
-| `NearEvt` | `has`、`event` | 单个邻近事件槽位。 |
-| `NearEvents` | `solar_prev`、`solar_next`、`phase_prev`、`phase_next` | 前后节气与前后月相。 |
-| `AtData` | `time_raw`、`tz_in`、`display_tz`、`lunar_day_tz`、`jd_utc`、`jd_tdb`、`utc_iso`、`local_iso`、`lam_s`、`lam_m`、`elong`、`elong_deg`、`ill_frac`、`ill_pct`、`waxing`、`phase_name`、`lunar_date`、`near_ev`、`eot`、`moon_xg`、`hli` | `at/day/almanac` 的核心计算结果容器。 |
-| `EventRec` | `kind`、`code`、`name`、`year`、`jd_tdb`、`jd_utc`、`utc_iso`、`loc_iso` | 单个事件记录。 |
-| `MonthRec` | `label`、`month_no`、`is_leap`、`st_jdutc`、`ed_jdutc`、`st_utc`、`st_loc`、`ed_utc`、`ed_loc` | 单个农历月范围记录。 |
-| `HliRuleSet` | `profile_code`、`year_boundary`、`month_boundary`、`leap_month_mode`、`day_boundary` | 黄历规则集合。 |
-| `GzNode` | `stem`、`branch`、`text` | 单个干支节点。 |
-| `HliHour` | `slot_index`、`gz_index`、`is_bad`、`slot`、`gz`、`luck` | 单个时辰吉凶结果。 |
-| `HliData` | `y_lun`、`y_lchun`、`y_rule`、`m_gz`、`d_gz`、`h_gz`、`h_gz_true`、`bazi_clock`、`bazi_true`、`rule_profile_code`、`year_boundary_code`、`month_boundary_code`、`leap_month_mode_code`、`day_boundary_code`、`good_gods`、`bad_gods`、`yi`、`ji`、`hour_jx`、`eot_min`、`tst_min` | 黄历总结果对象。 |
-| `HliInput` | `jd_utc`、`gy/gm/gd`、`hh/mm/ss`、`tz_off`、`lon_deg`、`lun_year`、`lun_month`、`lun_day`、`lun_leap`、`phase_name`、`moon_xg`、`rules` | 黄历计算输入对象。 |
-| `EoTData` | `jd_utc`、`jd_tdb`、`lon_deg`、`lon_rad`、`apparent_solar_time_rad`、`mean_solar_time_rad`、`eot_rad`、`eot_minutes`、`eot_seconds` | 均时差计算结果。 |
-| `AppLon` | `eph`、`frame_bias`、`prec_cache`、`r1n_cache`、`rot_cache` | 太阳 / 月亮视黄经与均时差的计算器对象。 |
-| `MoonXg` | `region`、`star_id`、`star_name`、`sep_deg` | 月亮星官归属结果。 |
-| `AstroObs` | `has_site`、`lat_deg`、`lon_deg`、`h_m` | 天象观测地点。 |
-| `SkyPos` | `kind`、`code`、`name`、`region`、`mag_v`、`ra_deg`、`dec_deg`、`az_deg`、`alt_deg` | 天体天空位置输出记录。 |
-| `SolarZodiacDef` | `index`、`code`、`term_code`、`start_lambda_rad`、`end_lambda_rad` | 单个太阳星座的固定黄经区间定义。 |
-| `SolarZodiacPoint` | `sun_lam_deg`、`sign_index`、`sign_code`、`term_code`、`sign_start_jd_utc`、`sign_end_jd_utc`、`elapsed_sec`、`remain_sec` | 单时刻太阳星座结果。 |
-| `SolarZodiacYearInterval` | `sign_index`、`sign_code`、`term_code`、`in_year_start_jd_utc`、`in_year_end_jd_utc`、`in_year_dur_sec`、`clipped_start`、`clipped_end` | 全年模式下单个星座区间摘要。 |
-| `SolarZodiacYearSummary` | `year`、`tz_off`、`year_start_jd_utc`、`year_end_jd_utc`、`intervals` | 全年太阳星座汇总结果。 |
-| `AstroEvt` | `kind`、`code`、`name`、`jd_utc`、`detail` | 天象事件记录。 |
+| `LunDate` | `lunar_year`, `lun_mno`, `is_leap`, `lun_mlab`, `lunar_day`, `lun_label`, `cst_year`, `cst_month`, `cst_day`, `cstday_jd` | Lunar date object, also retaining the civil-day information used for day-boundary decisions. |
+| `NearEvt` | `has`, `event` | A single nearby-event slot. |
+| `NearEvents` | `solar_prev`, `solar_next`, `phase_prev`, `phase_next` | Previous/next solar terms and previous/next lunar phases. |
+| `AtData` | `time_raw`, `tz_in`, `display_tz`, `lunar_day_tz`, `jd_utc`, `jd_tdb`, `utc_iso`, `local_iso`, `lam_s`, `lam_m`, `elong`, `elong_deg`, `ill_frac`, `ill_pct`, `waxing`, `phase_name`, `lunar_date`, `near_ev`, `eot`, `moon_xg`, `hli` | Core result container used by `at/day/almanac`. |
+| `EventRec` | `kind`, `code`, `name`, `year`, `jd_tdb`, `jd_utc`, `utc_iso`, `loc_iso` | A single event record. |
+| `MonthRec` | `label`, `month_no`, `is_leap`, `st_jdutc`, `ed_jdutc`, `st_utc`, `st_loc`, `ed_utc`, `ed_loc` | A single lunar-month interval record. |
+| `HliRuleSet` | `profile_code`, `year_boundary`, `month_boundary`, `leap_month_mode`, `day_boundary` | Almanac rule set. |
+| `GzNode` | `stem`, `branch`, `text` | A single Ganzhi node. |
+| `HliHour` | `slot_index`, `gz_index`, `is_bad`, `slot`, `gz`, `luck` | A single hourly luck result. |
+| `HliData` | `y_lun`, `y_lchun`, `y_rule`, `m_gz`, `d_gz`, `h_gz`, `h_gz_true`, `bazi_clock`, `bazi_true`, `rule_profile_code`, `year_boundary_code`, `month_boundary_code`, `leap_month_mode_code`, `day_boundary_code`, `good_gods`, `bad_gods`, `yi`, `ji`, `hour_jx`, `eot_min`, `tst_min` | Full almanac result object. |
+| `HliInput` | `jd_utc`, `gy/gm/gd`, `hh/mm/ss`, `tz_off`, `lon_deg`, `lun_year`, `lun_month`, `lun_day`, `lun_leap`, `phase_name`, `moon_xg`, `rules` | Almanac computation input object. |
+| `EoTData` | `jd_utc`, `jd_tdb`, `lon_deg`, `lon_rad`, `apparent_solar_time_rad`, `mean_solar_time_rad`, `eot_rad`, `eot_minutes`, `eot_seconds` | Equation-of-time result. |
+| `AppLon` | `eph`, `frame_bias`, `prec_cache`, `r1n_cache`, `rot_cache` | Calculator object for apparent solar/lunar longitude and equation of time. |
+| `MoonXg` | `region`, `star_id`, `star_name`, `sep_deg` | Result of the moon's star-lodge assignment. |
+| `AstroObs` | `has_site`, `lat_deg`, `lon_deg`, `h_m` | Astronomy observation site. |
+| `SkyPos` | `kind`, `code`, `name`, `region`, `mag_v`, `ra_deg`, `dec_deg`, `az_deg`, `alt_deg` | Output record of a sky position. |
+| `SolarZodiacDef` | `index`, `code`, `term_code`, `start_lambda_rad`, `end_lambda_rad` | Fixed ecliptic interval definition of a single solar zodiac sign. |
+| `SolarZodiacPoint` | `sun_lam_deg`, `sign_index`, `sign_code`, `term_code`, `sign_start_jd_utc`, `sign_end_jd_utc`, `elapsed_sec`, `remain_sec` | Solar-zodiac result for a single instant. |
+| `SolarZodiacYearInterval` | `sign_index`, `sign_code`, `term_code`, `in_year_start_jd_utc`, `in_year_end_jd_utc`, `in_year_dur_sec`, `clipped_start`, `clipped_end` | Summary of a single sign interval in year mode. |
+| `SolarZodiacYearSummary` | `year`, `tz_off`, `year_start_jd_utc`, `year_end_jd_utc`, `intervals` | Full-year solar-zodiac summary result. |
+| `AstroEvt` | `kind`, `code`, `name`, `jd_utc`, `detail` | Astronomy event record. |
 
-### 18.5 食相关结构体
+### 18.5 Eclipse Structures
 
-| 结构体 | 关键变量 | 说明 |
+| Structure | Key fields | Description |
 | --- | --- | --- |
-| `EclipseGeoCoord` | `ra_deg`、`dec_deg`、`sd_deg`、`ehp_deg` | 食计算中的天体几何参数。 |
-| `EclipseLibration` | `l_deg`、`b_deg`、`c_deg` | 月面天平动参数。 |
-| `EclipsePointMeta` | `zen_lat_deg`、`zen_lon_deg`、`pa_deg`、`axis_deg` | 接触点几何元数据。 |
-| `LunarEclipse` | `has`、`type`、`jd_tdb_p1/u1/u2/u3/u4/p4/opp/max`、`pen_mag`、`umb_mag`、`dur_pen_sec`、`dur_umb_sec`、`dur_tot_sec`、`gamma`、`eps_deg`、`sun_geo`、`moon_geo`、`lib` | 月食完整结果。 |
-| `LunarEclipsePointVis` | `stage_window`、`lat_deg`、`lon_deg`、`height_m`、`visible`、`max_alt_deg`、`first_jd_utc`、`last_jd_utc`、`sample_count` | 月食单点可见性结果。 |
-| `LunarEclipseGlobalVis` | `stage_window`、`jd_start_utc`、`jd_end_utc`、`lat_step_deg`、`lon_step_deg`、`sample_count`、`points` | 月食全局网格可见性结果。 |
-| `SolarEclipse` | `has`、`type`、`jd_tdb_c1/c2/c3/c4/max`、`mag`、`obscuration`、`gamma`、`sep_max_deg`、`sun_sd_max_deg`、`moon_sd_max_deg`、`moon_dist_km`、`sun_dist_km` | 日食完整结果。 |
-| `SolarEclipsePointVis` | `stage_window`、`lat_deg`、`lon_deg`、`height_m`、`has_eclipse`、`visible`、`central`、`max_mag`、`max_obscuration`、`max_sun_alt_deg`、`c1_jd_utc/c2_jd_utc/c3_jd_utc/c4_jd_utc/max_jd_utc` | 日食单点可见性结果。 |
-| `SolarEclipseGlobalVis` | `stage_window`、`jd_start_utc`、`jd_end_utc`、`lat_step_deg`、`lon_step_deg`、`sample_count`、`points` | 日食全局网格可见性结果。 |
+| `EclipseGeoCoord` | `ra_deg`, `dec_deg`, `sd_deg`, `ehp_deg` | Celestial-body geometric parameters used in eclipse computation. |
+| `EclipseLibration` | `l_deg`, `b_deg`, `c_deg` | Lunar libration parameters. |
+| `EclipsePointMeta` | `zen_lat_deg`, `zen_lon_deg`, `pa_deg`, `axis_deg` | Geometric metadata of a contact point. |
+| `LunarEclipse` | `has`, `type`, `jd_tdb_p1/u1/u2/u3/u4/p4/opp/max`, `pen_mag`, `umb_mag`, `dur_pen_sec`, `dur_umb_sec`, `dur_tot_sec`, `gamma`, `eps_deg`, `sun_geo`, `moon_geo`, `lib` | Full lunar-eclipse result. |
+| `LunarEclipsePointVis` | `stage_window`, `lat_deg`, `lon_deg`, `height_m`, `visible`, `max_alt_deg`, `first_jd_utc`, `last_jd_utc`, `sample_count` | Point-visibility result of a lunar eclipse. |
+| `LunarEclipseGlobalVis` | `stage_window`, `jd_start_utc`, `jd_end_utc`, `lat_step_deg`, `lon_step_deg`, `sample_count`, `points` | Global grid visibility result of a lunar eclipse. |
+| `SolarEclipse` | `has`, `type`, `jd_tdb_c1/c2/c3/c4/max`, `mag`, `obscuration`, `gamma`, `sep_max_deg`, `sun_sd_max_deg`, `moon_sd_max_deg`, `moon_dist_km`, `sun_dist_km` | Full solar-eclipse result. |
+| `SolarEclipsePointVis` | `stage_window`, `lat_deg`, `lon_deg`, `height_m`, `has_eclipse`, `visible`, `central`, `max_mag`, `max_obscuration`, `max_sun_alt_deg`, `c1_jd_utc/c2_jd_utc/c3_jd_utc/c4_jd_utc/max_jd_utc` | Point-visibility result of a solar eclipse. |
+| `SolarEclipseGlobalVis` | `stage_window`, `jd_start_utc`, `jd_end_utc`, `lat_step_deg`, `lon_step_deg`, `sample_count`, `points` | Global grid visibility result of a solar eclipse. |
 
-### 18.6 C API 结构体
+### 18.6 C API Structures
 
-| 结构体 | 关键变量 | 说明 |
+| Structure | Key fields | Description |
 | --- | --- | --- |
-| `lunar_eot_result` | `jd_utc`、`jd_tdb`、`lon_deg`、`lon_rad`、`apparent_solar_time_rad`、`mean_solar_time_rad`、`eot_rad`、`eot_minutes`、`eot_seconds` | C API 的均时差结果。 |
-| `lunar_day_summary` | `lunar_year`、`lun_mno`、`lunar_day`、`is_leap`、`ill_pct`、`phase_name`、`lun_label` | C API 的单日简表结果。 |
-| `lunar_hli_rules` | `profile_code`、`year_boundary`、`month_boundary`、`leap_month_mode`、`day_boundary` | C API 的黄历规则集合。 |
-| `lunar_ganzhi_node` | `index`、`stem`、`branch`、`text` | C API 的单个干支节点。 |
-| `lunar_ganzhi_summary` | `year`、`month`、`day`、`rule_profile_code`、`year_boundary_code`、`month_boundary_code`、`leap_month_mode_code`、`day_boundary_code` | C API 的单时刻干支摘要。 |
-| `lunar_ganzhi_month_summary` | `year`、`month`、`day_count`、`years[31]`、`months[31]`、`days[31]`、各类 `*_code` | C API 的整月干支摘要。 |
+| `lunar_eot_result` | `jd_utc`, `jd_tdb`, `lon_deg`, `lon_rad`, `apparent_solar_time_rad`, `mean_solar_time_rad`, `eot_rad`, `eot_minutes`, `eot_seconds` | Equation-of-time result in the C API. |
+| `lunar_day_summary` | `lunar_year`, `lun_mno`, `lunar_day`, `is_leap`, `ill_pct`, `phase_name`, `lun_label` | Single-day summary in the C API. |
+| `lunar_hli_rules` | `profile_code`, `year_boundary`, `month_boundary`, `leap_month_mode`, `day_boundary` | Almanac rule set in the C API. |
+| `lunar_ganzhi_node` | `index`, `stem`, `branch`, `text` | A single Ganzhi node in the C API. |
+| `lunar_ganzhi_summary` | `year`, `month`, `day`, `rule_profile_code`, `year_boundary_code`, `month_boundary_code`, `leap_month_mode_code`, `day_boundary_code` | Single-instant Ganzhi summary in the C API. |
+| `lunar_ganzhi_month_summary` | `year`, `month`, `day_count`, `years[31]`, `months[31]`, `days[31]`, `*_code` fields | Month-long Ganzhi summary in the C API. |

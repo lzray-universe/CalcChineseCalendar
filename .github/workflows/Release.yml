@@ -250,6 +250,7 @@ jobs:
           set -euxo pipefail
           mkdir -p package
           cp README.md package/
+          cp README_zh.md package/
           cp LICENSE package/
           archive_base="lunar-${{ matrix.name }}-${RELEASE_TAG}"
 
