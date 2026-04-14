@@ -283,4 +283,14 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          npm publish dist/npm/*.tgz --provenance --access public
+          if ${{ inputs.preview_package_version }}; then
+            npm publish dist/npm/*.tgz \
+              --provenance \
+              --access public \
+              --tag "${{ inputs.preview_channel }}"
+          else
+            npm publish dist/npm/*.tgz \
+              --provenance \
+              --access public \
+              --tag latest
+          fi
