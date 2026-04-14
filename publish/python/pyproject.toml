@@ -8,13 +8,14 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "calcchinesecalendar"
 version = "0.0.0"
-description = "Python bindings for the lunar ephemeris and calendar engine."
+description = "Native Python bindings for the CalcChineseCalendar lunar ephemeris, astronomy, and calendar engine."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
 authors = [
     { name = "lzray-universe" },
 ]
+urls = { Homepage = "https://github.com/lzray-universe/CalcChineseCalendar/", Repository = "https://github.com/lzray-universe/CalcChineseCalendar/" }
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

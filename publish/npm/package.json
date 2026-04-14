@@ -1,7 +1,8 @@
 {
   "name": "calcchinesecalendar",
   "version": "0.0.0",
-  "description": "ESM package for the lunar ephemeris and calendar engine.",
+  "description": "ESM/WebAssembly bindings for the CalcChineseCalendar lunar ephemeris, astronomy, and calendar engine.",
+  "homepage": "https://github.com/lzray-universe/CalcChineseCalendar/",
   "type": "module",
   "main": "./src/index.js",
   "types": "./src/index.d.ts",
@@ -29,6 +30,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/lzray-universe/CalcChineseCalendar/"
+  },
+  "bugs": {
+    "url": "https://github.com/lzray-universe/CalcChineseCalendar/issues"
   },
   "engines": {
     "node": ">=18"
