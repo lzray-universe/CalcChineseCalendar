@@ -288,13 +288,99 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
 
+      - name: Generate release notes
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          current_tag='${{ inputs.tag }}'
+          if git rev-parse -q --verify "refs/tags/$current_tag" >/dev/null; then
+            current_ref="refs/tags/$current_tag"
+          else
+            current_ref="HEAD"
+          fi
+
+          previous_tag="$(
+            git for-each-ref refs/tags \
+              --sort=-creatordate \
+              --format='%(refname:short)' |
+            grep -Fxv "$current_tag" |
+            head -n 1 || true
+          )"
+
+          if [ -n "$previous_tag" ]; then
+            range="${previous_tag}..${current_ref}"
+          else
+            range="${current_ref}"
+          fi
+
+          PREVIOUS_TAG="$previous_tag" RANGE="$range" CURRENT_TAG="$current_tag" python - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+
+          previous_tag = os.environ.get("PREVIOUS_TAG", "").strip()
+          current_tag = os.environ.get("CURRENT_TAG", "").strip()
+          range_spec = os.environ["RANGE"]
+          out_path = Path("release_notes.md")
+
+          log_text = subprocess.check_output(
+              [
+                  "git",
+                  "log",
+                  "--reverse",
+                  "--format=%H%x1f%s%x1f%b%x1e",
+                  range_spec,
+              ],
+              text=True,
+              encoding="utf-8",
+          )
+
+          sections: list[str] = []
+          for item in log_text.split("\x1e"):
+              item = item.strip()
+              if not item:
+                  continue
+              commit, subject, body = item.split("\x1f", 2)
+              subject = subject.strip()
+              body = body.strip()
+              short_commit = commit[:7]
+              section = [f"## {subject}", f"- Commit: `{short_commit}`"]
+              if body:
+                  section.append("")
+                  section.append(body)
+              sections.append("\n".join(section))
+
+          title = "# Release Notes"
+          if previous_tag:
+              title += f"\n\nChanges from `{previous_tag}` to `{current_tag or 'current build'}`."
+          else:
+              title += f"\n\nChanges included in `{current_tag or 'this release'}`."
+
+          if sections:
+              out_path.write_text(
+                  title + "\n\n" + "\n\n".join(sections) + "\n",
+                  encoding="utf-8",
+              )
+          else:
+              out_path.write_text(
+                  title + "\n\nNo commits found for this release range.\n",
+                  encoding="utf-8",
+              )
+          PY
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag }}
           prerelease: ${{ inputs.prerelease }}
+          body_path: release_notes.md
           files: artifacts/*
