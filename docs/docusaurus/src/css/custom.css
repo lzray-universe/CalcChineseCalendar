@@ -1,0 +1,91 @@
+:root {
+  --ifm-color-primary: #0f5e63;
+  --ifm-color-primary-dark: #0d5559;
+  --ifm-color-primary-darker: #0c5054;
+  --ifm-color-primary-darkest: #0a4245;
+  --ifm-color-primary-light: #11676d;
+  --ifm-color-primary-lighter: #126d73;
+  --ifm-color-primary-lightest: #178087;
+  --ifm-background-color: #fffaf3;
+  --ifm-background-surface-color: #ffffff;
+  --ifm-code-font-size: 95%;
+  --ifm-font-family-base: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Segoe UI Variable", sans-serif;
+  --ifm-heading-font-family: "Source Han Serif SC", "Noto Serif SC", "STZhongsong", Georgia, serif;
+  --ifm-navbar-background-color: rgba(255, 248, 238, 0.9);
+  --ifm-footer-background-color: #17313c;
+  --ifm-link-color: #935c1d;
+  --ifm-menu-color-active: #935c1d;
+  --ifm-toc-border-color: rgba(15, 94, 99, 0.16);
+  --ifm-global-shadow-lw: 0 12px 28px rgba(24, 43, 53, 0.08);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #5db3af;
+  --ifm-color-primary-dark: #49aba6;
+  --ifm-color-primary-darker: #3ca5a0;
+  --ifm-color-primary-darkest: #2e8884;
+  --ifm-color-primary-light: #71bbb8;
+  --ifm-color-primary-lighter: #7ec1be;
+  --ifm-color-primary-lightest: #9acfcc;
+  --ifm-background-color: #142129;
+  --ifm-background-surface-color: #182b36;
+  --ifm-navbar-background-color: rgba(20, 33, 41, 0.92);
+  --ifm-link-color: #e0ab68;
+  --ifm-menu-color-active: #e0ab68;
+  --ifm-footer-background-color: #0f1920;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(147, 92, 29, 0.05), transparent 20rem),
+    var(--ifm-background-color);
+}
+
+.navbar {
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(15, 94, 99, 0.08);
+}
+
+.navbar__title,
+.footer__title {
+  font-family: var(--ifm-heading-font-family);
+}
+
+.hero--primary {
+  --ifm-hero-background-color: transparent;
+  --ifm-hero-text-color: inherit;
+}
+
+.button.button--primary {
+  background: linear-gradient(135deg, #0f5e63, #1b7a81);
+  border-color: #0f5e63;
+}
+
+.button.button--secondary {
+  color: #1f3440;
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(18, 47, 61, 0.16);
+}
+
+[data-theme='dark'] .button.button--secondary {
+  color: #eff5f7;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.theme-doc-markdown h1,
+.theme-doc-markdown h2,
+.theme-doc-markdown h3,
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  letter-spacing: -0.03em;
+}
+
+.table-of-contents__link--active {
+  font-weight: 700;
+}

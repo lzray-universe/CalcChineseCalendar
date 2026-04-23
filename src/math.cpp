@@ -67,7 +67,8 @@ void jd2greg(double jd,int&year,int&month,int&day,int&hour,int&minute,
 			hour+=1;
 			if(hour>=24){
 				hour=0;
-				jd2greg(jd+1.0,year,month,day,hour,minute,second);
+				double next_midnight=std::floor(jd+0.5)+0.5;
+				jd2greg(next_midnight,year,month,day,hour,minute,second);
 			}
 		}
 	}

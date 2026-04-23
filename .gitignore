@@ -12,6 +12,7 @@ Thumbs.db
 /build-*/
 /build_*/
 /build_wasm/
+/.tmp-msbuild/
 /cmake-build-*/
 /out/
 /package/
@@ -60,3 +61,12 @@ Thumbs.db
 *.bsp
 __pycache__/
 *.pyc
+
+# Docusaurus docs site
+/docs/docusaurus/node_modules/
+/docs/docusaurus/build/
+/docs/docusaurus/.docusaurus/
+/docs/docusaurus/*.log
+
+# Generated static calendar datasets
+/calendar-data/
