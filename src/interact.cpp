@@ -1001,25 +1001,86 @@ void run_sint(const std::string&ephem){
 }
 
 void run_eint(const std::string&ephem){
-	std::string near_date=ask_line(itx("prompt.eclipse_near"));
-	if(near_date.empty()){
-		throw std::invalid_argument(itx("err.empty_required","--near"));
-	}
-	std::vector<std::string> args={ephem,"--near",near_date};
-	std::string kind=ask_line(itx("prompt.eclipse_kind"));
-	if(kind=="2"||kind=="solar"){
-		args.push_back("--kind");
-		args.push_back("solar");
+	std::string mode=ask_line(lunar::i18n::pick(
+		"日月食查询模式：1) 邻近日期 2) 本地点最近可见（默认 1）：",
+		"Eclipse mode: 1) near date 2) nearest visible at site (default 1): ",
+		"食検索モード: 1) 近傍日付 2) 地点で最近見える食（既定 1）: ",
+		"식 조회 모드: 1) 근접 날짜 2) 지점에서 가장 가까운 가시 식 (기본 1): "));
+	std::vector<std::string> args={ephem};
+	bool visible_mode=(mode=="2"||mode=="visible"||mode=="visible-near");
+	if(visible_mode){
+		std::string near_time=ask_line(lunar::i18n::pick(
+			"请输入目标时刻（例如 2025-01-01T00:00:00+08:00）：",
+			"Enter target time (e.g. 2025-01-01T00:00:00+08:00): ",
+			"目標時刻を入力（例: 2025-01-01T00:00:00+08:00）: ",
+			"대상 시각 입력(예: 2025-01-01T00:00:00+08:00): "));
+		if(near_time.empty()){
+			throw std::invalid_argument(itx("err.empty_required","--visible-near"));
+		}
+		args.push_back("--visible-near");
+		args.push_back(near_time);
+		std::string lat=ask_line(lunar::i18n::pick(
+			"请输入纬度（度）：",
+			"Enter latitude in degrees: ",
+			"緯度（度）を入力: ",
+			"위도(도)를 입력하세요: "));
+		std::string lon=ask_line(lunar::i18n::pick(
+			"请输入经度（度，东经为正）：",
+			"Enter longitude in degrees (east positive): ",
+			"経度（度、東経正）を入力: ",
+			"경도(도, 동경 양수)를 입력하세요: "));
+		if(lat.empty()||lon.empty()){
+			throw std::invalid_argument(itx("err.empty_required","--point-lat/--point-lon"));
+		}
+		args.push_back("--point-lat");
+		args.push_back(lat);
+		args.push_back("--point-lon");
+		args.push_back(lon);
+		std::string height=ask_line(lunar::i18n::pick(
+			"可选：海拔米数（默认 0）：",
+			"Optional: height in meters (default 0): ",
+			"任意: 標高メートル（既定 0）: ",
+			"선택: 해발(m, 기본 0): "));
+		if(!height.empty()){
+			args.push_back("--point-height");
+			args.push_back(height);
+		}
+		std::string kind=ask_line(lunar::i18n::pick(
+			"食类型：1) both 2) lunar 3) solar（默认 both）：",
+			"Eclipse kind: 1) both 2) lunar 3) solar (default both): ",
+			"食タイプ: 1) both 2) lunar 3) solar（既定 both）: ",
+			"식 종류: 1) both 2) lunar 3) solar (기본 both): "));
+		if(kind=="2"||kind=="lunar"){
+			args.push_back("--kind");
+			args.push_back("lunar");
+		}else if(kind=="3"||kind=="solar"){
+			args.push_back("--kind");
+			args.push_back("solar");
+		}
+	}else{
+		std::string near_date=ask_line(itx("prompt.eclipse_near"));
+		if(near_date.empty()){
+			throw std::invalid_argument(itx("err.empty_required","--near"));
+		}
+		args.push_back("--near");
+		args.push_back(near_date);
+		std::string kind=ask_line(itx("prompt.eclipse_kind"));
+		if(kind=="2"||kind=="solar"){
+			args.push_back("--kind");
+			args.push_back("solar");
+		}
 	}
 	std::string stage=ask_line(itx("prompt.eclipse_stage"));
 	if(!stage.empty()){
 		args.push_back("--stage");
 		args.push_back(stage);
 	}
-	std::string global=ask_line(itx("prompt.eclipse_global"));
-	if(global=="1"||global=="yes"||global=="y"){
-		args.push_back("--global-vis");
-		args.push_back("1");
+	if(!visible_mode){
+		std::string global=ask_line(itx("prompt.eclipse_global"));
+		if(global=="1"||global=="yes"||global=="y"){
+			args.push_back("--global-vis");
+			args.push_back("1");
+		}
 	}
 	std::string fmt=ask_line(itx("prompt.format_eclipse"));
 	if(fmt=="2"||fmt=="txt"){
@@ -1035,6 +1096,105 @@ void run_eint(const std::string&ephem){
 		args.push_back(out);
 	}
 	cmd_eclipse(args);
+	ask_line(done_back_msg());
+}
+
+void run_xpint(const std::string&ephem){
+	InterCfg cfg;
+	load_cfg(cfg);
+	std::vector<std::string> args={ephem};
+	std::string mode=ask_line(lunar::i18n::pick(
+		"导出范围：1) 单月 2) 月到月 3) 年到年（默认 1）：",
+		"Export range: 1) single month 2) month range 3) year range (default 1): ",
+		"出力範囲: 1) 単月 2) 月範囲 3) 年範囲（既定 1）: ",
+		"내보내기 범위: 1) 단일 월 2) 월 범위 3) 연도 범위 (기본 1): "));
+	if(mode=="2"){
+		std::string from=ask_line(lunar::i18n::pick(
+			"起始年月 YYYY-MM：",
+			"Start month YYYY-MM: ",
+			"開始年月 YYYY-MM: ",
+			"시작 연월 YYYY-MM: "));
+		std::string to=ask_line(lunar::i18n::pick(
+			"结束年月 YYYY-MM：",
+			"End month YYYY-MM: ",
+			"終了年月 YYYY-MM: ",
+			"종료 연월 YYYY-MM: "));
+		if(from.empty()||to.empty()){
+			throw std::invalid_argument(itx("err.empty_required","--from/--to"));
+		}
+		args.push_back("--from");
+		args.push_back(from);
+		args.push_back("--to");
+		args.push_back(to);
+	}else if(mode=="3"){
+		std::string from=ask_line(lunar::i18n::pick(
+			"起始年份：",
+			"Start year: ",
+			"開始年: ",
+			"시작 연도: "));
+		std::string to=ask_line(lunar::i18n::pick(
+			"结束年份：",
+			"End year: ",
+			"終了年: ",
+			"종료 연도: "));
+		if(from.empty()||to.empty()){
+			throw std::invalid_argument(itx("err.empty_required","--from-year/--to-year"));
+		}
+		args.push_back("--from-year");
+		args.push_back(from);
+		args.push_back("--to-year");
+		args.push_back(to);
+	}else{
+		std::string ym=ask_line(itx("prompt.monthview_ym"));
+		if(ym.empty()){
+			throw std::invalid_argument(itx("err.empty_required","YYYY-MM"));
+		}
+		args.push_back(ym);
+	}
+	std::string lunar_day_tz=ask_lunar_day_tz(cfg);
+	if(!lunar_day_tz.empty()){
+		args.push_back("--lunar-day-tz");
+		args.push_back(lunar_day_tz);
+	}
+	std::string scope=ask_line(lunar::i18n::pick(
+		"输出内容：1) 基础 2) 完整（含食、天象、全部黄历）（默认 基础）：",
+		"Content: 1) basic 2) full (eclipse, astro, all almanacs) (default basic): ",
+		"内容: 1) 基本 2) 完全（食・天象・全黄暦）（既定 基本）: ",
+		"내용: 1) 기본 2) 전체(식, 천문, 모든 황력) (기본 기본): "));
+	if(scope=="2"||scope=="full"){
+		args.push_back("--scope");
+		args.push_back("full");
+	}
+	std::string jobs=ask_line(lunar::i18n::pick(
+		"可选：并行任务数 --jobs（留空自动）：",
+		"Optional: worker count --jobs (empty for auto): ",
+		"任意: 並列数 --jobs（空で自動）: ",
+		"선택: 병렬 작업 수 --jobs (비우면 자동): "));
+	if(!jobs.empty()){
+		args.push_back("--jobs");
+		args.push_back(jobs);
+	}
+	std::string fmt=ask_line(lunar::i18n::pick(
+		"输出格式：1) jsonl 2) json 3) csv 4) txt（默认 jsonl）：",
+		"Output format: 1) jsonl 2) json 3) csv 4) txt (default jsonl): ",
+		"出力形式: 1) jsonl 2) json 3) csv 4) txt（既定 jsonl）: ",
+		"출력 형식: 1) jsonl 2) json 3) csv 4) txt (기본 jsonl): "));
+	args.push_back("--format");
+	if(fmt=="2"||fmt=="json"){
+		args.push_back("json");
+	}else if(fmt=="3"||fmt=="csv"){
+		args.push_back("csv");
+	}else if(fmt=="4"||fmt=="txt"){
+		args.push_back("txt");
+	}else{
+		args.push_back("jsonl");
+	}
+	std::string out=ask_line(itx("prompt.out_file"));
+	if(!out.empty()){
+		args.push_back("--out");
+		args.push_back(out);
+	}
+	cmd_export(args);
 	ask_line(done_back_msg());
 }
 
@@ -1250,6 +1410,7 @@ void int_mode(){
 		std::cout<<"[15] "<<itx("menu.config")<<" (config)\n";
 		std::cout<<"[16] "<<itx("menu.completion")<<" (completion)\n";
 		std::cout<<"[17] "<<itx("menu.sky")<<" (sky)\n";
+		std::cout<<"[18] "<<itx("menu.export")<<" (export)\n";
 		std::cout<<"[d] "<<itx("menu.switch_bsp")<<"\n";
 		std::cout<<"[l] "<<itx("menu.lang")<<"\n";
 		std::cout<<"[h] "<<itx("menu.help")<<"\n";
@@ -1290,6 +1451,8 @@ void int_mode(){
 			run_with_err("completion",[&](){ run_pint(); });
 		}else if(choice=="17"){
 			run_with_err("sky",[&](){ run_skyint(ephem); });
+		}else if(choice=="18"){
+			run_with_err("export",[&](){ run_xpint(ephem); });
 		}else if(choice=="d"||choice=="D"){
 			std::string new_ephem=init_bspq(cfg);
 			if(!new_ephem.empty()){

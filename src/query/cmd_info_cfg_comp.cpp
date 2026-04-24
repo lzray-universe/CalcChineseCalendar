@@ -196,7 +196,7 @@ std::string build_comp(const std::string&shell){
 			   "  COMPREPLY=()\n"
 			   "  cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
 			   "  local cmds=\"months calendar year event download at convert "
-			   "zodiac sky day monthview next range search eclipse festival "
+			   "zodiac sky day monthview export next range search eclipse festival "
 			   "almanac info config completion\"\n"
 			   "  if [[ ${COMP_CWORD} -eq 1 ]]; then\n"
 			   "    COMPREPLY=( $(compgen -W \"${cmds}\" -- \"${cur}\") )\n"
@@ -219,7 +219,7 @@ std::string build_comp(const std::string&shell){
 		return "complete -c lunar -f\n"
 			   "complete -c lunar -n '__fish_use_subcommand' -a 'months "
 			   "calendar year event download at convert zodiac sky day "
-			   "monthview next range search eclipse festival almanac info "
+			   "monthview export next range search eclipse festival almanac info "
 			   "config completion'\n";
 	}
 	if(shell=="powershell"){
@@ -228,7 +228,7 @@ std::string build_comp(const std::string&shell){
 			   "  param($wordToComplete, $commandAst, $cursorPosition)\n"
 			   "  $cmds = "
 			   "'months','calendar','year','event','download','at','convert',"
-			   "'zodiac','sky','day','monthview','next','range','search',"
+			   "'zodiac','sky','day','monthview','export','next','range','search',"
 			   "'eclipse','festival','almanac','info','config','completion'\n"
 			   "  $cmds | Where-Object { $_ -like \"$wordToComplete*\" } | "
 			   "ForEach-Object {\n"

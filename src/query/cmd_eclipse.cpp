@@ -3,7 +3,10 @@ namespace{
 struct EclOpt{
 	std::string ephem;
 	std::string kind="lunar";
+	bool kind_set=false;
 	std::string near_date;
+	std::string visible_near;
+	int visible_years=20;
 	std::string stage="any";
 	std::string tz;
 	std::string format;
@@ -42,6 +45,9 @@ struct EclRes{
 	SolarEclipsePointVis spt;
 	bool has_sglb=false;
 	SolarEclipseGlobalVis sglb;
+	bool visible_search=false;
+	double visible_target_jd_utc=std::numeric_limits<double>::quiet_NaN();
+	double visible_delta_days=std::numeric_limits<double>::quiet_NaN();
 };
 
 void out_num(std::ostream&os,double v){
@@ -67,7 +73,19 @@ void write_in(JsonWriter&w,const EclOpt&opt){
 	w.key("kind");
 	w.value(opt.kind);
 	w.key("near");
-	w.value(opt.near_date);
+	if(opt.near_date.empty()){
+		w.null_val();
+	}else{
+		w.value(opt.near_date);
+	}
+	w.key("visible_near");
+	if(opt.visible_near.empty()){
+		w.null_val();
+	}else{
+		w.value(opt.visible_near);
+	}
+	w.key("visible_years");
+	w.value(opt.visible_years);
 	w.key("stage_window");
 	w.value(opt.stage);
 	w.key("sample_minutes");
@@ -108,8 +126,16 @@ EclOpt parse_ecl(const std::vector<std::string>&args){
 	}
 	opt.pretty=cfg.def_prety;
 	lunar::ArgParser parser;
-	parser.add_value("--kind",[&](const std::string&v){ opt.kind=to_low(v); })
+	parser.add_value("--kind",[&](const std::string&v){
+			opt.kind=to_low(v);
+			opt.kind_set=true;
+		})
 		.add_value("--near",[&](const std::string&v){ opt.near_date=v; })
+		.add_value("--visible-near",
+				   [&](const std::string&v){ opt.visible_near=v; })
+		.add_value("--visible-years",[&](const std::string&v){
+			opt.visible_years=parse_int(v,"--visible-years");
+		})
 		.add_value("--stage",[&](const std::string&v){ opt.stage=to_low(v); })
 		.add_value("--sample-min",[&](const std::string&v){
 			opt.sample_min=parse_double(v,"--sample-min");
@@ -156,18 +182,35 @@ EclOpt parse_ecl(const std::vector<std::string>&args){
 		})
 		.add_flag("--quiet",[&](){ opt.quiet=true; });
 	parser.parse_all(args,1,"eclipse");
-	if(opt.near_date.empty()){
+	const bool visible_mode=!opt.visible_near.empty();
+	if(visible_mode&&!opt.kind_set){
+		opt.kind="both";
+	}
+	if(!visible_mode&&opt.near_date.empty()){
 		throw std::invalid_argument("eclipse requires --near <YYYY-MM-DD>");
 	}
-	if(opt.kind!="lunar"&&opt.kind!="solar"){
-		throw std::invalid_argument("--kind must be lunar or solar");
+	if(visible_mode&&!opt.near_date.empty()){
+		throw std::invalid_argument("--near and --visible-near are mutually exclusive");
+	}
+	if(opt.kind!="lunar"&&opt.kind!="solar"&&
+	   !(visible_mode&&opt.kind=="both")){
+		throw std::invalid_argument(
+			visible_mode?"--kind must be lunar, solar, or both"
+						:"--kind must be lunar or solar");
 	}
 	if(!(opt.sample_min>0.0)){
 		throw std::invalid_argument("--sample-min must be > 0");
 	}
+	if(visible_mode&&opt.visible_years<1){
+		throw std::invalid_argument("--visible-years must be >=1");
+	}
 	if(opt.has_point_lat!=opt.has_point_lon){
 		throw std::invalid_argument(
 			"point visibility requires both --point-lat and --point-lon");
+	}
+	if(visible_mode&&!opt.has_point_lat){
+		throw std::invalid_argument(
+			"--visible-near requires --point-lat and --point-lon");
 	}
 	if((opt.has_point_height||opt.point_refine_set)&&!opt.has_point_lat){
 		throw std::invalid_argument(
@@ -177,8 +220,14 @@ EclOpt parse_ecl(const std::vector<std::string>&args){
 		throw std::invalid_argument("--global-format must be json or geojson");
 	}
 	chk_fmt(opt.format,{"json","txt","geojson"},"eclipse");
+	if(visible_mode&&opt.format=="geojson"){
+		throw std::invalid_argument("--visible-near does not support --format geojson");
+	}
 	if(opt.format=="geojson"){
 		opt.global_vis=true;
+	}
+	if(visible_mode&&opt.global_vis){
+		throw std::invalid_argument("--global-vis is not used with --visible-near");
 	}
 	if((opt.global_fmt_set||opt.grid_lat_set||opt.grid_lon_set)&&!opt.global_vis){
 		throw std::invalid_argument(
@@ -193,7 +242,114 @@ EclOpt parse_ecl(const std::vector<std::string>&args){
 	return opt;
 }
 
+bool try_visible_lunar(EphRead&eph,const EclOpt&opt,const EventRec&ev,
+					   EclRes&out){
+	double jd_tdb=std::isfinite(ev.jd_tdb)?ev.jd_tdb
+										  :TimeScale::utc_to_tdb(ev.jd_utc);
+	EclRes cand;
+	cand.tz_off=parse_tz(opt.tz);
+	cand.ev=ev;
+	cand.lunar=true;
+	if(!calc_lunar_eclipse(eph,jd_tdb,&cand.le)||!cand.le.has){
+		return false;
+	}
+	if(!lunar_eclipse_point_visibility(eph,cand.le,opt.stage,opt.point_lat,
+									   opt.point_lon,opt.point_height,
+									   opt.sample_min,opt.point_refine,
+									   &cand.lpt)){
+		return false;
+	}
+	cand.has_lpt=true;
+	if(!cand.lpt.visible){
+		return false;
+	}
+	out=std::move(cand);
+	return true;
+}
+
+bool try_visible_solar(EphRead&eph,const EclOpt&opt,const EventRec&ev,
+					   EclRes&out){
+	double jd_tdb=std::isfinite(ev.jd_tdb)?ev.jd_tdb
+										  :TimeScale::utc_to_tdb(ev.jd_utc);
+	EclRes cand;
+	cand.tz_off=parse_tz(opt.tz);
+	cand.ev=ev;
+	cand.lunar=false;
+	if(!calc_solar_eclipse(eph,jd_tdb,&cand.se)||!cand.se.has){
+		return false;
+	}
+	if(!solar_eclipse_point_visibility(eph,cand.se,opt.stage,opt.point_lat,
+									   opt.point_lon,opt.point_height,
+									   opt.sample_min,opt.point_refine,
+									   &cand.spt)){
+		return false;
+	}
+	cand.has_spt=true;
+	if(!cand.spt.visible){
+		return false;
+	}
+	out=std::move(cand);
+	return true;
+}
+
+EclRes run_visible_ecl(const EclOpt&opt){
+	EclRes res;
+	res.tz_off=parse_tz(opt.tz);
+	IsoTime parsed=parse_iso(opt.visible_near,opt.tz);
+	res.visible_search=true;
+	res.visible_target_jd_utc=parsed.jd_utc;
+
+	int y=0;
+	int m=0;
+	int d=0;
+	utc2civil(parsed.jd_utc,res.tz_off,y,m,d);
+	std::set<int> years;
+	for(int year=y-opt.visible_years;year<=y+opt.visible_years;++year){
+		years.insert(year);
+	}
+
+	EvtFilt filter;
+	filter.inc_st=false;
+	filter.inc_lph=false;
+	filter.inc_lecl=(opt.kind=="lunar"||opt.kind=="both");
+	filter.inc_secl=(opt.kind=="solar"||opt.kind=="both");
+	filter.inc_ecl=filter.inc_lecl||filter.inc_secl;
+
+	EphRead eph(opt.ephem);
+	std::vector<EventRec> events=
+		col_eyrs(eph,years,res.tz_off,opt.quiet?nullptr:&std::cerr,filter);
+	std::sort(events.begin(),events.end(),
+			  [&](const EventRec&a,const EventRec&b){
+				  return std::fabs(a.jd_utc-parsed.jd_utc)<
+						 std::fabs(b.jd_utc-parsed.jd_utc);
+			  });
+
+	for(const auto&ev : events){
+		EclRes cand;
+		bool visible=false;
+		if(ev.kind=="lunar_eclipse"){
+			visible=try_visible_lunar(eph,opt,ev,cand);
+		}else if(ev.kind=="solar_eclipse"){
+			visible=try_visible_solar(eph,opt,ev,cand);
+		}
+		if(!visible){
+			continue;
+		}
+		cand.visible_search=true;
+		cand.visible_target_jd_utc=parsed.jd_utc;
+		cand.visible_delta_days=std::fabs(ev.jd_utc-parsed.jd_utc);
+		return cand;
+	}
+
+	throw std::runtime_error(
+		"no visible eclipse found within +/- "+std::to_string(opt.visible_years)+
+		" years");
+}
+
 EclRes run_ecl(const EclOpt&opt){
+	if(!opt.visible_near.empty()){
+		return run_visible_ecl(opt);
+	}
 	int y=0,m=0,d=0;
 	std::tie(y,m,d)=parse_ymd(opt.near_date);
 	EclRes res;
@@ -256,6 +412,13 @@ void write_lun_txt(std::ostream&os,const EclOpt&opt,const EclRes&res){
 	os<<"tool=lunar format=txt type=eclipse tz_display="<<opt.tz<<"\n";
 	os<<"input.kind="<<opt.kind<<"\n";
 	os<<"input.near="<<opt.near_date<<"\n";
+	if(res.visible_search){
+		os<<"input.visible_near="<<opt.visible_near<<"\n";
+		os<<"input.visible_years="<<opt.visible_years<<"\n";
+		os<<"data.visible_target_loc="
+		  <<fmt_iso(res.visible_target_jd_utc,res.tz_off,true)<<"\n";
+		os<<"data.visible_delta_days="<<format_num(res.visible_delta_days)<<"\n";
+	}
 	os<<"input.stage_window="<<opt.stage<<"\n";
 	os<<"input.sample_minutes="<<format_num(opt.sample_min)<<"\n";
 	os<<"data.event.kind="<<res.ev.kind<<"\n";
@@ -325,6 +488,13 @@ void write_sol_txt(std::ostream&os,const EclOpt&opt,const EclRes&res){
 	os<<"tool=lunar format=txt type=eclipse tz_display="<<opt.tz<<"\n";
 	os<<"input.kind="<<opt.kind<<"\n";
 	os<<"input.near="<<opt.near_date<<"\n";
+	if(res.visible_search){
+		os<<"input.visible_near="<<opt.visible_near<<"\n";
+		os<<"input.visible_years="<<opt.visible_years<<"\n";
+		os<<"data.visible_target_loc="
+		  <<fmt_iso(res.visible_target_jd_utc,res.tz_off,true)<<"\n";
+		os<<"data.visible_delta_days="<<format_num(res.visible_delta_days)<<"\n";
+	}
 	os<<"input.stage_window="<<opt.stage<<"\n";
 	os<<"input.sample_minutes="<<format_num(opt.sample_min)<<"\n";
 	os<<"data.event.kind="<<res.ev.kind<<"\n";
@@ -392,7 +562,71 @@ void write_ecl(std::ostream&os,const EclOpt&opt,const EclRes&res){
 		return;
 	}
 	const FmtMap fmts={
-		{"json",[&](){ JsonWriter w(os,opt.pretty); w.obj_begin(); write_meta(w,opt.ephem,opt.tz,{"type=eclipse"}); write_in(w,opt); w.key("data"); w.obj_begin(); w.key("event"); wr_ejson(w,res.ev,eph,false,res.tz_off); if(res.lunar){ w.key("lunar_eclipse"); wr_ecljson(w,res.le,res.ev.year,res.tz_off); w.key("point_visibility"); if(res.has_lpt){ wr_ptvis_json(w,res.lpt,res.tz_off); }else{ w.null_val(); } w.key("global_visibility"); if(res.has_lglb){ if(opt.global_fmt=="geojson"){ wr_glbvis_geojson(w,res.lglb,res.tz_off); }else{ wr_glbvis_json(w,res.lglb,res.tz_off); } }else{ w.null_val(); } }else{ w.key("solar_eclipse"); wr_sol_ecljson(w,res.se,res.ev.year,res.tz_off); w.key("point_visibility"); if(res.has_spt){ wr_sol_ptvis_json(w,res.spt,res.tz_off); }else{ w.null_val(); } w.key("global_visibility"); if(res.has_sglb){ if(opt.global_fmt=="geojson"){ wr_sol_glbvis_geojson(w,res.sglb,res.tz_off); }else{ wr_sol_glbvis_json(w,res.sglb,res.tz_off); } }else{ w.null_val(); } } w.obj_end(); w.obj_end(); os<<"\n"; }},
+		{"json",[&](){
+			 JsonWriter w(os,opt.pretty);
+			 w.obj_begin();
+			 write_meta(w,opt.ephem,opt.tz,{"type=eclipse"});
+			 write_in(w,opt);
+			 w.key("data");
+			 w.obj_begin();
+			 if(res.visible_search){
+				 w.key("visible_target");
+				 w.obj_begin();
+				 w.key("jd_utc");
+				 w.value(res.visible_target_jd_utc);
+				 w.key("utc_iso");
+				 w.value(fmt_iso(res.visible_target_jd_utc,0,true));
+				 w.key("loc_iso");
+				 w.value(fmt_iso(res.visible_target_jd_utc,res.tz_off,true));
+				 w.key("delta_days");
+				 w.value(res.visible_delta_days);
+				 w.obj_end();
+			 }
+			 w.key("event");
+			 wr_ejson(w,res.ev,eph,false,res.tz_off);
+			 if(res.lunar){
+				 w.key("lunar_eclipse");
+				 wr_ecljson(w,res.le,res.ev.year,res.tz_off);
+				 w.key("point_visibility");
+				 if(res.has_lpt){
+					 wr_ptvis_json(w,res.lpt,res.tz_off);
+				 }else{
+					 w.null_val();
+				 }
+				 w.key("global_visibility");
+				 if(res.has_lglb){
+					 if(opt.global_fmt=="geojson"){
+						 wr_glbvis_geojson(w,res.lglb,res.tz_off);
+					 }else{
+						 wr_glbvis_json(w,res.lglb,res.tz_off);
+					 }
+				 }else{
+					 w.null_val();
+				 }
+			 }else{
+				 w.key("solar_eclipse");
+				 wr_sol_ecljson(w,res.se,res.ev.year,res.tz_off);
+				 w.key("point_visibility");
+				 if(res.has_spt){
+					 wr_sol_ptvis_json(w,res.spt,res.tz_off);
+				 }else{
+					 w.null_val();
+				 }
+				 w.key("global_visibility");
+				 if(res.has_sglb){
+					 if(opt.global_fmt=="geojson"){
+						 wr_sol_glbvis_geojson(w,res.sglb,res.tz_off);
+					 }else{
+						 wr_sol_glbvis_json(w,res.sglb,res.tz_off);
+					 }
+				 }else{
+					 w.null_val();
+				 }
+			 }
+			 w.obj_end();
+			 w.obj_end();
+			 os<<"\n";
+		 }},
 		{"txt",[&](){ if(res.lunar){ write_lun_txt(os,opt,res); }else{ write_sol_txt(os,opt,res); } }},
 	};
 	run_fmt(fmts,opt.format,"eclipse");

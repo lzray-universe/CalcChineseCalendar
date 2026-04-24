@@ -95,6 +95,29 @@ void use_mview(){
 			   "--astro-lat/--astro-lon are provided.\n";
 }
 
+void use_export(){
+	std::cout
+		<<"Usage:\n"
+		<<"  lunar export [bsp] <YYYY-MM>\n"
+		<<"  lunar export [bsp] --from <YYYY-MM> --to <YYYY-MM>\n"
+		<<"  lunar export [bsp] --from-year <year> --to-year <year>\n"
+		<<"    [--tz ...] [--lunar-day-tz ...] [--format json|jsonl|csv|txt] "
+		  "[--out ...] [--pretty 0|1] [--quiet]\n"
+		<<"    [--at HH:MM[:SS]] [--jobs N] [--events 0|1] [--eclipse 0|1]\n"
+		<<"    [--huangli off|folk|ziping|purple|xieji|all] [--lon <deg>]\n"
+		<<"    [--astro 0|1] [--astro-mode less|all|pick] "
+		  "[--astro-pick id,en,zh,...]\n"
+		<<"    [--astro-lat deg --astro-lon deg [--astro-height m]]\n"
+		<<"Examples:\n"
+		<<"  lunar export D:\\de442.bsp 2025-09 --format jsonl --out days.jsonl\n"
+		<<"  lunar export D:\\de442.bsp --from 2025-01 --to 2025-12 "
+		  "--eclipse 1 --huangli all --astro 1 --astro-mode less\n"
+		<<"Notes:\n"
+		<<"  Date ranges are inclusive by civil month in --lunar-day-tz.\n"
+		<<"  --jobs controls the daily compute loop when threaded builds are "
+		  "enabled; use --jobs 1 for deterministic single-thread execution.\n";
+}
+
 void use_next(){
 	std::cout<<"Usage:\n"
 			 <<"  lunar next [bsp] --from <time> --count N\n"
@@ -156,10 +179,13 @@ void use_eclipse(){
 		<<"Usage:\n"
 		<<"  lunar [--eclipse-method modern|legacy] eclipse [bsp] --near <YYYY-MM-DD>\n"
 		<<"  lunar eclipse [bsp] --near <YYYY-MM-DD> [--kind lunar|solar]\n"
+		<<"  lunar eclipse [bsp] --visible-near <time> --point-lat <deg> "
+		  "--point-lon <deg> [--kind lunar|solar|both]\n"
 		<<"    [--stage any|umb|total] (lunar) [--stage any|central] (solar)\n"
 		<<"    [--sample-min <minutes>]\n"
 		<<"    [--point-lat <deg> --point-lon <deg> [--point-height <m>]] "
 		  "[--point-refine 0|1]\n"
+		<<"    [--visible-years <years>]\n"
 		<<"    [--global-vis 0|1] [--grid-lat-step <deg>] [--grid-lon-step "
 		  "<deg>] [--global-format json|geojson]\n"
 		<<"    [--tz ...] [--format json|txt|geojson] [--out ...] [--pretty "
@@ -172,6 +198,10 @@ void use_eclipse(){
 		  "--global-format geojson --format json\n"
 		<<"  lunar eclipse D:\\de442.bsp --near 2025-09-07 --point-lat 31.23 "
 		  "--point-lon 121.47 --point-height 10\n";
+	std::cout
+		<<"  lunar eclipse D:\\de442.bsp --visible-near "
+		  "2025-01-01T00:00:00+08:00 --point-lat 31.23 --point-lon "
+		  "121.47 --kind both --format json\n";
 }
 
 void use_fest(){

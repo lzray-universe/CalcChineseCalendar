@@ -91,6 +91,31 @@ export type MonthviewOptions = JsonCommandOptions & {
   astroHeight?: number;
 };
 
+export type ExportDaysOptions = JsonCommandOptions & {
+  ephem: string;
+  yearMonth?: string;
+  fromMonth?: string;
+  toMonth?: string;
+  fromYear?: number;
+  toYear?: number;
+  tz?: string;
+  lunarDayTz?: string;
+  atTime?: string;
+  jobs?: number;
+  events?: boolean;
+  eclipse?: boolean;
+  scope?: string;
+  full?: boolean;
+  huangli?: string;
+  lon?: number;
+  astro?: boolean;
+  astroMode?: string;
+  astroPick?: string;
+  astroLat?: number;
+  astroLon?: number;
+  astroHeight?: number;
+};
+
 export type AtOptions = JsonCommandOptions & {
   ephem: string;
   time: string;
@@ -173,7 +198,9 @@ export type SkyOptions = JsonCommandOptions & {
 
 export type EclipseOptions = JsonCommandOptions & {
   ephem: string;
-  near: string;
+  near?: string;
+  visibleNear?: string;
+  visibleYears?: number;
   kind?: string;
   stage?: string;
   sampleMin?: number;
@@ -233,6 +260,7 @@ export class LunarClient {
   ganzhiMonth(options: GanzhiMonthOptions): unknown;
   day(options: DayOptions): unknown;
   monthview(options: MonthviewOptions): unknown;
+  exportDays(options: ExportDaysOptions): unknown;
   at(options: AtOptions): unknown;
   convert(options: ConvertOptions): unknown;
   fromLunar(options: FromLunarOptions): unknown;
@@ -256,6 +284,7 @@ export function ganzhi(options: GanzhiOptions): Promise<unknown>;
 export function ganzhiMonth(options: GanzhiMonthOptions): Promise<unknown>;
 export function day(options: DayOptions): Promise<unknown>;
 export function monthview(options: MonthviewOptions): Promise<unknown>;
+export function exportDays(options: ExportDaysOptions): Promise<unknown>;
 export function at(options: AtOptions): Promise<unknown>;
 export function convert(options: ConvertOptions): Promise<unknown>;
 export function fromLunar(options: FromLunarOptions): Promise<unknown>;

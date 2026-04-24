@@ -72,7 +72,7 @@ CalcChineseCalendar is a calendar and astronomy computation tool that prefers JP
 - Query a specific time and batch processing: `at`
 - Gregorian/lunar conversion and batch processing: `convert`
 - Solar zodiac and observed sky positions: `zodiac`, `sky`
-- Single-day / single-month views: `day`, `monthview`
+- Single-day, single-month, and batch day export views: `day`, `monthview`, `export`
 - Event lookup: `next`, `range`, `search`
 - Lunar and solar eclipses: `eclipse`
 - Traditional festivals and almanac summary: `festival`, `almanac`
@@ -297,7 +297,7 @@ Notes:
 
 ### 5.1 Which Commands Require BSP
 
-- `months calendar year event at convert day monthview next range search eclipse festival almanac info`
+- `months calendar year event at convert day monthview export next range search eclipse festival almanac info`
 
 Commands that do not require BSP:
 
@@ -581,6 +581,29 @@ Notes:
 - Default `tz/format/pretty` values come from config
 - `--lunar-day-tz ...` is also supported to explicitly override the lunar day-boundary timezone
 
+### 9.9.1 export
+
+```bash
+lunar export [bsp] <YYYY-MM>
+lunar export [bsp] --from <YYYY-MM> --to <YYYY-MM>
+lunar export [bsp] --from-year <year> --to-year <year>
+  [--tz ...] [--lunar-day-tz ...]
+  [--format json|jsonl|csv|txt] [--out ...] [--pretty 0|1] [--quiet]
+  [--at HH:MM[:SS]] [--jobs N] [--events 0|1] [--eclipse 0|1]
+  [--scope basic|full] [--huangli off|folk|ziping|purple|xieji|all] [--lon <deg>]
+  [--astro 0|1] [--astro-mode less|all|pick] [--astro-pick id,en,zh,...]
+  [--astro-lat deg --astro-lon deg [--astro-height m]]
+```
+
+Notes:
+
+- Ranges are inclusive by civil month under `--lunar-day-tz`
+- Each exported day includes Gregorian date, lunar date, year/month/day Ganzhi, and same-day lunar-phase or solar-term events with exact local time when present
+- Optional data can add eclipse events, astronomy events, and Huangli payloads; `--huangli all` emits every supported Huangli school
+- `--scope full` expands to eclipse events, less-mode astronomy events, and all Huangli schools
+- JSON and JSONL preserve nested daily payloads; CSV is a flat summary format
+- `--jobs 1` forces the single-thread daily loop; larger values use the threaded daily loop when internal threading is enabled
+
 ### 9.10 next
 
 ```bash
@@ -637,14 +660,21 @@ lunar eclipse [bsp] --near <YYYY-MM-DD> [--kind lunar|solar]
   [--global-format json|geojson]
   [--grid-lat-step <deg>] [--grid-lon-step <deg>]
   [--tz ...] [--format json|txt|geojson] [--out ...] [--pretty 0|1] [--quiet]
+
+lunar eclipse [bsp] --visible-near <time> --point-lat <deg> --point-lon <deg>
+  [--kind lunar|solar|both] [--visible-years <years>]
+  [--stage any|umb|total|central] [--sample-min <minutes>] [--point-height <m>]
+  [--tz ...] [--format json|txt] [--out ...] [--pretty 0|1] [--quiet]
 ```
 
 Notes:
 
-- `--near` is required
-- `--kind` defaults to `lunar`
+- Either `--near` or `--visible-near` is required
+- `--kind` defaults to `lunar`; with `--visible-near`, omitted `--kind` searches both lunar and solar eclipses
 - `--point-lat` and `--point-lon` must appear together
 - `--point-height` and `--point-refine` can only be used together with `--point-lat` and `--point-lon`
+- `--visible-near` finds the closest eclipse visible at the supplied point and requires `--point-lat` plus `--point-lon`
+- `--visible-near` is mutually exclusive with `--near`, and does not support `--global-vis` or `--format geojson`
 - `--global` is a compatibility alias of `--global-vis`
 - `--global-format`, `--grid-lat-step`, and `--grid-lon-step` require `--global-vis 1`, or using `--format geojson` directly
 - `--format geojson` forces global-visibility computation on
@@ -782,6 +812,7 @@ Run `lunar` directly with no arguments.
 - `15` config
 - `16` completion
 - `17` sky
+- `18` export
 - `d` switch / download BSP
 - `l` switch language
 - `h` help
@@ -854,13 +885,12 @@ Header: `include/lunar/c_api.h`
 
 Currently wrapped:
 
-- `month cal year event dl at conv zodiac day mview next range search fest alm info cfg comp`
-
-Note: `eclipse` is not currently exported as a standalone `lunar_cmd_eclipse`; use `lunar_run` instead.
+- `month cal year event dl at conv zodiac day mview export next range search eclipse fest alm info cfg comp`
 
 Additional notes:
 
 - Extra `zodiac` wrappers are now exported as `lunar_cmd_zodiac` and `lunar_use_zodiac`
+- `export` and `eclipse` are available as standalone command wrappers
 - `sky` is still recommended to be called through `lunar_run`
 
 ### 13.4 Return Codes
@@ -911,6 +941,9 @@ lunar day 2025-06-01 --bsp ./de440s.bsp --format txt
 # Range events
 lunar range --from 2025-01-01 --to 2025-12-31 --format json --kinds solar_term,lunar_phase
 
+# Batch daily export
+lunar export --from 2025-01 --to 2025-12 --scope full --format jsonl --out days.jsonl
+
 # Solar zodiac
 lunar zodiac ./de442.bsp --time 2025-03-20T18:01:00+08:00 --format json
 
@@ -919,6 +952,9 @@ lunar sky ./de442.bsp --time 2025-06-01T20:00 --input-tz +08:00 --lat 31.23 --lo
 
 # Eclipse calculation
 lunar eclipse --near 2025-09-07 --kind lunar --global-vis 1 --global-format geojson --format json
+
+# Nearest visible eclipse at a site
+lunar eclipse --visible-near 2025-01-01T00:00:00+08:00 --point-lat 31.23 --point-lon 121.47 --kind both --format json
 ```
 
 ## 17. Output Field Codes
@@ -927,7 +963,7 @@ Notes:
 
 - This section specifically explains abbreviations, codes, and fields such as `*_code`, `*_key`, `*_codes`, and `*_mask_hex` in structured output
 - Obvious semantic fields such as `year`, `month`, `name`, `data`, `events`, and `input` are not repeated here
-- Field names follow the current implementation in `src/query/core/base.cpp`, `src/query/day_output.cpp`, `src/cli/output.cpp`, `src/query/cmd_day_mview.cpp`, and `src/query/cmd_eclipse.cpp`
+- Field names follow the current implementation in `src/query/core/base.cpp`, `src/query/day_output.cpp`, `src/cli/output.cpp`, `src/query/cmd_day_mview.cpp`, `src/query/cmd_export.cpp`, and `src/query/cmd_eclipse.cpp`
 
 ### 17.1 Common Time and Sampling Fields
 
@@ -939,7 +975,7 @@ Notes:
 | `loc_iso` | General | ISO 8601 time converted into the current display timezone. |
 | `tz_display` | `meta` | Display timezone used by the current output. |
 | `input_tz` | `at.input` | Parsing timezone applied to the original input string. |
-| `lunar_day_tz` | `at/day/almanac/monthview` | Timezone used for lunar day boundaries. |
+| `lunar_day_tz` | `at/day/almanac/monthview/export` | Timezone used for lunar day boundaries. |
 | `smp_time` | `day.input` | Sampling time used by `day` within that date, default `12:00:00`. |
 | `smp_jdutc` | `day.input` | UTC Julian day of the `day` sample point. |
 | `smp_uiso` | `day.data` | UTC ISO time of the `day` sample point. |
@@ -960,7 +996,7 @@ Notes:
 | `elong` / `elongation_rad` | `at.data` | Solar-lunar ecliptic longitude difference in radians. |
 | `elong_deg` / `elongation_deg` | `at.data` | Solar-lunar ecliptic longitude difference in degrees. |
 | `ill_frac` | `at/day` | Illuminated lunar fraction, usually within `0..1`. |
-| `ill_pct` | `at/day/monthview` | Illuminated lunar percentage. |
+| `ill_pct` | `at/day/monthview/export` | Illuminated lunar percentage. |
 | `phase_name` | `at/day` | Lunar phase name. |
 | `moon_dist_km` | `event/eclipse` | Earth-Moon distance in kilometers. |
 | `moon_xg` | `at/day` | Summary object for the moon's star-lodge position. |
@@ -1065,7 +1101,7 @@ Notes:
 
 | Field | Main locations | Description |
 | --- | --- | --- |
-| `kind` | `event` / `near_ev` / `eclipse` | Machine-usable event category. |
+| `kind` | `event` / `near_ev` / `eclipse` / `export` | Machine-usable event category. |
 | `code` | `event` / `near_ev` | Stable code inside that event category. |
 | `st_prev` / `st_next` | `near_ev` | Previous / next solar-term event. |
 | `lp_prev` / `lp_next` | `near_ev` | Previous / next lunar-phase event. |
@@ -1077,6 +1113,9 @@ Notes:
 | `visible` | `eclipse.visibility` | Whether it is visible. |
 | `has_eclipse` | `solar.point_vis` | Whether an actual solar eclipse occurs at the site. |
 | `central` | `solar.point_vis` | Whether the site lies on the central eclipse path. |
+| `eclipses` | `export.day` | Eclipse events assigned to the exported civil day. |
+| `astro_events` | `export.day` | Astronomy events assigned to the exported civil day. |
+| `huangli` | `export.day` | Huangli payload for the selected school or all schools. |
 
 ### 17.6 Eclipse-Related Fields
 
@@ -1112,6 +1151,8 @@ Notes:
 | `max_mag` | `solar.point_vis` / `solar.global_vis` | Maximum eclipse magnitude at the site or grid point. |
 | `max_obscuration` | `solar.point_vis` | Maximum obscuration fraction at the site. |
 | `max_sun_alt_deg` | `solar.point_vis` / `solar.global_vis` | Solar altitude at maximum eclipse. |
+| `visible_target` | `eclipse.visible_near` | Target instant and distance metadata for nearest-visible search. |
+| `visible_delta_days` | `eclipse.visible_near` | Absolute distance in days between the target time and the selected visible eclipse. |
 
 ### 17.7 `code` / `key` / `mask` Fields
 
@@ -1170,7 +1211,7 @@ Notes:
 | `cli_month` / `cli_cal` / `cli_year` / `cli_event` / `cli_dl` | `include/lunar/cli.hpp` | Legacy CLI entries that use argument structs. |
 | `cli_at` / `cli_conv` | `include/lunar/cli_query.hpp` | Legacy CLI entries with argument structs for `at` / `convert`. |
 | `cmd_month` / `cmd_cal` / `cmd_year` / `cmd_event` / `cmd_dl` | `include/lunar/cli.hpp` | Command entries that directly receive string arrays. |
-| `cmd_at` / `cmd_conv` / `cmd_zodiac` / `cmd_sky` / `cmd_day` / `cmd_mview` / `cmd_next` / `cmd_range` / `cmd_search` / `cmd_eclipse` / `cmd_fest` / `cmd_alm` / `cmd_info` / `cmd_cfg` / `cmd_comp` | `include/lunar/cli_query.hpp` | Direct entries of each subcommand. |
+| `cmd_at` / `cmd_conv` / `cmd_zodiac` / `cmd_sky` / `cmd_day` / `cmd_mview` / `cmd_export` / `cmd_next` / `cmd_range` / `cmd_search` / `cmd_eclipse` / `cmd_fest` / `cmd_alm` / `cmd_info` / `cmd_cfg` / `cmd_comp` | `include/lunar/cli_query.hpp` | Direct entries of each subcommand. |
 | `lunar::calc_sky_pos` | `include/lunar/star.hpp` | Computes the sky-position list for a given time and observer site. |
 | `calc_solar_zodiac_at` / `calc_solar_zodiac_year` | `include/lunar/solar_zodiac.hpp` | Computes the solar zodiac at a single instant or a full-year zodiac interval summary. |
 | `lunar::core::compute_day` | `include/lunar/core.hpp` | Computes lunar date, almanac, lunar phase, events, and optional astronomy data for a given day. |

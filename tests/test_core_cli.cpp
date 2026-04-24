@@ -899,3 +899,100 @@ TEST(CliSky, EnglishOutputLocalizesNamesAndRegion){
 	std::error_code ec;
 	std::filesystem::remove(out_path,ec);
 }
+
+TEST(CliExport, MonthRangeJsonlHasOneRowPerDay){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path out_path=make_temp_path("export_range",".jsonl");
+	std::vector<std::string> args={
+		"export",test_ephem(),
+		"--from","2025-02",
+		"--to","2025-03",
+		"--events","0",
+		"--huangli","off",
+		"--jobs","1",
+		"--format","jsonl",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args));
+	const std::string txt=read_file_text(out_path);
+	std::istringstream iss(txt);
+	std::string line;
+	int rows=0;
+	while(std::getline(iss,line)){
+		if(!line.empty()){
+			++rows;
+		}
+	}
+	EXPECT_EQ(rows,59);
+	EXPECT_NE(txt.find("\"greg_date\":\"2025-02-01\""),std::string::npos);
+	EXPECT_NE(txt.find("\"greg_date\":\"2025-03-31\""),std::string::npos);
+	EXPECT_NE(txt.find("\"huangli\":null"),std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(out_path,ec);
+}
+
+TEST(CliExport, FullJsonIncludesEventsEclipsesAstroAndAllHuangli){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path out_path=make_temp_path("export_full",".json");
+	std::vector<std::string> args={
+		"export",test_ephem(),"2025-09",
+		"--scope","full",
+		"--jobs","1",
+		"--format","json",
+		"--pretty","0",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args));
+	const std::string txt=read_file_text(out_path);
+	EXPECT_NE(txt.find("\"type=export\""),std::string::npos);
+	EXPECT_NE(txt.find("\"greg_date\":\"2025-09-01\""),std::string::npos);
+	EXPECT_NE(txt.find("\"lunar_date\""),std::string::npos);
+	EXPECT_NE(txt.find("\"ganzhi\""),std::string::npos);
+	EXPECT_NE(txt.find("\"events\""),std::string::npos);
+	EXPECT_NE(txt.find("\"eclipses\""),std::string::npos);
+	EXPECT_NE(txt.find("\"lunar_eclipse\""),std::string::npos);
+	EXPECT_NE(txt.find("\"astro_events\""),std::string::npos);
+	EXPECT_NE(txt.find("\"huangli\":{\"folk\""),std::string::npos);
+	EXPECT_NE(txt.find("\"ziping\""),std::string::npos);
+	EXPECT_NE(txt.find("\"xieji\""),std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(out_path,ec);
+}
+
+TEST(CliEclipse, VisibleNearFindsVisibleLunarEclipseAtPoint){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path out_path=make_temp_path("eclipse_visible",".json");
+	std::vector<std::string> args={
+		"eclipse",test_ephem(),
+		"--visible-near","2025-01-01T00:00:00+08:00",
+		"--kind","lunar",
+		"--point-lat","31.23",
+		"--point-lon","121.47",
+		"--visible-years","2",
+		"--format","json",
+		"--pretty","0",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args));
+	const std::string txt=read_file_text(out_path);
+	EXPECT_NE(txt.find("\"visible_near\":\"2025-01-01T00:00:00+08:00\""),
+			  std::string::npos);
+	EXPECT_NE(txt.find("\"visible_target\""),std::string::npos);
+	EXPECT_NE(txt.find("\"kind\":\"lunar_eclipse\""),std::string::npos);
+	EXPECT_NE(txt.find("\"point_visibility\""),std::string::npos);
+	EXPECT_NE(txt.find("\"visible\":true"),std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(out_path,ec);
+}

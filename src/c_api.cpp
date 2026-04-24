@@ -684,6 +684,10 @@ int LUNAR_CALL lunar_cmd_mview(int argc,const char*const*argv){
 	return guard([&](){ return run_cmd(cmd_mview,argc,argv); });
 }
 
+int LUNAR_CALL lunar_cmd_export(int argc,const char*const*argv){
+	return guard([&](){ return run_cmd(cmd_export,argc,argv); });
+}
+
 int LUNAR_CALL lunar_cmd_next(int argc,const char*const*argv){
 	return guard([&](){ return run_cmd(cmd_next,argc,argv); });
 }
@@ -694,6 +698,10 @@ int LUNAR_CALL lunar_cmd_range(int argc,const char*const*argv){
 
 int LUNAR_CALL lunar_cmd_search(int argc,const char*const*argv){
 	return guard([&](){ return run_cmd(cmd_search,argc,argv); });
+}
+
+int LUNAR_CALL lunar_cmd_eclipse(int argc,const char*const*argv){
+	return guard([&](){ return run_cmd(cmd_eclipse,argc,argv); });
 }
 
 int LUNAR_CALL lunar_cmd_fest(int argc,const char*const*argv){
@@ -793,6 +801,13 @@ int LUNAR_CALL lunar_use_mview(void){
 	});
 }
 
+int LUNAR_CALL lunar_use_export(void){
+	return guard([](){
+		use_export();
+		return 0;
+	});
+}
+
 int LUNAR_CALL lunar_use_next(void){
 	return guard([](){
 		use_next();
@@ -810,6 +825,13 @@ int LUNAR_CALL lunar_use_range(void){
 int LUNAR_CALL lunar_use_search(void){
 	return guard([](){
 		use_search();
+		return 0;
+	});
+}
+
+int LUNAR_CALL lunar_use_eclipse(void){
+	return guard([](){
+		use_eclipse();
 		return 0;
 	});
 }

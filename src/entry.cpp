@@ -160,6 +160,9 @@ int run_cli_args(const std::vector<std::string>&args){
 	if(first=="monthview"){
 		return cmd_mview(tail_for(first));
 	}
+	if(first=="export"){
+		return cmd_export(tail_for(first));
+	}
 	if(first=="next"){
 		return cmd_next(tail_for(first));
 	}

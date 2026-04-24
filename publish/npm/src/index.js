@@ -378,6 +378,34 @@ export class LunarClient {
     return this._jsonCommand(args, options);
   }
 
+  exportDays(options) {
+    const args = ["export", options.ephem];
+    if (options.yearMonth !== undefined && options.yearMonth !== null) {
+      args.push(String(options.yearMonth));
+    }
+    appendValue(args, "--from", options.fromMonth);
+    appendValue(args, "--to", options.toMonth);
+    appendValue(args, "--from-year", options.fromYear);
+    appendValue(args, "--to-year", options.toYear);
+    appendValue(args, "--tz", options.tz);
+    appendValue(args, "--lunar-day-tz", options.lunarDayTz);
+    appendValue(args, "--at", options.atTime);
+    appendValue(args, "--jobs", options.jobs);
+    appendBool(args, "--events", options.events);
+    appendBool(args, "--eclipse", options.eclipse);
+    appendValue(args, "--scope", options.scope);
+    appendBool(args, "--full", options.full);
+    appendValue(args, "--huangli", options.huangli);
+    appendValue(args, "--lon", options.lon);
+    appendBool(args, "--astro", options.astro);
+    appendValue(args, "--astro-mode", options.astroMode);
+    appendValue(args, "--astro-pick", options.astroPick);
+    appendValue(args, "--astro-lat", options.astroLat);
+    appendValue(args, "--astro-lon", options.astroLon);
+    appendValue(args, "--astro-height", options.astroHeight);
+    return this._jsonCommand(args, options);
+  }
+
   at(options) {
     const args = ["at", options.ephem, options.time];
     appendValue(args, "--input-tz", options.inputTz);
@@ -483,7 +511,10 @@ export class LunarClient {
   }
 
   eclipse(options) {
-    const args = ["eclipse", options.ephem, "--near", options.near];
+    const args = ["eclipse", options.ephem];
+    appendValue(args, "--near", options.near);
+    appendValue(args, "--visible-near", options.visibleNear);
+    appendValue(args, "--visible-years", options.visibleYears);
     appendValue(args, "--kind", options.kind);
     appendValue(args, "--stage", options.stage);
     appendValue(args, "--sample-min", options.sampleMin);
@@ -568,6 +599,10 @@ export async function day(options) {
 
 export async function monthview(options) {
   return (await getDefaultClient()).monthview(options);
+}
+
+export async function exportDays(options) {
+  return (await getDefaultClient()).exportDays(options);
 }
 
 export async function at(options) {

@@ -10,6 +10,7 @@
 #include "query/core/day.cpp"
 #include "query/day_output.cpp"
 #include "query/cmd_day_mview.cpp"
+#include "query/cmd_export.cpp"
 #include "query/cmd_next_range_search.cpp"
 #include "query/cmd_zodiac.cpp"
 #include "query/cmd_eclipse.cpp"

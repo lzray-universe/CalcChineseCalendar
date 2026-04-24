@@ -194,7 +194,7 @@ std::optional<std::string> find_opt_val(const std::vector<std::string>&args,
 bool needs_bsp(const std::string&cmd){
 	static const std::unordered_set<std::string> kNeed={
 		"months","calendar","year","event","at","convert","day",
-		"monthview","next","range","search","eclipse","festival",
+		"monthview","export","next","range","search","eclipse","festival",
 		"almanac","info"};
 	return kNeed.find(cmd)!=kNeed.end();
 }
@@ -235,6 +235,47 @@ std::optional<std::pair<double,double>> infer_jd_interval(
 			int y2=(m==12)?(y+1):y;
 			double start=greg2jd(y,m,1,0,0,0.0)-UTC8DAY;
 			double end=greg2jd(y2,m2,1,0,0,0.0)-UTC8DAY;
+			return std::make_pair(start,end);
+		}
+		if(command=="export"){
+			std::optional<std::string> from=find_opt_val(args,"--from");
+			std::optional<std::string> to=find_opt_val(args,"--to");
+			if(!from&&!args.empty()&&!lunar::ArgParser::is_opt(args[0])){
+				from=args[0];
+			}
+			if(!from){
+				if(auto fy=find_opt_val(args,"--from-year")){
+					int y0=std::stoi(*fy);
+					int y1=y0;
+					if(auto ty=find_opt_val(args,"--to-year")){
+						y1=std::stoi(*ty);
+					}
+					double start=greg2jd(std::min(y0,y1),1,1,0,0,0.0)-UTC8DAY;
+					double end=greg2jd(std::max(y0,y1)+1,1,1,0,0,0.0)-UTC8DAY;
+					return std::make_pair(start,end);
+				}
+				return std::nullopt;
+			}
+			if(!to){
+				to=from;
+			}
+			auto ym0=parse_ym(*from);
+			auto ym1=parse_ym(*to);
+			if(!ym0||!ym1){
+				return std::nullopt;
+			}
+			int y0=ym0->first;
+			int m0=ym0->second;
+			int y1=ym1->first;
+			int m1=ym1->second;
+			if(y1<y0||(y1==y0&&m1<m0)){
+				std::swap(y0,y1);
+				std::swap(m0,m1);
+			}
+			int end_y=y1+(m1==12?1:0);
+			int end_m=(m1==12)?1:(m1+1);
+			double start=greg2jd(y0,m0,1,0,0,0.0)-UTC8DAY;
+			double end=greg2jd(end_y,end_m,1,0,0,0.0)-UTC8DAY;
 			return std::make_pair(start,end);
 		}
 		if(command=="at"){
@@ -295,6 +336,16 @@ std::optional<std::pair<double,double>> infer_jd_interval(
 			return std::make_pair(f.jd_utc,f.jd_utc+span);
 		}
 		if(command=="eclipse"){
+			auto visible_near=find_opt_val(args,"--visible-near");
+			if(visible_near){
+				IsoTime p=parse_iso(*visible_near,default_tz);
+				int years=20;
+				if(auto v=find_opt_val(args,"--visible-years")){
+					years=std::max(1,std::stoi(*v));
+				}
+				double span=static_cast<double>(years)*366.0;
+				return std::make_pair(p.jd_utc-span,p.jd_utc+span);
+			}
 			auto near=find_opt_val(args,"--near");
 			if(!near){
 				return std::nullopt;

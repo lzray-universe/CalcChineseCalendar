@@ -8,6 +8,7 @@ from ._api import convert
 from ._api import core_day
 from ._api import day
 from ._api import eclipse
+from ._api import export_days
 from ._api import festival
 from ._api import from_lunar
 from ._api import ganzhi
@@ -36,6 +37,7 @@ __all__ = [
     "core_day",
     "day",
     "eclipse",
+    "export_days",
     "festival",
     "from_lunar",
     "ganzhi",

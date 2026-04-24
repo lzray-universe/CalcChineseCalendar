@@ -305,6 +305,60 @@ class Lunar:
         _append_value(args, "--astro-height", astro_height)
         return self._json_command(args, pretty=pretty, quiet=quiet, extra_args=extra_args)
 
+    def export_days(
+        self,
+        ephem: str,
+        *,
+        year_month: str | None = None,
+        from_month: str | None = None,
+        to_month: str | None = None,
+        from_year: int | None = None,
+        to_year: int | None = None,
+        tz: str | None = None,
+        lunar_day_tz: str | None = None,
+        at_time: str | None = None,
+        jobs: int | None = None,
+        events: bool | None = None,
+        eclipse: bool | None = None,
+        scope: str | None = None,
+        full: bool | None = None,
+        huangli: str | None = None,
+        lon: float | None = None,
+        astro: bool | None = None,
+        astro_mode: str | None = None,
+        astro_pick: str | None = None,
+        astro_lat: float | None = None,
+        astro_lon: float | None = None,
+        astro_height: float | None = None,
+        pretty: bool = False,
+        quiet: bool = True,
+        extra_args: Iterable[str] | None = None,
+    ) -> JsonValue:
+        args = ["export", ephem]
+        if year_month is not None:
+            args.append(str(year_month))
+        _append_value(args, "--from", from_month)
+        _append_value(args, "--to", to_month)
+        _append_value(args, "--from-year", from_year)
+        _append_value(args, "--to-year", to_year)
+        _append_value(args, "--tz", tz)
+        _append_value(args, "--lunar-day-tz", lunar_day_tz)
+        _append_value(args, "--at", at_time)
+        _append_value(args, "--jobs", jobs)
+        _append_bool(args, "--events", events)
+        _append_bool(args, "--eclipse", eclipse)
+        _append_value(args, "--scope", scope)
+        _append_bool(args, "--full", full)
+        _append_value(args, "--huangli", huangli)
+        _append_value(args, "--lon", lon)
+        _append_bool(args, "--astro", astro)
+        _append_value(args, "--astro-mode", astro_mode)
+        _append_value(args, "--astro-pick", astro_pick)
+        _append_value(args, "--astro-lat", astro_lat)
+        _append_value(args, "--astro-lon", astro_lon)
+        _append_value(args, "--astro-height", astro_height)
+        return self._json_command(args, pretty=pretty, quiet=quiet, extra_args=extra_args)
+
     def at(
         self,
         ephem: str,
@@ -486,8 +540,10 @@ class Lunar:
     def eclipse(
         self,
         ephem: str,
-        near: str,
+        near: str | None = None,
         *,
+        visible_near: str | None = None,
+        visible_years: int | None = None,
         kind: str | None = None,
         stage: str | None = None,
         sample_min: float | None = None,
@@ -504,7 +560,10 @@ class Lunar:
         quiet: bool = True,
         extra_args: Iterable[str] | None = None,
     ) -> JsonValue:
-        args = ["eclipse", ephem, "--near", near]
+        args = ["eclipse", ephem]
+        _append_value(args, "--near", near)
+        _append_value(args, "--visible-near", visible_near)
+        _append_value(args, "--visible-years", visible_years)
         _append_value(args, "--kind", kind)
         _append_value(args, "--stage", stage)
         _append_value(args, "--sample-min", sample_min)
@@ -612,6 +671,10 @@ def ganzhi_month(ephem: str, year: int, month: int, **kwargs: Any) -> JsonValue:
 
 def monthview(ephem: str, year_month: str, **kwargs: Any) -> JsonValue:
     return _DEFAULT.monthview(ephem, year_month, **kwargs)
+
+
+def export_days(ephem: str, **kwargs: Any) -> JsonValue:
+    return _DEFAULT.export_days(ephem, **kwargs)
 
 
 def at(ephem: str, time: str, **kwargs: Any) -> JsonValue:
