@@ -1120,8 +1120,8 @@ lunar eclipse --visible-near 2025-01-01T00:00:00+08:00 --point-lat 31.23 --point
 | --- | --- | --- |
 | `pen_mag` | `lunar_eclipse` | 半影食分。 |
 | `umb_mag` | `lunar_eclipse` | 本影食分。 |
-| `mag` | `solar_eclipse` | 日食食分。 |
-| `obscuration` | `solar_eclipse` | 太阳被遮蔽面积比例。 |
+| `mag` | `solar_eclipse` | 地心视圆盘重叠口径的日食食分；地点或网格食分见 `max_mag`。 |
+| `obscuration` | `solar_eclipse` | 地心视圆盘重叠口径的太阳被遮蔽面积比例。 |
 | `gamma` | `lunar_eclipse` / `solar_eclipse` | 食中心相对影轴的归一化偏距。 |
 | `eps_deg` | `lunar_eclipse` | 月食几何角参数，单位度。 |
 | `rp_re` | `eclipse` | 影区半径参数，单位地球半径。 |
@@ -1134,6 +1134,13 @@ lunar eclipse --visible-near 2025-01-01T00:00:00+08:00 --point-lat 31.23 --point
 | `sep_max_deg` | `solar_eclipse` | 最大食时日月中心角距，单位度。 |
 | `sun_sd_max_deg` | `solar_eclipse` | 最大食时太阳视半径角，单位度。 |
 | `moon_sd_max_deg` | `solar_eclipse` | 最大食时月亮视半径角，单位度。 |
+| `besselian` | `solar_eclipse` | 日食贝塞尔参数对象，含基本平面坐标、影锥半径、锥角与时间多项式。 |
+| `x` / `y` | `solar_eclipse.besselian` | 食甚时月影轴在基本平面上的坐标，单位地球半径。 |
+| `d_deg` / `mu_deg` | `solar_eclipse.besselian` | 影轴赤纬与格林尼治时角，单位度。 |
+| `l1` / `l2` | `solar_eclipse.besselian` | 半影 / 本影影锥在基本平面的半径，单位地球半径。 |
+| `tan_f1` / `tan_f2` | `solar_eclipse.besselian` | 半影 / 本影影锥角正切值。 |
+| `x_dot` / `y_dot` / `d_dot_deg` / `mu_dot_deg` / `l1_dot` / `l2_dot` | `solar_eclipse.besselian` | 对应贝塞尔参数对小时的导数。 |
+| `coefficients` | `solar_eclipse.besselian` | 三次多项式系数数组 `[c0,c1,c2,c3]`，自 `epoch` 起按 TDB 小时计算。 |
 | `sun_geo` / `moon_geo` | `lunar_eclipse` | 太阳 / 月亮几何参数对象。 |
 | `lib` | `lunar_eclipse` | 月面天平动参数对象。 |
 | `l_deg` / `b_deg` / `c_deg` | `lib` | 月面天平动角参数，单位度。 |
@@ -1284,7 +1291,8 @@ lunar eclipse --visible-near 2025-01-01T00:00:00+08:00 --point-lat 31.23 --point
 | `LunarEclipse` | `has`、`type`、`jd_tdb_p1/u1/u2/u3/u4/p4/opp/max`、`pen_mag`、`umb_mag`、`dur_pen_sec`、`dur_umb_sec`、`dur_tot_sec`、`gamma`、`eps_deg`、`sun_geo`、`moon_geo`、`lib` | 月食完整结果。 |
 | `LunarEclipsePointVis` | `stage_window`、`lat_deg`、`lon_deg`、`height_m`、`visible`、`max_alt_deg`、`first_jd_utc`、`last_jd_utc`、`sample_count` | 月食单点可见性结果。 |
 | `LunarEclipseGlobalVis` | `stage_window`、`jd_start_utc`、`jd_end_utc`、`lat_step_deg`、`lon_step_deg`、`sample_count`、`points` | 月食全局网格可见性结果。 |
-| `SolarEclipse` | `has`、`type`、`jd_tdb_c1/c2/c3/c4/max`、`mag`、`obscuration`、`gamma`、`sep_max_deg`、`sun_sd_max_deg`、`moon_sd_max_deg`、`moon_dist_km`、`sun_dist_km` | 日食完整结果。 |
+| `SolarBesselianElements` | `x`、`y`、`d_deg`、`mu_deg`、`l1`、`l2`、`tan_f1`、`tan_f2`、`*_coeff` | 日食贝塞尔参数与三次时间多项式。 |
+| `SolarEclipse` | `has`、`type`、`jd_tdb_c1/c2/c3/c4/max`、`mag`、`obscuration`、`gamma`、`sep_max_deg`、`sun_sd_max_deg`、`moon_sd_max_deg`、`moon_dist_km`、`sun_dist_km`、`besselian` | 日食完整结果。 |
 | `SolarEclipsePointVis` | `stage_window`、`lat_deg`、`lon_deg`、`height_m`、`has_eclipse`、`visible`、`central`、`max_mag`、`max_obscuration`、`max_sun_alt_deg`、`c1_jd_utc/c2_jd_utc/c3_jd_utc/c4_jd_utc/max_jd_utc` | 日食单点可见性结果。 |
 | `SolarEclipseGlobalVis` | `stage_window`、`jd_start_utc`、`jd_end_utc`、`lat_step_deg`、`lon_step_deg`、`sample_count`、`points` | 日食全局网格可见性结果。 |
 

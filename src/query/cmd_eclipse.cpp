@@ -67,6 +67,54 @@ void out_loc(std::ostream&os,const std::string&key,double jd,int tz_off){
 	}
 }
 
+void out_coeff(std::ostream&os,const std::string&key,
+			   const std::array<double,4>&coeff){
+	os<<key<<"=";
+	for(std::size_t i=0;i<coeff.size();++i){
+		if(i>0){
+			os<<",";
+		}
+		out_num(os,coeff[i]);
+	}
+	os<<"\n";
+}
+
+void write_sol_besselian_txt(std::ostream&os,const SolarBesselianElements&b,
+							 int tz_off){
+	os<<"[solar_besselian]\n";
+	if(!b.has){
+		os<<"null\n";
+		return;
+	}
+	os<<"epoch_jd_tdb="; out_num(os,b.jd_tdb_epoch); os<<"\n";
+	os<<"epoch_jd_utc="; out_num(os,TimeScale::tdb_to_utc(b.jd_tdb_epoch)); os<<"\n";
+	os<<"epoch_utc="<<fmt_iso(TimeScale::tdb_to_utc(b.jd_tdb_epoch),0,true)<<"\n";
+	os<<"epoch_td="<<fmt_iso(TimeScale::tdb_to_tt(b.jd_tdb_epoch),0,true)<<"\n";
+	os<<"epoch_loc="<<node_liso(b.jd_tdb_epoch,tz_off)<<"\n";
+	os<<"time_argument=hours_from_epoch_tdb\n";
+	os<<"polynomial_order=3\n";
+	os<<"x="; out_num(os,b.x); os<<"\n";
+	os<<"y="; out_num(os,b.y); os<<"\n";
+	os<<"d_deg="; out_num(os,b.d_deg); os<<"\n";
+	os<<"mu_deg="; out_num(os,b.mu_deg); os<<"\n";
+	os<<"l1="; out_num(os,b.l1); os<<"\n";
+	os<<"l2="; out_num(os,b.l2); os<<"\n";
+	os<<"tan_f1="; out_num(os,b.tan_f1); os<<"\n";
+	os<<"tan_f2="; out_num(os,b.tan_f2); os<<"\n";
+	os<<"x_dot="; out_num(os,b.x_dot); os<<"\n";
+	os<<"y_dot="; out_num(os,b.y_dot); os<<"\n";
+	os<<"d_dot_deg="; out_num(os,b.d_dot_deg); os<<"\n";
+	os<<"mu_dot_deg="; out_num(os,b.mu_dot_deg); os<<"\n";
+	os<<"l1_dot="; out_num(os,b.l1_dot); os<<"\n";
+	os<<"l2_dot="; out_num(os,b.l2_dot); os<<"\n";
+	out_coeff(os,"x_coeff",b.x_coeff);
+	out_coeff(os,"y_coeff",b.y_coeff);
+	out_coeff(os,"d_coeff_deg",b.d_coeff_deg);
+	out_coeff(os,"mu_coeff_deg",b.mu_coeff_deg);
+	out_coeff(os,"l1_coeff",b.l1_coeff);
+	out_coeff(os,"l2_coeff",b.l2_coeff);
+}
+
 void write_in(JsonWriter&w,const EclOpt&opt){
 	w.key("input");
 	w.obj_begin();
@@ -514,6 +562,7 @@ void write_sol_txt(std::ostream&os,const EclOpt&opt,const EclRes&res){
 	os<<"dt_max_sec="; out_num(os,e.dt_max_sec); os<<"\n";
 	os<<"rp_re="; out_num(os,e.rp_re); os<<"\n";
 	os<<"ru_re="; out_num(os,e.ru_re); os<<"\n";
+	write_sol_besselian_txt(os,e.besselian,res.tz_off);
 	os<<"c1_loc="<<node_liso(e.jd_tdb_c1,res.tz_off)<<"\n";
 	os<<"c2_loc="<<node_liso(e.jd_tdb_c2,res.tz_off)<<"\n";
 	os<<"max_loc="<<node_liso(e.jd_tdb_max,res.tz_off)<<"\n";

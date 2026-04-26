@@ -6,6 +6,8 @@
 
 #include "test_common.hpp"
 
+#include<cmath>
+
 TEST(LunarEclipseSeries, TotalEclipseRegression){
 	if(!has_test_ephem()){
 		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
@@ -45,4 +47,12 @@ TEST(SolarEclipseSeries, TotalEclipseRegression){
 	EXPECT_LT(ecl.jd_tdb_c2,ecl.jd_tdb_max);
 	EXPECT_LT(ecl.jd_tdb_max,ecl.jd_tdb_c3);
 	EXPECT_LT(ecl.jd_tdb_c3,ecl.jd_tdb_c4);
+	ASSERT_TRUE(ecl.besselian.has);
+	EXPECT_NEAR(ecl.besselian.jd_tdb_epoch,ecl.jd_tdb_max,1e-12);
+	EXPECT_NEAR(ecl.besselian.l1,ecl.rp_re,1e-12);
+	EXPECT_NEAR(ecl.besselian.l2,ecl.ru_re,1e-12);
+	EXPECT_NEAR(ecl.besselian.x_coeff[0],ecl.besselian.x,1e-12);
+	EXPECT_NEAR(ecl.besselian.y_coeff[0],ecl.besselian.y,1e-12);
+	EXPECT_TRUE(std::isfinite(ecl.besselian.tan_f1));
+	EXPECT_TRUE(std::isfinite(ecl.besselian.tan_f2));
 }

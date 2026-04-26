@@ -143,6 +143,92 @@ void wr_glbvis_geojson(JsonWriter&w,const LunarEclipseGlobalVis&gv,int tz_off){
 	w.obj_end();
 }
 
+void wr_num_array(JsonWriter&w,const std::array<double,4>&items){
+	w.arr_begin();
+	for(double item : items){
+		wr_num_or_null(w,item);
+	}
+	w.arr_end();
+}
+
+void wr_sol_besselian_json(JsonWriter&w,const SolarBesselianElements&b,
+						   int tz_off){
+	if(!b.has){
+		w.null_val();
+		return;
+	}
+	w.obj_begin();
+	w.key("epoch");
+	if(std::isfinite(b.jd_tdb_epoch)){
+		double jd_td=TimeScale::tdb_to_tt(b.jd_tdb_epoch);
+		double jd_utc=TimeScale::tdb_to_utc(b.jd_tdb_epoch);
+		w.obj_begin();
+		w.key("jd_tdb");
+		w.value(b.jd_tdb_epoch);
+		w.key("jd_td");
+		w.value(jd_td);
+		w.key("jd_utc");
+		w.value(jd_utc);
+		w.key("utc_iso");
+		w.value(fmt_iso(jd_utc,0,true));
+		w.key("td_iso");
+		w.value(fmt_iso(jd_td,0,true));
+		w.key("loc_iso");
+		w.value(fmt_iso(jd_utc,tz_off,true));
+		w.obj_end();
+	}else{
+		w.null_val();
+	}
+	w.key("time_argument");
+	w.value("hours_from_epoch_tdb");
+	w.key("polynomial_order");
+	w.value(3);
+	w.key("x");
+	wr_num_or_null(w,b.x);
+	w.key("y");
+	wr_num_or_null(w,b.y);
+	w.key("d_deg");
+	wr_num_or_null(w,b.d_deg);
+	w.key("mu_deg");
+	wr_num_or_null(w,b.mu_deg);
+	w.key("l1");
+	wr_num_or_null(w,b.l1);
+	w.key("l2");
+	wr_num_or_null(w,b.l2);
+	w.key("tan_f1");
+	wr_num_or_null(w,b.tan_f1);
+	w.key("tan_f2");
+	wr_num_or_null(w,b.tan_f2);
+	w.key("x_dot");
+	wr_num_or_null(w,b.x_dot);
+	w.key("y_dot");
+	wr_num_or_null(w,b.y_dot);
+	w.key("d_dot_deg");
+	wr_num_or_null(w,b.d_dot_deg);
+	w.key("mu_dot_deg");
+	wr_num_or_null(w,b.mu_dot_deg);
+	w.key("l1_dot");
+	wr_num_or_null(w,b.l1_dot);
+	w.key("l2_dot");
+	wr_num_or_null(w,b.l2_dot);
+	w.key("coefficients");
+	w.obj_begin();
+	w.key("x");
+	wr_num_array(w,b.x_coeff);
+	w.key("y");
+	wr_num_array(w,b.y_coeff);
+	w.key("d_deg");
+	wr_num_array(w,b.d_coeff_deg);
+	w.key("mu_deg");
+	wr_num_array(w,b.mu_coeff_deg);
+	w.key("l1");
+	wr_num_array(w,b.l1_coeff);
+	w.key("l2");
+	wr_num_array(w,b.l2_coeff);
+	w.obj_end();
+	w.obj_end();
+}
+
 void wr_sol_ecljson(JsonWriter&w,const SolarEclipse&ecl,int year,int tz_off){
 	w.obj_begin();
 	w.key("kind");
@@ -175,6 +261,8 @@ void wr_sol_ecljson(JsonWriter&w,const SolarEclipse&ecl,int year,int tz_off){
 	wr_num_or_null(w,ecl.rp_re);
 	w.key("ru_re");
 	wr_num_or_null(w,ecl.ru_re);
+	w.key("besselian");
+	wr_sol_besselian_json(w,ecl.besselian,tz_off);
 	w.key("c1_loc");
 	w.value(node_liso(ecl.jd_tdb_c1,tz_off));
 	w.key("c2_loc");

@@ -1,5 +1,6 @@
 #pragma once
 
+#include<array>
 #include<limits>
 #include<string>
 #include<vector>
@@ -7,6 +8,31 @@
 #include "lunar/calendar.hpp"
 #include "lunar/events.hpp"
 #include "lunar/spc_ephem.hpp"
+
+struct SolarBesselianElements{
+	bool has=false;
+	double jd_tdb_epoch=std::numeric_limits<double>::quiet_NaN();
+	double x=std::numeric_limits<double>::quiet_NaN();
+	double y=std::numeric_limits<double>::quiet_NaN();
+	double d_deg=std::numeric_limits<double>::quiet_NaN();
+	double mu_deg=std::numeric_limits<double>::quiet_NaN();
+	double l1=std::numeric_limits<double>::quiet_NaN();
+	double l2=std::numeric_limits<double>::quiet_NaN();
+	double tan_f1=std::numeric_limits<double>::quiet_NaN();
+	double tan_f2=std::numeric_limits<double>::quiet_NaN();
+	double x_dot=std::numeric_limits<double>::quiet_NaN();
+	double y_dot=std::numeric_limits<double>::quiet_NaN();
+	double d_dot_deg=std::numeric_limits<double>::quiet_NaN();
+	double mu_dot_deg=std::numeric_limits<double>::quiet_NaN();
+	double l1_dot=std::numeric_limits<double>::quiet_NaN();
+	double l2_dot=std::numeric_limits<double>::quiet_NaN();
+	std::array<double,4> x_coeff{};
+	std::array<double,4> y_coeff{};
+	std::array<double,4> d_coeff_deg{};
+	std::array<double,4> mu_coeff_deg{};
+	std::array<double,4> l1_coeff{};
+	std::array<double,4> l2_coeff{};
+};
 
 struct SolarEclipse{
 	bool has=false;
@@ -27,6 +53,7 @@ struct SolarEclipse{
 	double dt_max_sec=std::numeric_limits<double>::quiet_NaN();
 	double rp_re=std::numeric_limits<double>::quiet_NaN();
 	double ru_re=std::numeric_limits<double>::quiet_NaN();
+	SolarBesselianElements besselian;
 };
 
 bool calc_solar_eclipse(EphRead&eph,double jd_tdb_near_new_moon,SolarEclipse*out);

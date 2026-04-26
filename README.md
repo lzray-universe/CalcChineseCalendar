@@ -1123,8 +1123,8 @@ Notes:
 | --- | --- | --- |
 | `pen_mag` | `lunar_eclipse` | Penumbral magnitude. |
 | `umb_mag` | `lunar_eclipse` | Umbral magnitude. |
-| `mag` | `solar_eclipse` | Solar-eclipse magnitude. |
-| `obscuration` | `solar_eclipse` | Fraction of the solar disk obscured. |
+| `mag` | `solar_eclipse` | Geocentric apparent-disk eclipse magnitude; use `max_mag` for site or grid magnitude. |
+| `obscuration` | `solar_eclipse` | Geocentric apparent-disk obscuration fraction. |
 | `gamma` | `lunar_eclipse` / `solar_eclipse` | Normalized offset of eclipse center relative to the shadow axis. |
 | `eps_deg` | `lunar_eclipse` | Geometric angle parameter of the lunar eclipse, in degrees. |
 | `rp_re` | `eclipse` | Shadow-zone radius parameter in Earth radii. |
@@ -1137,6 +1137,13 @@ Notes:
 | `sep_max_deg` | `solar_eclipse` | Angular separation between sun and moon centers at maximum eclipse, in degrees. |
 | `sun_sd_max_deg` | `solar_eclipse` | Apparent solar semidiameter at maximum eclipse, in degrees. |
 | `moon_sd_max_deg` | `solar_eclipse` | Apparent lunar semidiameter at maximum eclipse, in degrees. |
+| `besselian` | `solar_eclipse` | Solar-eclipse Besselian element object with fundamental-plane coordinates, shadow radii, cone angles, and time polynomials. |
+| `x` / `y` | `solar_eclipse.besselian` | Shadow-axis coordinates in the fundamental plane at maximum eclipse, in Earth radii. |
+| `d_deg` / `mu_deg` | `solar_eclipse.besselian` | Declination and Greenwich hour angle of the shadow axis, in degrees. |
+| `l1` / `l2` | `solar_eclipse.besselian` | Penumbral / umbral shadow radius in the fundamental plane, in Earth radii. |
+| `tan_f1` / `tan_f2` | `solar_eclipse.besselian` | Tangents of the penumbral / umbral cone angles. |
+| `x_dot` / `y_dot` / `d_dot_deg` / `mu_dot_deg` / `l1_dot` / `l2_dot` | `solar_eclipse.besselian` | Hourly derivatives of the corresponding Besselian elements. |
+| `coefficients` | `solar_eclipse.besselian` | Cubic polynomial coefficient arrays `[c0,c1,c2,c3]`, evaluated in TDB hours from `epoch`. |
 | `sun_geo` / `moon_geo` | `lunar_eclipse` | Geometric-parameter objects for the sun / moon. |
 | `lib` | `lunar_eclipse` | Lunar libration parameter object. |
 | `l_deg` / `b_deg` / `c_deg` | `lib` | Lunar libration angular parameters, in degrees. |
@@ -1287,7 +1294,8 @@ Notes:
 | `LunarEclipse` | `has`, `type`, `jd_tdb_p1/u1/u2/u3/u4/p4/opp/max`, `pen_mag`, `umb_mag`, `dur_pen_sec`, `dur_umb_sec`, `dur_tot_sec`, `gamma`, `eps_deg`, `sun_geo`, `moon_geo`, `lib` | Full lunar-eclipse result. |
 | `LunarEclipsePointVis` | `stage_window`, `lat_deg`, `lon_deg`, `height_m`, `visible`, `max_alt_deg`, `first_jd_utc`, `last_jd_utc`, `sample_count` | Point-visibility result of a lunar eclipse. |
 | `LunarEclipseGlobalVis` | `stage_window`, `jd_start_utc`, `jd_end_utc`, `lat_step_deg`, `lon_step_deg`, `sample_count`, `points` | Global grid visibility result of a lunar eclipse. |
-| `SolarEclipse` | `has`, `type`, `jd_tdb_c1/c2/c3/c4/max`, `mag`, `obscuration`, `gamma`, `sep_max_deg`, `sun_sd_max_deg`, `moon_sd_max_deg`, `moon_dist_km`, `sun_dist_km` | Full solar-eclipse result. |
+| `SolarBesselianElements` | `x`, `y`, `d_deg`, `mu_deg`, `l1`, `l2`, `tan_f1`, `tan_f2`, `*_coeff` | Solar-eclipse Besselian elements and cubic time polynomials. |
+| `SolarEclipse` | `has`, `type`, `jd_tdb_c1/c2/c3/c4/max`, `mag`, `obscuration`, `gamma`, `sep_max_deg`, `sun_sd_max_deg`, `moon_sd_max_deg`, `moon_dist_km`, `sun_dist_km`, `besselian` | Full solar-eclipse result. |
 | `SolarEclipsePointVis` | `stage_window`, `lat_deg`, `lon_deg`, `height_m`, `has_eclipse`, `visible`, `central`, `max_mag`, `max_obscuration`, `max_sun_alt_deg`, `c1_jd_utc/c2_jd_utc/c3_jd_utc/c4_jd_utc/max_jd_utc` | Point-visibility result of a solar eclipse. |
 | `SolarEclipseGlobalVis` | `stage_window`, `jd_start_utc`, `jd_end_utc`, `lat_step_deg`, `lon_step_deg`, `sample_count`, `points` | Global grid visibility result of a solar eclipse. |
 

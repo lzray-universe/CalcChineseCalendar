@@ -97,6 +97,32 @@ double clamp_unit(double v){
 	return v;
 }
 
+double norm2pi(double angle){
+	double v=std::fmod(angle,TWO_PI);
+	if(v<0.0){
+		v+=TWO_PI;
+	}
+	return v;
+}
+
+double norm_deg360(double angle_deg){
+	double v=std::fmod(angle_deg,360.0);
+	if(v<0.0){
+		v+=360.0;
+	}
+	return v;
+}
+
+double unwrap_deg(double value,double ref){
+	while(value-ref>180.0){
+		value-=360.0;
+	}
+	while(value-ref<-180.0){
+		value+=360.0;
+	}
+	return value;
+}
+
 std::string to_low(std::string s){
 	for(char&c : s){
 		c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -112,6 +138,36 @@ Mat3 eq_true_mat(double jd_tdb){
 
 Vec3 cross_vec(const Vec3&a,const Vec3&b){
 	return Vec3(a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x);
+}
+
+bool build_besselian_basis(const Vec3&axis_eq,Vec3&x_axis,Vec3&y_axis){
+	double an=axis_eq.norm();
+	if(!(an>0.0)){
+		return false;
+	}
+	Vec3 z_axis=axis_eq/an;
+	Vec3 pole(0.0,0.0,1.0);
+	y_axis=pole-Vec3::dot(pole,z_axis)*z_axis;
+	double yn=y_axis.norm();
+	if(!(yn>1e-15)){
+		Vec3 ref(1.0,0.0,0.0);
+		if(std::fabs(Vec3::dot(ref,z_axis))>0.9){
+			ref=Vec3(0.0,1.0,0.0);
+		}
+		y_axis=ref-Vec3::dot(ref,z_axis)*z_axis;
+		yn=y_axis.norm();
+		if(!(yn>1e-15)){
+			return false;
+		}
+	}
+	y_axis=y_axis/yn;
+	x_axis=cross_vec(y_axis,z_axis);
+	double xn=x_axis.norm();
+	if(!(xn>0.0)){
+		return false;
+	}
+	x_axis=x_axis/xn;
+	return finite_vec(x_axis)&&finite_vec(y_axis);
 }
 
 bool build_shadow_plane_basis(const Vec3&axis_eq,Vec3&e1,Vec3&e2){
@@ -374,6 +430,107 @@ bool eval_geo(EphRead&eph,double jd_tdb,GeoEval&g){
 		   std::isfinite(g.obscuration)&&std::isfinite(g.sun_dist_km)&&
 		   std::isfinite(g.moon_dist_km)&&std::isfinite(g.rp)&&
 		   std::isfinite(g.ru)&&std::isfinite(g.gamma);
+}
+
+bool eval_besselian(EphRead&eph,double jd_tdb,SolarBesselianElements&out){
+	GeoEval g;
+	if(!eval_geo(eph,jd_tdb,g)||!(g.x>0.0)){
+		return false;
+	}
+
+	Mat3 eq=eq_true_mat(jd_tdb);
+	Vec3 axis_eq=eq*g.axis;
+	Vec3 moon_eq=eq*g.moon;
+	double an=axis_eq.norm();
+	if(!(an>0.0)||!finite_vec(axis_eq)||!finite_vec(moon_eq)){
+		return false;
+	}
+	Vec3 z_axis=axis_eq/an;
+	Vec3 x_axis;
+	Vec3 y_axis;
+	if(!build_besselian_basis(z_axis,x_axis,y_axis)){
+		return false;
+	}
+
+	Vec3 shadow_center=moon_eq+g.x*z_axis;
+	double ra=std::atan2(z_axis.y,z_axis.x);
+	double dec=std::asin(clamp_unit(z_axis.z));
+
+	double jd_td=TimeScale::tdb_to_tt(jd_tdb);
+	double jd_ut1=TimeScale::tdb_to_utc(jd_tdb);
+	double uta=std::floor(jd_ut1);
+	double utb=jd_ut1-uta;
+	double tta=std::floor(jd_td);
+	double ttb=jd_td-tta;
+	double gast=lunar::precnut::gst06a(uta,utb,tta,ttb);
+
+	out=SolarBesselianElements{};
+	out.has=true;
+	out.jd_tdb_epoch=jd_tdb;
+	out.x=Vec3::dot(shadow_center,x_axis)/kReA;
+	out.y=Vec3::dot(shadow_center,y_axis)/kReA;
+	out.d_deg=dec*kDegPerRad;
+	out.mu_deg=norm_deg360(norm2pi(gast-ra)*kDegPerRad);
+	out.l1=g.rp/kReA;
+	out.l2=g.ru/kReA;
+	out.tan_f1=(kRsA+kRmA)/g.D;
+	out.tan_f2=(kRsA-kRmA)/g.D;
+	return std::isfinite(out.x)&&std::isfinite(out.y)&&
+		   std::isfinite(out.d_deg)&&std::isfinite(out.mu_deg)&&
+		   std::isfinite(out.l1)&&std::isfinite(out.l2)&&
+		   std::isfinite(out.tan_f1)&&std::isfinite(out.tan_f2);
+}
+
+std::array<double,4> cubic_coeff_from_5pt(const std::array<double,5>&v){
+	std::array<double,4> c{};
+	c[0]=v[2];
+	c[1]=(v[0]-8.0*v[1]+8.0*v[3]-v[4])/12.0;
+	c[2]=(-v[0]+16.0*v[1]-30.0*v[2]+16.0*v[3]-v[4])/24.0;
+	c[3]=(v[4]-2.0*v[3]+2.0*v[1]-v[0])/12.0;
+	return c;
+}
+
+bool fill_solar_besselian(EphRead&eph,double jd_tdb_epoch,
+						  SolarBesselianElements&out){
+	std::array<SolarBesselianElements,5> s{};
+	for(int i=0;i<5;++i){
+		double hour=static_cast<double>(i-2);
+		if(!eval_besselian(eph,jd_tdb_epoch+hour/24.0,s[static_cast<std::size_t>(i)])){
+			return false;
+		}
+	}
+	const double mu0=s[2].mu_deg;
+	std::array<double,5> x{};
+	std::array<double,5> y{};
+	std::array<double,5> d{};
+	std::array<double,5> mu{};
+	std::array<double,5> l1{};
+	std::array<double,5> l2{};
+	for(int i=0;i<5;++i){
+		const auto&item=s[static_cast<std::size_t>(i)];
+		std::size_t idx=static_cast<std::size_t>(i);
+		x[idx]=item.x;
+		y[idx]=item.y;
+		d[idx]=item.d_deg;
+		mu[idx]=unwrap_deg(item.mu_deg,mu0);
+		l1[idx]=item.l1;
+		l2[idx]=item.l2;
+	}
+
+	out=s[2];
+	out.x_coeff=cubic_coeff_from_5pt(x);
+	out.y_coeff=cubic_coeff_from_5pt(y);
+	out.d_coeff_deg=cubic_coeff_from_5pt(d);
+	out.mu_coeff_deg=cubic_coeff_from_5pt(mu);
+	out.l1_coeff=cubic_coeff_from_5pt(l1);
+	out.l2_coeff=cubic_coeff_from_5pt(l2);
+	out.x_dot=out.x_coeff[1];
+	out.y_dot=out.y_coeff[1];
+	out.d_dot_deg=out.d_coeff_deg[1];
+	out.mu_dot_deg=out.mu_coeff_deg[1];
+	out.l1_dot=out.l1_coeff[1];
+	out.l2_dot=out.l2_coeff[1];
+	return true;
 }
 
 bool eval_global_metrics(EphRead&eph,double jd_tdb,double&f_any,double&f_cen,
@@ -1130,6 +1287,9 @@ bool calc_solar_eclipse(EphRead&eph,double jd_tdb_near_new_moon,SolarEclipse*out
 	ans.rp_re=g_max.rp/kReA;
 	ans.ru_re=g_max.ru/kReA;
 	ans.dt_max_sec=(ans.jd_tdb_max-TimeScale::tdb_to_utc(ans.jd_tdb_max))*SEC_DAY;
+	if(!fill_solar_besselian(eph,ans.jd_tdb_max,ans.besselian)){
+		return false;
+	}
 
 	double jd_cen_min=std::numeric_limits<double>::quiet_NaN();
 	double f_cen_min=std::numeric_limits<double>::infinity();

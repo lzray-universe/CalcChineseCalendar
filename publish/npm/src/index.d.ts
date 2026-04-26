@@ -176,6 +176,70 @@ export type SearchOptions = JsonCommandOptions & {
   eclipse?: boolean;
 };
 
+export type NullableNumber = number | null;
+
+export type SolarBesselianElements = {
+  epoch: Record<string, unknown> | null;
+  time_argument: string;
+  polynomial_order: number;
+  x: NullableNumber;
+  y: NullableNumber;
+  d_deg: NullableNumber;
+  mu_deg: NullableNumber;
+  l1: NullableNumber;
+  l2: NullableNumber;
+  tan_f1: NullableNumber;
+  tan_f2: NullableNumber;
+  x_dot: NullableNumber;
+  y_dot: NullableNumber;
+  d_dot_deg: NullableNumber;
+  mu_dot_deg: NullableNumber;
+  l1_dot: NullableNumber;
+  l2_dot: NullableNumber;
+  coefficients: {
+    x: NullableNumber[];
+    y: NullableNumber[];
+    d_deg: NullableNumber[];
+    mu_deg: NullableNumber[];
+    l1: NullableNumber[];
+    l2: NullableNumber[];
+  };
+  [key: string]: unknown;
+};
+
+export type SolarEclipseData = {
+  kind: "solar_eclipse";
+  year: number;
+  has: boolean;
+  type: string;
+  mag: NullableNumber;
+  obscuration: NullableNumber;
+  gamma: NullableNumber;
+  sep_max_deg: NullableNumber;
+  sun_sd_max_deg: NullableNumber;
+  moon_sd_max_deg: NullableNumber;
+  sun_dist_km: NullableNumber;
+  moon_dist_km: NullableNumber;
+  dt_max_sec: NullableNumber;
+  rp_re: NullableNumber;
+  ru_re: NullableNumber;
+  besselian: SolarBesselianElements | null;
+  [key: string]: unknown;
+};
+
+export type EclipseResult = {
+  meta: Record<string, unknown>;
+  input: Record<string, unknown>;
+  data: {
+    event?: Record<string, unknown>;
+    lunar_eclipse?: Record<string, unknown> | null;
+    solar_eclipse?: SolarEclipseData | null;
+    point_visibility?: Record<string, unknown> | null;
+    global_visibility?: Record<string, unknown> | null;
+    [key: string]: unknown;
+  };
+};
+
 export type ZodiacOptions = JsonCommandOptions & {
   ephem: string;
   time?: string;
@@ -269,7 +333,7 @@ export class LunarClient {
   search(options: SearchOptions): unknown;
   zodiac(options: ZodiacOptions): unknown;
   sky(options: SkyOptions): unknown;
-  eclipse(options: EclipseOptions): unknown;
+  eclipse(options: EclipseOptions): EclipseResult;
   festival(options: FestivalOptions): unknown;
   almanac(options: AlmanacOptions): unknown;
   info(options: InfoOptions): unknown;
@@ -293,7 +357,7 @@ export function rangeEvents(options: RangeOptions): Promise<unknown>;
 export function search(options: SearchOptions): Promise<unknown>;
 export function zodiac(options: ZodiacOptions): Promise<unknown>;
 export function sky(options: SkyOptions): Promise<unknown>;
-export function eclipse(options: EclipseOptions): Promise<unknown>;
+export function eclipse(options: EclipseOptions): Promise<EclipseResult>;
 export function festival(options: FestivalOptions): Promise<unknown>;
 export function almanac(options: AlmanacOptions): Promise<unknown>;
 export function info(options: InfoOptions): Promise<unknown>;
