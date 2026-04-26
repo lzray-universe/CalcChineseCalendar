@@ -4,6 +4,7 @@
 #include<fstream>
 #include<set>
 #include<string>
+#include<tuple>
 #include<vector>
 
 #include "lunar/calendar.hpp"
@@ -23,6 +24,11 @@ std::string to_low(std::string s);
 int parse_int(const std::string&text,const std::string&label);
 
 bool parse_bool01(const std::string&text,const std::string&label);
+
+std::tuple<int,int,int> parse_ymd_fixed(const std::string&text,
+										const std::string&label);
+
+double current_jd_utc();
 
 std::string req_val(const std::vector<std::string>&args,std::size_t&idx,
 					const std::string&opt);

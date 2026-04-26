@@ -121,48 +121,20 @@ AlmOpt parse_alm(const std::vector<std::string>&args){
 			opt.hli_lon_deg=parse_double(v,"--lon");
 		})
 		.add_value("--trad",[&](const std::string&v){
-			HliProfileCode trad=HliProfileCode::Folk;
-			if(!parse_hli_profile(v,&trad)){
-				throw std::invalid_argument(
-					"invalid --trad: "+v+" (expected folk|ziping|purple|xieji)");
-			}
+			HliProfileCode trad=parse_hli_profile_arg(v,"--trad");
 			opt.hli_rules=make_hli_rule_set(trad);
 		})
 		.add_value("--year-boundary",[&](const std::string&v){
-			HliYearBoundary parsed=HliYearBoundary::LunarNewYear;
-			if(!parse_hli_year_boundary(v,&parsed)){
-				throw std::invalid_argument(
-					"invalid --year-boundary: "+v+
-					" (expected lichun|lunar_new_year|dongzhi)");
-			}
-			opt.hli_rules.year_boundary=static_cast<int>(parsed);
+			set_hli_year_boundary(opt.hli_rules,v);
 		})
 		.add_value("--month-boundary",[&](const std::string&v){
-			HliMonthBoundary parsed=HliMonthBoundary::LunarFirstDay;
-			if(!parse_hli_month_boundary(v,&parsed)){
-				throw std::invalid_argument(
-					"invalid --month-boundary: "+v+
-					" (expected solar_term|lunar_first_day)");
-			}
-			opt.hli_rules.month_boundary=static_cast<int>(parsed);
+			set_hli_month_boundary(opt.hli_rules,v);
 		})
 		.add_value("--leap-month-mode",[&](const std::string&v){
-			HliLeapMonthMode parsed=HliLeapMonthMode::InheritPrevious;
-			if(!parse_hli_leap_month_mode(v,&parsed)){
-				throw std::invalid_argument(
-					"invalid --leap-month-mode: "+v+
-					" (expected ignore|inherit_previous|split_midway|"
-					"shift_to_next)");
-			}
-			opt.hli_rules.leap_month_mode=static_cast<int>(parsed);
+			set_hli_leap_month_mode(opt.hli_rules,v);
 		})
 		.add_value("--day-boundary",[&](const std::string&v){
-			HliDayBoundary parsed=HliDayBoundary::Hour23;
-			if(!parse_hli_day_boundary(v,&parsed)){
-				throw std::invalid_argument(
-					"invalid --day-boundary: "+v+" (expected hour23|hour0)");
-			}
-			opt.hli_rules.day_boundary=static_cast<int>(parsed);
+			set_hli_day_boundary(opt.hli_rules,v);
 		});
 	for(std::size_t i=2;i<args.size();++i){
 		if(!parser.parse_one(args,i,"almanac")){

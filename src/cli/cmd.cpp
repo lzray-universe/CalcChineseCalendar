@@ -30,6 +30,25 @@ struct DlCmd{
 	bool help=false;
 };
 
+template<typename Cmd>
+lunar::ArgParser& add_help_opts(lunar::ArgParser&parser,Cmd&cmd){
+	return parser.add_flag("-h",[&](){ cmd.help=true; })
+		.add_flag("--help",[&](){ cmd.help=true; });
+}
+
+template<typename Args>
+lunar::ArgParser& add_common_output_opts(lunar::ArgParser&parser,Args&args){
+	return parser.add_value("--format",[&](const std::string&v){
+			args.format=to_low(v);
+		})
+		.add_value("--out",[&](const std::string&v){ args.out=v; })
+		.add_value("--tz",[&](const std::string&v){ args.tz=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			args.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ args.quiet=true; });
+}
+
 MonthCmd parse_month(const std::vector<std::string>&src){
 	if(src.size()<2){
 		throw std::invalid_argument("months requires: <bsp> <years>");
@@ -38,18 +57,9 @@ MonthCmd parse_month(const std::vector<std::string>&src){
 	cmd.args.ephem=src[0];
 	cmd.args.years=src[1];
 	lunar::ArgParser parser;
-	parser.add_flag("-h",[&](){ cmd.help=true; })
-		.add_flag("--help",[&](){ cmd.help=true; })
-		.add_value("--mode",[&](const std::string&v){ cmd.args.mode=to_low(v); })
-		.add_value("--format",[&](const std::string&v){
-			cmd.args.format=to_low(v);
-		})
-		.add_value("--out",[&](const std::string&v){ cmd.args.out=v; })
-		.add_value("--tz",[&](const std::string&v){ cmd.args.tz=v; })
-		.add_value("--pretty",[&](const std::string&v){
-			cmd.args.pretty=parse_bool01(v,"--pretty");
-		})
-		.add_flag("--quiet",[&](){ cmd.args.quiet=true; })
+	add_help_opts(parser,cmd)
+		.add_value("--mode",[&](const std::string&v){ cmd.args.mode=to_low(v); });
+	add_common_output_opts(parser,cmd.args)
 		.add_value("--include-eclipses",[&](const std::string&v){
 			cmd.inc_ecl=parse_bool01(v,"--include-eclipses");
 		})
@@ -93,23 +103,14 @@ CalCmd parse_cal(const std::vector<std::string>&src){
 		++i;
 	}
 	lunar::ArgParser parser;
-	parser.add_flag("-h",[&](){ cmd.help=true; })
-		.add_flag("--help",[&](){ cmd.help=true; })
-		.add_value("--format",[&](const std::string&v){
-			cmd.args.format=to_low(v);
-		})
-		.add_value("--out",[&](const std::string&v){ cmd.args.out=v; })
-		.add_value("--tz",[&](const std::string&v){ cmd.args.tz=v; })
+	add_help_opts(parser,cmd);
+	add_common_output_opts(parser,cmd.args)
 		.add_value("--include-months",[&](const std::string&v){
 			cmd.args.inc_month=parse_bool01(v,"--include-months");
 		})
 		.add_value("--include-eclipses",[&](const std::string&v){
 			cmd.inc_ecl=parse_bool01(v,"--include-eclipses");
-		})
-		.add_value("--pretty",[&](const std::string&v){
-			cmd.args.pretty=parse_bool01(v,"--pretty");
-		})
-		.add_flag("--quiet",[&](){ cmd.args.quiet=true; });
+		});
 	for(;i<src.size();++i){
 		if(!parser.parse_one(src,i,"calendar")){
 			throw std::invalid_argument("unknown option for calendar: "+src[i]);
@@ -133,18 +134,9 @@ YearCmd parse_year_cmd(const std::vector<std::string>&src){
 	cmd.args.ephem=src[0];
 	cmd.args.year=parse_int(src[1],"year");
 	lunar::ArgParser parser;
-	parser.add_flag("-h",[&](){ cmd.help=true; })
-		.add_flag("--help",[&](){ cmd.help=true; })
-		.add_value("--mode",[&](const std::string&v){ cmd.args.mode=to_low(v); })
-		.add_value("--format",[&](const std::string&v){
-			cmd.args.format=to_low(v);
-		})
-		.add_value("--out",[&](const std::string&v){ cmd.args.out=v; })
-		.add_value("--tz",[&](const std::string&v){ cmd.args.tz=v; })
-		.add_value("--pretty",[&](const std::string&v){
-			cmd.args.pretty=parse_bool01(v,"--pretty");
-		})
-		.add_flag("--quiet",[&](){ cmd.args.quiet=true; });
+	add_help_opts(parser,cmd)
+		.add_value("--mode",[&](const std::string&v){ cmd.args.mode=to_low(v); });
+	add_common_output_opts(parser,cmd.args);
 	for(std::size_t i=2;i<src.size();++i){
 		if(!parser.parse_one(src,i,"year")){
 			throw std::invalid_argument("unknown option for year: "+src[i]);
@@ -207,18 +199,9 @@ EventCmd parse_event(const std::vector<std::string>&src){
 			"event category must be solar-term or lunar-phase");
 	}
 	lunar::ArgParser parser;
-	parser.add_flag("-h",[&](){ cmd.help=true; })
-		.add_flag("--help",[&](){ cmd.help=true; })
-		.add_value("--near",[&](const std::string&v){ cmd.args.near_date=v; })
-		.add_value("--format",[&](const std::string&v){
-			cmd.args.format=to_low(v);
-		})
-		.add_value("--out",[&](const std::string&v){ cmd.args.out=v; })
-		.add_value("--tz",[&](const std::string&v){ cmd.args.tz=v; })
-		.add_value("--pretty",[&](const std::string&v){
-			cmd.args.pretty=parse_bool01(v,"--pretty");
-		})
-		.add_flag("--quiet",[&](){ cmd.args.quiet=true; })
+	add_help_opts(parser,cmd)
+		.add_value("--near",[&](const std::string&v){ cmd.args.near_date=v; });
+	add_common_output_opts(parser,cmd.args)
 		.add_value("--eclipse",[&](const std::string&v){
 			cmd.calc_ecl=parse_bool01(v,"--eclipse");
 		});

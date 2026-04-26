@@ -181,6 +181,43 @@ std::string c_api_or_default(const char*text,const char*fallback){
 	return text;
 }
 
+lunar::core::DayComputeOptions make_day_options(const char*ephem,
+												const char*date,
+												const char*tz){
+	lunar::core::DayComputeOptions opt;
+	opt.ephem=ephem;
+	opt.date_text=date;
+	opt.tz=c_api_or_default(tz,"+08:00");
+	opt.include_events=false;
+	opt.include_astro=false;
+	return opt;
+}
+
+lunar::core::GanzhiComputeOptions make_ganzhi_options(
+	const char*ephem,const char*date,const char*at_time,const char*tz,
+	const lunar_hli_rules*rules){
+	lunar::core::GanzhiComputeOptions opt;
+	opt.ephem=ephem;
+	opt.date_text=date;
+	opt.at_time=c_api_or_default(at_time,"12:00:00");
+	opt.tz=c_api_or_default(tz,"+08:00");
+	opt.hli_rules=rules_from_c(rules);
+	return opt;
+}
+
+lunar::core::GanzhiMonthComputeOptions make_ganzhi_month_options(
+	const char*ephem,int year,int month,const char*at_time,const char*tz,
+	const lunar_hli_rules*rules){
+	lunar::core::GanzhiMonthComputeOptions opt;
+	opt.ephem=ephem;
+	opt.year=year;
+	opt.month=month;
+	opt.at_time=c_api_or_default(at_time,"12:00:00");
+	opt.tz=c_api_or_default(tz,"+08:00");
+	opt.hli_rules=rules_from_c(rules);
+	return opt;
+}
+
 std::vector<std::string> mk_args(int argc,const char*const*argv){
 	if(argc<0){
 		throw std::invalid_argument("argc must be >= 0");
@@ -405,12 +442,7 @@ int LUNAR_CALL lunar_core_day(const char*ephem,const char*date,const char*tz,
 		if(ephem==nullptr||date==nullptr||out==nullptr){
 			throw std::invalid_argument("ephem/date/out must not be null");
 		}
-		lunar::core::DayComputeOptions opt;
-		opt.ephem=ephem;
-		opt.date_text=date;
-		opt.tz=(tz==nullptr||std::string(tz).empty())?"+08:00":std::string(tz);
-		opt.include_events=false;
-		opt.include_astro=false;
+		lunar::core::DayComputeOptions opt=make_day_options(ephem,date,tz);
 		DayResult day=lunar::core::compute_day(opt);
 		out->lunar_year=day.at_data.lunar_date.lunar_year;
 		out->lun_mno=day.at_data.lunar_date.lun_mno;
@@ -432,12 +464,7 @@ int LUNAR_CALL lunar_core_day_json(const char*ephem,const char*date,const char*t
 		if(ephem==nullptr||date==nullptr){
 			throw std::invalid_argument("ephem/date must not be null");
 		}
-		lunar::core::DayComputeOptions opt;
-		opt.ephem=ephem;
-		opt.date_text=date;
-		opt.tz=(tz==nullptr||std::string(tz).empty())?"+08:00":std::string(tz);
-		opt.include_events=false;
-		opt.include_astro=false;
+		lunar::core::DayComputeOptions opt=make_day_options(ephem,date,tz);
 		DayResult day=lunar::core::compute_day(opt);
 		return write_json_capture(pretty!=0,[&](JsonWriter&w){
 			w.obj_begin();
@@ -492,12 +519,8 @@ int LUNAR_CALL lunar_core_ganzhi(const char*ephem,const char*date,
 		if(ephem==nullptr||date==nullptr||out==nullptr){
 			throw std::invalid_argument("ephem/date/out must not be null");
 		}
-		lunar::core::GanzhiComputeOptions opt;
-		opt.ephem=ephem;
-		opt.date_text=date;
-		opt.at_time=c_api_or_default(at_time,"12:00:00");
-		opt.tz=c_api_or_default(tz,"+08:00");
-		opt.hli_rules=rules_from_c(rules);
+		lunar::core::GanzhiComputeOptions opt=
+			make_ganzhi_options(ephem,date,at_time,tz,rules);
 		lunar::core::GanzhiSummary sum=lunar::core::compute_ganzhi(opt);
 		std::memset(out,0,sizeof(*out));
 		fill_ganzhi_node(&out->year,sum.year);
@@ -516,12 +539,8 @@ int LUNAR_CALL lunar_core_ganzhi_json(const char*ephem,const char*date,
 		if(ephem==nullptr||date==nullptr){
 			throw std::invalid_argument("ephem/date must not be null");
 		}
-		lunar::core::GanzhiComputeOptions opt;
-		opt.ephem=ephem;
-		opt.date_text=date;
-		opt.at_time=c_api_or_default(at_time,"12:00:00");
-		opt.tz=c_api_or_default(tz,"+08:00");
-		opt.hli_rules=rules_from_c(rules);
+		lunar::core::GanzhiComputeOptions opt=
+			make_ganzhi_options(ephem,date,at_time,tz,rules);
 		lunar::core::GanzhiSummary sum=lunar::core::compute_ganzhi(opt);
 		return write_json_capture(pretty!=0,[&](JsonWriter&w){
 			w.obj_begin();
@@ -556,13 +575,8 @@ int LUNAR_CALL lunar_core_ganzhi_month(
 		if(ephem==nullptr||out==nullptr){
 			throw std::invalid_argument("ephem/out must not be null");
 		}
-		lunar::core::GanzhiMonthComputeOptions opt;
-		opt.ephem=ephem;
-		opt.year=year;
-		opt.month=month;
-		opt.at_time=c_api_or_default(at_time,"12:00:00");
-		opt.tz=c_api_or_default(tz,"+08:00");
-		opt.hli_rules=rules_from_c(rules);
+		lunar::core::GanzhiMonthComputeOptions opt=
+			make_ganzhi_month_options(ephem,year,month,at_time,tz,rules);
 		lunar::core::GanzhiMonthSummary sum=lunar::core::compute_ganzhi_month(opt);
 		if(sum.years.size()!=sum.months.size()||sum.months.size()!=sum.days.size()){
 			throw std::runtime_error("ganzhi month result size mismatch");
@@ -592,13 +606,8 @@ int LUNAR_CALL lunar_core_ganzhi_month_json(
 		if(ephem==nullptr){
 			throw std::invalid_argument("ephem must not be null");
 		}
-		lunar::core::GanzhiMonthComputeOptions opt;
-		opt.ephem=ephem;
-		opt.year=year;
-		opt.month=month;
-		opt.at_time=c_api_or_default(at_time,"12:00:00");
-		opt.tz=c_api_or_default(tz,"+08:00");
-		opt.hli_rules=rules_from_c(rules);
+		lunar::core::GanzhiMonthComputeOptions opt=
+			make_ganzhi_month_options(ephem,year,month,at_time,tz,rules);
 		lunar::core::GanzhiMonthSummary sum=lunar::core::compute_ganzhi_month(opt);
 		if(sum.years.size()!=sum.months.size()||sum.months.size()!=sum.days.size()){
 			throw std::runtime_error("ganzhi month result size mismatch");

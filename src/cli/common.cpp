@@ -30,6 +30,7 @@ using cli_util::note_out;
 using cli_util::open_out;
 using cli_util::parse_bool01;
 using cli_util::parse_int;
+using cli_util::parse_ymd_fixed;
 using cli_util::req_val;
 using cli_util::to_low;
 
@@ -78,7 +79,7 @@ void write_meta(JsonWriter&w,const std::string&ephem,
 	w.key("version");
 	w.value(tool_ver());
 	w.key("schema");
-	w.value(cli_shared::kSchema);
+	w.value(tool_ver());
 	w.key("ephem");
 	w.value(ephem);
 	w.key("tz_display");

@@ -50,14 +50,17 @@ void wr_ptvis_json(JsonWriter&w,const LunarEclipsePointVis&pv,int tz_off){
 	w.obj_end();
 }
 
-void wr_glbvis_json(JsonWriter&w,const LunarEclipseGlobalVis&gv,int tz_off){
-	w.obj_begin();
+template<typename GlobalVis>
+void wr_glbvis_meta(JsonWriter&w,const GlobalVis&gv,int tz_off,
+					bool include_jd_utc){
 	w.key("stage_window");
 	w.value(gv.stage_window);
-	w.key("jd_start_utc");
-	w.value(gv.jd_start_utc);
-	w.key("jd_end_utc");
-	w.value(gv.jd_end_utc);
+	if(include_jd_utc){
+		w.key("jd_start_utc");
+		w.value(gv.jd_start_utc);
+		w.key("jd_end_utc");
+		w.value(gv.jd_end_utc);
+	}
 	w.key("utc_start_iso");
 	w.value(fmt_iso(gv.jd_start_utc,0,true));
 	w.key("utc_end_iso");
@@ -72,6 +75,11 @@ void wr_glbvis_json(JsonWriter&w,const LunarEclipseGlobalVis&gv,int tz_off){
 	w.value(gv.lon_step_deg);
 	w.key("sample_count");
 	w.value(gv.sample_count);
+}
+
+void wr_glbvis_json(JsonWriter&w,const LunarEclipseGlobalVis&gv,int tz_off){
+	w.obj_begin();
+	wr_glbvis_meta(w,gv,tz_off,true);
 	w.key("points");
 	w.arr_begin();
 	for(const auto&pt : gv.points){
@@ -96,22 +104,7 @@ void wr_glbvis_geojson(JsonWriter&w,const LunarEclipseGlobalVis&gv,int tz_off){
 	w.obj_begin();
 	w.key("type");
 	w.value("FeatureCollection");
-	w.key("stage_window");
-	w.value(gv.stage_window);
-	w.key("utc_start_iso");
-	w.value(fmt_iso(gv.jd_start_utc,0,true));
-	w.key("utc_end_iso");
-	w.value(fmt_iso(gv.jd_end_utc,0,true));
-	w.key("loc_start_iso");
-	w.value(fmt_iso(gv.jd_start_utc,tz_off,true));
-	w.key("loc_end_iso");
-	w.value(fmt_iso(gv.jd_end_utc,tz_off,true));
-	w.key("lat_step_deg");
-	w.value(gv.lat_step_deg);
-	w.key("lon_step_deg");
-	w.value(gv.lon_step_deg);
-	w.key("sample_count");
-	w.value(gv.sample_count);
+	wr_glbvis_meta(w,gv,tz_off,false);
 	w.key("features");
 	w.arr_begin();
 	for(const auto&pt : gv.points){
@@ -343,26 +336,7 @@ void wr_sol_ptvis_json(JsonWriter&w,const SolarEclipsePointVis&pv,int tz_off){
 
 void wr_sol_glbvis_json(JsonWriter&w,const SolarEclipseGlobalVis&gv,int tz_off){
 	w.obj_begin();
-	w.key("stage_window");
-	w.value(gv.stage_window);
-	w.key("jd_start_utc");
-	w.value(gv.jd_start_utc);
-	w.key("jd_end_utc");
-	w.value(gv.jd_end_utc);
-	w.key("utc_start_iso");
-	w.value(fmt_iso(gv.jd_start_utc,0,true));
-	w.key("utc_end_iso");
-	w.value(fmt_iso(gv.jd_end_utc,0,true));
-	w.key("loc_start_iso");
-	w.value(fmt_iso(gv.jd_start_utc,tz_off,true));
-	w.key("loc_end_iso");
-	w.value(fmt_iso(gv.jd_end_utc,tz_off,true));
-	w.key("lat_step_deg");
-	w.value(gv.lat_step_deg);
-	w.key("lon_step_deg");
-	w.value(gv.lon_step_deg);
-	w.key("sample_count");
-	w.value(gv.sample_count);
+	wr_glbvis_meta(w,gv,tz_off,true);
 	w.key("points");
 	w.arr_begin();
 	for(const auto&pt : gv.points){
@@ -389,22 +363,7 @@ void wr_sol_glbvis_geojson(JsonWriter&w,const SolarEclipseGlobalVis&gv,int tz_of
 	w.obj_begin();
 	w.key("type");
 	w.value("FeatureCollection");
-	w.key("stage_window");
-	w.value(gv.stage_window);
-	w.key("utc_start_iso");
-	w.value(fmt_iso(gv.jd_start_utc,0,true));
-	w.key("utc_end_iso");
-	w.value(fmt_iso(gv.jd_end_utc,0,true));
-	w.key("loc_start_iso");
-	w.value(fmt_iso(gv.jd_start_utc,tz_off,true));
-	w.key("loc_end_iso");
-	w.value(fmt_iso(gv.jd_end_utc,tz_off,true));
-	w.key("lat_step_deg");
-	w.value(gv.lat_step_deg);
-	w.key("lon_step_deg");
-	w.value(gv.lon_step_deg);
-	w.key("sample_count");
-	w.value(gv.sample_count);
+	wr_glbvis_meta(w,gv,tz_off,false);
 	w.key("features");
 	w.arr_begin();
 	for(const auto&pt : gv.points){

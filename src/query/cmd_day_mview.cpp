@@ -78,12 +78,7 @@ DayCmd parse_day(const std::vector<std::string>&args){
 	cmd.run.hli_lon_deg=120.0;
 	cmd.run.hli_rules=hli_rules_from_cfg(cfg);
 
-	double astro_lat=0.0;
-	double astro_lon=0.0;
-	double astro_h=0.0;
-	bool has_lat=false;
-	bool has_lon=false;
-	bool has_h=false;
+	AstroSiteOpt site;
 	lunar::ArgParser parser;
 	parser.add_value("--tz",[&](const std::string&v){ cmd.run.tz=v; });
 	parser.add_value("--lunar-day-tz",
@@ -103,47 +98,20 @@ DayCmd parse_day(const std::vector<std::string>&args){
 		cmd.run.hli_lon_deg=parse_double(v,"--lon");
 	});
 	parser.add_value("--trad",[&](const std::string&v){
-		HliProfileCode trad=HliProfileCode::Folk;
-		if(!parse_hli_profile(v,&trad)){
-			throw std::invalid_argument(
-				"invalid --trad: "+v+" (expected folk|ziping|purple|xieji)");
-		}
+		HliProfileCode trad=parse_hli_profile_arg(v,"--trad");
 		cmd.run.hli_rules=make_hli_rule_set(trad);
 	});
 	parser.add_value("--year-boundary",[&](const std::string&v){
-		HliYearBoundary parsed=HliYearBoundary::LunarNewYear;
-		if(!parse_hli_year_boundary(v,&parsed)){
-			throw std::invalid_argument(
-				"invalid --year-boundary: "+v+
-				" (expected lichun|lunar_new_year|dongzhi)");
-		}
-		cmd.run.hli_rules.year_boundary=static_cast<int>(parsed);
+		set_hli_year_boundary(cmd.run.hli_rules,v);
 	});
 	parser.add_value("--month-boundary",[&](const std::string&v){
-		HliMonthBoundary parsed=HliMonthBoundary::LunarFirstDay;
-		if(!parse_hli_month_boundary(v,&parsed)){
-			throw std::invalid_argument(
-				"invalid --month-boundary: "+v+
-				" (expected solar_term|lunar_first_day)");
-		}
-		cmd.run.hli_rules.month_boundary=static_cast<int>(parsed);
+		set_hli_month_boundary(cmd.run.hli_rules,v);
 	});
 	parser.add_value("--leap-month-mode",[&](const std::string&v){
-		HliLeapMonthMode parsed=HliLeapMonthMode::InheritPrevious;
-		if(!parse_hli_leap_month_mode(v,&parsed)){
-			throw std::invalid_argument(
-				"invalid --leap-month-mode: "+v+
-				" (expected ignore|inherit_previous|split_midway|shift_to_next)");
-		}
-		cmd.run.hli_rules.leap_month_mode=static_cast<int>(parsed);
+		set_hli_leap_month_mode(cmd.run.hli_rules,v);
 	});
 	parser.add_value("--day-boundary",[&](const std::string&v){
-		HliDayBoundary parsed=HliDayBoundary::Hour23;
-		if(!parse_hli_day_boundary(v,&parsed)){
-			throw std::invalid_argument(
-				"invalid --day-boundary: "+v+" (expected hour23|hour0)");
-		}
-		cmd.run.hli_rules.day_boundary=static_cast<int>(parsed);
+		set_hli_day_boundary(cmd.run.hli_rules,v);
 	});
 	parser.add_value("--astro",[&](const std::string&v){
 		cmd.run.include_astro=parse_bool01(v,"--astro");
@@ -152,18 +120,7 @@ DayCmd parse_day(const std::vector<std::string>&args){
 					 [&](const std::string&v){ cmd.run.astro_mode_text=v; });
 	parser.add_value("--astro-pick",
 					 [&](const std::string&v){ cmd.run.astro_pick_csv=v; });
-	parser.add_value("--astro-lat",[&](const std::string&v){
-		astro_lat=parse_double(v,"--astro-lat");
-		has_lat=true;
-	});
-	parser.add_value("--astro-lon",[&](const std::string&v){
-		astro_lon=parse_double(v,"--astro-lon");
-		has_lon=true;
-	});
-	parser.add_value("--astro-height",[&](const std::string&v){
-		astro_h=parse_double(v,"--astro-height");
-		has_h=true;
-	});
+	add_astro_site_options(parser,site);
 
 	for(std::size_t i=2;i<args.size();++i){
 		if(args[i]=="-h"||args[i]=="--help"){
@@ -175,22 +132,15 @@ DayCmd parse_day(const std::vector<std::string>&args){
 			throw std::invalid_argument("unknown option for day: "+args[i]);
 		}
 	}
-	if(has_lat!=has_lon){
-		throw std::invalid_argument(
-			"astro site requires both --astro-lat and --astro-lon");
-	}
-	if(has_h&&!has_lat){
-		throw std::invalid_argument(
-			"--astro-height requires --astro-lat and --astro-lon");
-	}
+	validate_astro_site(site);
 	chk_fmt(cmd.format,{"json","txt","csv","jsonl"},"day");
 	cmd.run.lunar_day_tz=canonical_tz_text(cmd.run.lunar_day_tz);
 	cmd.run.hli_rules=normalize_hli_rule_set(cmd.run.hli_rules);
-	cmd.run.has_astro_site=has_lat;
-	if(has_lat){
-		cmd.run.astro_lat_deg=astro_lat;
-		cmd.run.astro_lon_deg=astro_lon;
-		cmd.run.astro_height_m=has_h?astro_h:0.0;
+	cmd.run.has_astro_site=site.has_lat;
+	if(site.has_lat){
+		cmd.run.astro_lat_deg=site.lat;
+		cmd.run.astro_lon_deg=site.lon;
+		cmd.run.astro_height_m=site.has_height?site.height:0.0;
 	}
 	return cmd;
 }
@@ -219,12 +169,7 @@ MvOpt parse_mview(const std::vector<std::string>&args){
 	}
 	opt.pretty=cfg.def_prety;
 
-	double astro_lat=0.0;
-	double astro_lon=0.0;
-	double astro_h=0.0;
-	bool has_lat=false;
-	bool has_lon=false;
-	bool has_h=false;
+	AstroSiteOpt site;
 	lunar::ArgParser parser;
 	parser.add_value("--tz",[&](const std::string&v){ opt.tz=v; });
 	parser.add_value("--lunar-day-tz",
@@ -243,18 +188,7 @@ MvOpt parse_mview(const std::vector<std::string>&args){
 					 [&](const std::string&v){ opt.astro_mode_text=v; });
 	parser.add_value("--astro-pick",
 					 [&](const std::string&v){ opt.astro_pick_csv=v; });
-	parser.add_value("--astro-lat",[&](const std::string&v){
-		astro_lat=parse_double(v,"--astro-lat");
-		has_lat=true;
-	});
-	parser.add_value("--astro-lon",[&](const std::string&v){
-		astro_lon=parse_double(v,"--astro-lon");
-		has_lon=true;
-	});
-	parser.add_value("--astro-height",[&](const std::string&v){
-		astro_h=parse_double(v,"--astro-height");
-		has_h=true;
-	});
+	add_astro_site_options(parser,site);
 
 	for(std::size_t i=2;i<args.size();++i){
 		if(args[i]=="-h"||args[i]=="--help"){
@@ -266,21 +200,14 @@ MvOpt parse_mview(const std::vector<std::string>&args){
 			throw std::invalid_argument("unknown option for monthview: "+args[i]);
 		}
 	}
-	if(has_lat!=has_lon){
-		throw std::invalid_argument(
-			"astro site requires both --astro-lat and --astro-lon");
-	}
-	if(has_h&&!has_lat){
-		throw std::invalid_argument(
-			"--astro-height requires --astro-lat and --astro-lon");
-	}
+	validate_astro_site(site);
 	chk_fmt(opt.format,{"json","txt","csv"},"monthview");
 	opt.lunar_day_tz=canonical_tz_text(opt.lunar_day_tz);
-	if(has_lat){
+	if(site.has_lat){
 		opt.astro_obs.has_site=true;
-		opt.astro_obs.lat_deg=astro_lat;
-		opt.astro_obs.lon_deg=astro_lon;
-		opt.astro_obs.h_m=has_h?astro_h:0.0;
+		opt.astro_obs.lat_deg=site.lat;
+		opt.astro_obs.lon_deg=site.lon;
+		opt.astro_obs.h_m=site.has_height?site.height:0.0;
 	}
 	return opt;
 }

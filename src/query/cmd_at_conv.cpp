@@ -146,49 +146,21 @@ AtOpt parse_at(const std::vector<std::string>&args){
 			a.calc_eot=true;
 		})
 		.add_value("--trad",[&](const std::string&v){
-			HliProfileCode p=HliProfileCode::Folk;
-			if(!parse_hli_profile(v,&p)){
-				throw std::invalid_argument(
-					"invalid --trad: "+v+" (expected folk|ziping|purple|xieji)");
-			}
+			HliProfileCode p=parse_hli_profile_arg(v,"--trad");
 			a.hli_trad=hli_profile_key(p);
 			a.hli_rules=make_hli_rule_set(p);
 		})
 		.add_value("--year-boundary",[&](const std::string&v){
-			HliYearBoundary p=HliYearBoundary::LunarNewYear;
-			if(!parse_hli_year_boundary(v,&p)){
-				throw std::invalid_argument(
-					"invalid --year-boundary: "+v+
-					" (expected lichun|lunar_new_year|dongzhi)");
-			}
-			a.hli_rules.year_boundary=static_cast<int>(p);
+			set_hli_year_boundary(a.hli_rules,v);
 		})
 		.add_value("--month-boundary",[&](const std::string&v){
-			HliMonthBoundary p=HliMonthBoundary::LunarFirstDay;
-			if(!parse_hli_month_boundary(v,&p)){
-				throw std::invalid_argument(
-					"invalid --month-boundary: "+v+
-					" (expected solar_term|lunar_first_day)");
-			}
-			a.hli_rules.month_boundary=static_cast<int>(p);
+			set_hli_month_boundary(a.hli_rules,v);
 		})
 		.add_value("--leap-month-mode",[&](const std::string&v){
-			HliLeapMonthMode p=HliLeapMonthMode::InheritPrevious;
-			if(!parse_hli_leap_month_mode(v,&p)){
-				throw std::invalid_argument(
-					"invalid --leap-month-mode: "+v+
-					" (expected ignore|inherit_previous|split_midway|"
-					"shift_to_next)");
-			}
-			a.hli_rules.leap_month_mode=static_cast<int>(p);
+			set_hli_leap_month_mode(a.hli_rules,v);
 		})
 		.add_value("--day-boundary",[&](const std::string&v){
-			HliDayBoundary p=HliDayBoundary::Hour23;
-			if(!parse_hli_day_boundary(v,&p)){
-				throw std::invalid_argument(
-					"invalid --day-boundary: "+v+" (expected hour23|hour0)");
-			}
-			a.hli_rules.day_boundary=static_cast<int>(p);
+			set_hli_day_boundary(a.hli_rules,v);
 		});
 	parser.parse_all(args,i,"at");
 	if(a.from_stdin&&!a.input_file.empty()){
@@ -253,6 +225,10 @@ AtRes run_at(const AtOpt&opt){
 	return res;
 }
 
+std::vector<std::string> batch_meta_notes(){
+	return {"batch=true","schema="+tool_ver()};
+}
+
 void write_at(std::ostream&os,const AtOpt&opt,const AtRes&res){
 	const AtArgs&args=opt.run;
 	if(opt.warn_time&&!args.quiet){
@@ -272,8 +248,8 @@ void write_at(std::ostream&os,const AtOpt&opt,const AtRes&res){
 	}
 	EphRead eph(args.ephem);
 	const FmtMap fmts={
-		{"jsonl",[&](){ if(args.meta_once){ JsonWriter w(os,false); w.obj_begin(); w.key("meta"); write_meta(w,args.ephem,args.tz,{"batch=true","schema=lunar.v1"}); w.obj_end(); os<<"\n"; } for(const auto&row : res.rows){ JsonWriter w(os,false); w.obj_begin(); if(!args.meta_once){ write_meta(w,args.ephem,args.tz,{"batch=true","schema=lunar.v1"}); } w.key("line_no"); w.value(row.line_no); w.key("raw"); w.value(row.raw); if(row.ok){ w.key("input"); wr_aijs(w,row.data); w.key("data"); wr_adjs(w,row.data,eph); }else{ w.key("error"); w.obj_begin(); w.key("message"); w.value(row.error); w.obj_end(); } w.obj_end(); os<<"\n"; } }},
-		{"json",[&](){ JsonWriter w(os,args.pretty); w.obj_begin(); write_meta(w,args.ephem,args.tz,{"batch=true","schema=lunar.v1"}); w.key("data"); w.arr_begin(); for(const auto&row : res.rows){ w.obj_begin(); w.key("line_no"); w.value(row.line_no); w.key("raw"); w.value(row.raw); if(row.ok){ w.key("input"); wr_aijs(w,row.data); w.key("data"); wr_adjs(w,row.data,eph); }else{ w.key("error"); w.obj_begin(); w.key("message"); w.value(row.error); w.obj_end(); } w.obj_end(); } w.arr_end(); w.obj_end(); os<<"\n"; }},
+		{"jsonl",[&](){ if(args.meta_once){ JsonWriter w(os,false); w.obj_begin(); w.key("meta"); write_meta(w,args.ephem,args.tz,batch_meta_notes()); w.obj_end(); os<<"\n"; } for(const auto&row : res.rows){ JsonWriter w(os,false); w.obj_begin(); if(!args.meta_once){ write_meta(w,args.ephem,args.tz,batch_meta_notes()); } w.key("line_no"); w.value(row.line_no); w.key("raw"); w.value(row.raw); if(row.ok){ w.key("input"); wr_aijs(w,row.data); w.key("data"); wr_adjs(w,row.data,eph); }else{ w.key("error"); w.obj_begin(); w.key("message"); w.value(row.error); w.obj_end(); } w.obj_end(); os<<"\n"; } }},
+		{"json",[&](){ JsonWriter w(os,args.pretty); w.obj_begin(); write_meta(w,args.ephem,args.tz,batch_meta_notes()); w.key("data"); w.arr_begin(); for(const auto&row : res.rows){ w.obj_begin(); w.key("line_no"); w.value(row.line_no); w.key("raw"); w.value(row.raw); if(row.ok){ w.key("input"); wr_aijs(w,row.data); w.key("data"); wr_adjs(w,row.data,eph); }else{ w.key("error"); w.obj_begin(); w.key("message"); w.value(row.error); w.obj_end(); } w.obj_end(); } w.arr_end(); w.obj_end(); os<<"\n"; }},
 		{"txt",[&](){ os<<"tool=lunar format=txt type=at-batch tz_display="<<args.tz<<"\n"; os<<"line_no\tstatus\traw\till_pct\tphase_name\tlunar_date\ty_lun_gz\ty_lchun_gz\ty_rule_gz\tm_gz\td_gz\th_gz\th_true_gz\trule_profile\tyear_boundary\tmonth_boundary\tleap_month_mode\tday_boundary\tjianchu\tchong_sha\tyi\tji"; if(args.calc_eot){ os<<"\teot_minutes"; } os<<"\tmessage\n"; for(const auto&row : res.rows){ os<<row.line_no<<"\t"; if(row.ok){ os<<"ok\t"<<row.raw<<"\t"<<format_num(row.data.ill_pct)<<"\t"<<row.data.phase_name<<"\t"<<row.data.lunar_date.lun_label<<"\t"<<row.data.hli.y_lun.text<<"\t"<<row.data.hli.y_lchun.text<<"\t"<<row.data.hli.y_rule.text<<"\t"<<row.data.hli.m_gz.text<<"\t"<<row.data.hli.d_gz.text<<"\t"<<row.data.hli.h_gz.text<<"\t"<<row.data.hli.h_gz_true.text<<"\t"<<row.data.hli.rule_profile<<"\t"<<row.data.hli.year_boundary_text<<"\t"<<row.data.hli.month_boundary_text<<"\t"<<row.data.hli.leap_month_mode_text<<"\t"<<row.data.hli.day_boundary_text<<"\t"<<row.data.hli.jianchu<<"\t"<<row.data.hli.chong_sha<<"\t"<<join_pipe(row.data.hli.yi)<<"\t"<<join_pipe(row.data.hli.ji); if(args.calc_eot){ os<<"\t"<<format_num(row.data.eot.eot_minutes); } os<<"\t\n"; }else{ os<<"error\t"<<row.raw<<"\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t"; if(args.calc_eot){ os<<"\t"; } os<<"\t"<<row.error<<"\n"; } } }},
 	};
 	run_fmt(fmts,args.format,"at");

@@ -38,7 +38,7 @@ void write_zod_meta(JsonWriter&w,const std::string&ephem,
 	w.key("version");
 	w.value(tool_ver());
 	w.key("schema");
-	w.value("lunar.v1");
+	w.value(tool_ver());
 	w.key("ephem");
 	w.value(ephem);
 	w.key("type");

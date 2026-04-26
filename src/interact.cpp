@@ -308,6 +308,63 @@ std::string ask_lunar_day_tz(const InterCfg&cfg){
 		lunar::i18n::pick("）：","): ","): ","): "));
 }
 
+void append_arg(std::vector<std::string>&args,const std::string&name,
+				const std::string&value){
+	if(value.empty()){
+		return;
+	}
+	args.push_back(name);
+	args.push_back(value);
+}
+
+void append_format_txt_json(std::vector<std::string>&args,
+							const std::string&fmt){
+	if(fmt=="2"||fmt=="json"){
+		append_arg(args,"--format","json");
+	}
+}
+
+void append_format_txt_json_csv(std::vector<std::string>&args,
+								const std::string&fmt){
+	if(fmt=="2"||fmt=="json"){
+		append_arg(args,"--format","json");
+	}else if(fmt=="3"||fmt=="csv"){
+		append_arg(args,"--format","csv");
+	}
+}
+
+void append_event_format(std::vector<std::string>&args,
+						 const std::string&fmt){
+	if(fmt=="2"||fmt=="json"){
+		append_arg(args,"--format","json");
+	}else if(fmt=="3"||fmt=="csv"){
+		append_arg(args,"--format","csv");
+	}else if(fmt=="4"||fmt=="ics"){
+		append_arg(args,"--format","ics");
+	}else if(fmt=="5"||fmt=="jsonl"){
+		append_arg(args,"--format","jsonl");
+	}
+}
+
+void append_eclipse_format(std::vector<std::string>&args,
+						   const std::string&fmt){
+	if(fmt=="2"||fmt=="txt"){
+		append_arg(args,"--format","txt");
+	}else if(fmt=="3"||fmt=="geojson"){
+		append_arg(args,"--format","geojson");
+	}
+}
+
+void ask_format_out_txt_json_csv(std::vector<std::string>&args){
+	append_format_txt_json_csv(args,ask_line(itx("prompt.format_txt_json_csv")));
+	append_arg(args,"--out",ask_line(itx("prompt.out_file")));
+}
+
+void ask_event_format_out(std::vector<std::string>&args){
+	append_event_format(args,ask_line(itx("prompt.format_event")));
+	append_arg(args,"--out",ask_line(itx("prompt.out_file")));
+}
+
 bool set_interact_lang(InterCfg&cfg,const std::string&choice){
 	lunar::i18n::Lang lang=lunar::i18n::Lang::Zh;
 	if(choice=="1"){
@@ -786,10 +843,7 @@ void run_dint(const std::string&ephem){
 		"Output format: 1) txt 2) json (default txt): ",
 		"出力形式: 1) txt 2) json（既定 txt）: ",
 		"출력 형식: 1) txt 2) json (기본 txt): "));
-	if(fmt=="2"||fmt=="json"){
-		args.push_back("--format");
-		args.push_back("json");
-	}
+	append_format_txt_json(args,fmt);
 	cmd_day(args);
 	ask_line(done_back_msg());
 }
@@ -822,19 +876,7 @@ void run_zint(const std::string&ephem){
 		args.push_back("--tz");
 		args.push_back(display_tz);
 	}
-	std::string fmt=ask_line(itx("prompt.format_txt_json_csv"));
-	if(fmt=="2"||fmt=="json"){
-		args.push_back("--format");
-		args.push_back("json");
-	}else if(fmt=="3"||fmt=="csv"){
-		args.push_back("--format");
-		args.push_back("csv");
-	}
-	std::string out=ask_line(itx("prompt.out_file"));
-	if(!out.empty()){
-		args.push_back("--out");
-		args.push_back(out);
-	}
+	ask_format_out_txt_json_csv(args);
 	cmd_zodiac(args);
 	ask_line(done_back_msg());
 }
@@ -906,19 +948,7 @@ void run_mvint(const std::string&ephem){
 		args.push_back("--lunar-day-tz");
 		args.push_back(lunar_day_tz);
 	}
-	std::string fmt=ask_line(itx("prompt.format_txt_json_csv"));
-	if(fmt=="2"||fmt=="json"){
-		args.push_back("--format");
-		args.push_back("json");
-	}else if(fmt=="3"||fmt=="csv"){
-		args.push_back("--format");
-		args.push_back("csv");
-	}
-	std::string out=ask_line(itx("prompt.out_file"));
-	if(!out.empty()){
-		args.push_back("--out");
-		args.push_back(out);
-	}
+	ask_format_out_txt_json_csv(args);
 	cmd_mview(args);
 	ask_line(done_back_msg());
 }
@@ -938,25 +968,7 @@ void run_rint(const std::string&ephem){
 		args.push_back("--kinds");
 		args.push_back(kinds);
 	}
-	std::string fmt=ask_line(itx("prompt.format_event"));
-	if(fmt=="2"||fmt=="json"){
-		args.push_back("--format");
-		args.push_back("json");
-	}else if(fmt=="3"||fmt=="csv"){
-		args.push_back("--format");
-		args.push_back("csv");
-	}else if(fmt=="4"||fmt=="ics"){
-		args.push_back("--format");
-		args.push_back("ics");
-	}else if(fmt=="5"||fmt=="jsonl"){
-		args.push_back("--format");
-		args.push_back("jsonl");
-	}
-	std::string out=ask_line(itx("prompt.out_file"));
-	if(!out.empty()){
-		args.push_back("--out");
-		args.push_back(out);
-	}
+	ask_event_format_out(args);
 	cmd_range(args);
 	ask_line(done_back_msg());
 }
@@ -977,25 +989,7 @@ void run_sint(const std::string&ephem){
 		args.push_back("--count");
 		args.push_back(count);
 	}
-	std::string fmt=ask_line(itx("prompt.format_event"));
-	if(fmt=="2"||fmt=="json"){
-		args.push_back("--format");
-		args.push_back("json");
-	}else if(fmt=="3"||fmt=="csv"){
-		args.push_back("--format");
-		args.push_back("csv");
-	}else if(fmt=="4"||fmt=="ics"){
-		args.push_back("--format");
-		args.push_back("ics");
-	}else if(fmt=="5"||fmt=="jsonl"){
-		args.push_back("--format");
-		args.push_back("jsonl");
-	}
-	std::string out=ask_line(itx("prompt.out_file"));
-	if(!out.empty()){
-		args.push_back("--out");
-		args.push_back(out);
-	}
+	ask_event_format_out(args);
 	cmd_search(args);
 	ask_line(done_back_msg());
 }
@@ -1082,19 +1076,8 @@ void run_eint(const std::string&ephem){
 			args.push_back("1");
 		}
 	}
-	std::string fmt=ask_line(itx("prompt.format_eclipse"));
-	if(fmt=="2"||fmt=="txt"){
-		args.push_back("--format");
-		args.push_back("txt");
-	}else if(fmt=="3"||fmt=="geojson"){
-		args.push_back("--format");
-		args.push_back("geojson");
-	}
-	std::string out=ask_line(itx("prompt.out_file"));
-	if(!out.empty()){
-		args.push_back("--out");
-		args.push_back(out);
-	}
+	append_eclipse_format(args,ask_line(itx("prompt.format_eclipse")));
+	append_arg(args,"--out",ask_line(itx("prompt.out_file")));
 	cmd_eclipse(args);
 	ask_line(done_back_msg());
 }
@@ -1211,19 +1194,7 @@ void run_aint(const std::string&ephem){
 		args.push_back("--lunar-day-tz");
 		args.push_back(lunar_day_tz);
 	}
-	std::string fmt=ask_line(itx("prompt.format_txt_json_csv"));
-	if(fmt=="2"||fmt=="json"){
-		args.push_back("--format");
-		args.push_back("json");
-	}else if(fmt=="3"||fmt=="csv"){
-		args.push_back("--format");
-		args.push_back("csv");
-	}
-	std::string out=ask_line(itx("prompt.out_file"));
-	if(!out.empty()){
-		args.push_back("--out");
-		args.push_back(out);
-	}
+	ask_format_out_txt_json_csv(args);
 	cmd_alm(args);
 	ask_line(done_back_msg());
 }
@@ -1277,19 +1248,7 @@ void run_skyint(const std::string&ephem){
 		args.push_back(pick);
 	}
 
-	std::string fmt=ask_line(itx("prompt.format_txt_json_csv"));
-	if(fmt=="2"||fmt=="json"){
-		args.push_back("--format");
-		args.push_back("json");
-	}else if(fmt=="3"||fmt=="csv"){
-		args.push_back("--format");
-		args.push_back("csv");
-	}
-	std::string out=ask_line(itx("prompt.out_file"));
-	if(!out.empty()){
-		args.push_back("--out");
-		args.push_back(out);
-	}
+	ask_format_out_txt_json_csv(args);
 	cmd_sky(args);
 	ask_line(done_back_msg());
 }

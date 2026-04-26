@@ -402,8 +402,10 @@ void write_cfg(std::ostream&os,const CfgOpt&opt,const CfgRes&res){
 			 w.obj_begin();
 			 w.key("tool");
 			 w.value("lunar");
+			 w.key("version");
+			 w.value(tool_ver());
 			 w.key("schema");
-			 w.value("lunar.v1");
+			 w.value(tool_ver());
 			 w.obj_end();
 			 w.key("data");
 			 w.obj_begin();

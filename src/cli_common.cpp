@@ -3,12 +3,14 @@
 #include<algorithm>
 #include<array>
 #include<cctype>
+#include<ctime>
 #include<iostream>
 #include<limits>
 #include<stdexcept>
 
 #include "lunar/format.hpp"
 #include "lunar/i18n.hpp"
+#include "lunar/math.hpp"
 
 namespace cli_util{
 
@@ -43,6 +45,61 @@ bool parse_bool01(const std::string&text,const std::string&label){
 		return true;
 	}
 	throw std::invalid_argument(label+" must be 0 or 1");
+}
+
+bool all_digits(const std::string&s){
+	if(s.empty()){
+		return false;
+	}
+	for(char c : s){
+		if(!std::isdigit(static_cast<unsigned char>(c))){
+			return false;
+		}
+	}
+	return true;
+}
+
+std::tuple<int,int,int> parse_ymd_fixed(const std::string&text,
+										const std::string&label){
+	const std::string err="invalid "+label+", expected YEAR-MM-DD: "+text;
+	if(text.empty()){
+		throw std::invalid_argument(err);
+	}
+	const std::size_t year_sep=
+		text.find('-',((text[0]=='+'||text[0]=='-')?1u:0u));
+	const std::size_t month_sep=
+		(year_sep==std::string::npos)?
+			std::string::npos:text.find('-',year_sep+1);
+	if(year_sep==std::string::npos||month_sep==std::string::npos){
+		throw std::invalid_argument(err);
+	}
+	const std::string ytxt=text.substr(0,year_sep);
+	const std::string mtxt=text.substr(year_sep+1,month_sep-year_sep-1);
+	const std::string dtxt=text.substr(month_sep+1);
+	if(mtxt.size()!=2||dtxt.size()!=2||!all_digits(mtxt)||
+	   !all_digits(dtxt)){
+		throw std::invalid_argument(err);
+	}
+	const int y=parse_int(ytxt,"year");
+	const int m=parse_int(mtxt,"month");
+	const int d=parse_int(dtxt,"day");
+	if(m<1||m>12||d<1||d>31){
+		throw std::invalid_argument("invalid "+label+" value: "+text);
+	}
+	return {y,m,d};
+}
+
+double current_jd_utc(){
+	const std::time_t now=std::time(nullptr);
+	std::tm utc_tm{};
+#if defined(_WIN32)
+	gmtime_s(&utc_tm,&now);
+#else
+	gmtime_r(&now,&utc_tm);
+#endif
+	return greg2jd(utc_tm.tm_year+1900,utc_tm.tm_mon+1,utc_tm.tm_mday,
+				   utc_tm.tm_hour,utc_tm.tm_min,
+				   static_cast<double>(utc_tm.tm_sec));
 }
 
 std::string req_val(const std::vector<std::string>&args,std::size_t&idx,

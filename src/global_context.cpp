@@ -3,7 +3,6 @@
 #include<algorithm>
 #include<cctype>
 #include<cmath>
-#include<ctime>
 #include<filesystem>
 #include<limits>
 #include<optional>
@@ -15,6 +14,7 @@
 #include<vector>
 
 #include "lunar/arg_parser.hpp"
+#include "lunar/cli/common.hpp"
 #include "lunar/cli/main.hpp"
 #include "lunar/format.hpp"
 #include "lunar/i18n.hpp"
@@ -125,19 +125,6 @@ void add_unique_existing(std::vector<std::string>&out,
 	if(seen.insert(norm).second){
 		out.push_back(p.string());
 	}
-}
-
-double current_jd_utc(){
-	const std::time_t now=std::time(nullptr);
-	std::tm utc_tm{};
-#if defined(_WIN32)
-	gmtime_s(&utc_tm,&now);
-#else
-	gmtime_r(&now,&utc_tm);
-#endif
-	return greg2jd(utc_tm.tm_year+1900,utc_tm.tm_mon+1,utc_tm.tm_mday,
-				   utc_tm.tm_hour,utc_tm.tm_min,
-				   static_cast<double>(utc_tm.tm_sec));
 }
 
 std::optional<std::pair<int,int>> parse_ym(const std::string&s){
@@ -309,7 +296,7 @@ std::optional<std::pair<double,double>> infer_jd_interval(
 									  std::max(f.jd_utc,t.jd_utc));
 			}
 			if(command=="search"){
-				double jd_from=current_jd_utc();
+				double jd_from=cli_util::current_jd_utc();
 				if(from){
 					jd_from=parse_iso(*from,default_tz).jd_utc;
 				}

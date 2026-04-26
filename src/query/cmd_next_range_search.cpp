@@ -39,17 +39,18 @@ struct EvRes{
 	std::vector<EventRec> rows;
 };
 
-double current_jd_utc(){
-	const std::time_t now=std::time(nullptr);
-	std::tm utc_tm{};
-#if defined(_WIN32)
-	gmtime_s(&utc_tm,&now);
-#else
-	gmtime_r(&now,&utc_tm);
-#endif
-	return greg2jd(utc_tm.tm_year+1900,utc_tm.tm_mon+1,utc_tm.tm_mday,
-				   utc_tm.tm_hour,utc_tm.tm_min,
-				   static_cast<double>(utc_tm.tm_sec));
+template<typename Opt>
+lunar::ArgParser& add_event_output_opts(lunar::ArgParser&parser,Opt&opt){
+	return parser.add_value("--tz",[&](const std::string&v){ opt.tz=v; })
+		.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
+		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
+		.add_value("--pretty",[&](const std::string&v){
+			opt.pretty=parse_bool01(v,"--pretty");
+		})
+		.add_flag("--quiet",[&](){ opt.quiet=true; })
+		.add_value("--eclipse",[&](const std::string&v){
+			opt.calc_ecl=parse_bool01(v,"--eclipse");
+		});
 }
 
 std::vector<EventRec> collect_next_events(EphRead&eph,double jd_utc_from,
@@ -202,17 +203,8 @@ NextOpt parse_next(const std::vector<std::string>&args){
 		.add_value("--count",[&](const std::string&v){
 			opt.count=parse_int(v,"--count");
 		})
-		.add_value("--kinds",[&](const std::string&v){ opt.kinds=v; })
-		.add_value("--tz",[&](const std::string&v){ opt.tz=v; })
-		.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
-		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
-		.add_value("--pretty",[&](const std::string&v){
-			opt.pretty=parse_bool01(v,"--pretty");
-		})
-		.add_flag("--quiet",[&](){ opt.quiet=true; })
-		.add_value("--eclipse",[&](const std::string&v){
-			opt.calc_ecl=parse_bool01(v,"--eclipse");
-		});
+		.add_value("--kinds",[&](const std::string&v){ opt.kinds=v; });
+	add_event_output_opts(parser,opt);
 	parser.parse_all(args,1,"next");
 	if(opt.from_time.empty()){
 		throw std::invalid_argument("next requires --from <time>");
@@ -235,17 +227,8 @@ RangeOpt parse_range(const std::vector<std::string>&args){
 	lunar::ArgParser parser;
 	parser.add_value("--from",[&](const std::string&v){ opt.from_time=v; })
 		.add_value("--to",[&](const std::string&v){ opt.to_time=v; })
-		.add_value("--kinds",[&](const std::string&v){ opt.kinds=v; })
-		.add_value("--tz",[&](const std::string&v){ opt.tz=v; })
-		.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
-		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
-		.add_value("--pretty",[&](const std::string&v){
-			opt.pretty=parse_bool01(v,"--pretty");
-		})
-		.add_flag("--quiet",[&](){ opt.quiet=true; })
-		.add_value("--eclipse",[&](const std::string&v){
-			opt.calc_ecl=parse_bool01(v,"--eclipse");
-		});
+		.add_value("--kinds",[&](const std::string&v){ opt.kinds=v; });
+	add_event_output_opts(parser,opt);
 	parser.parse_all(args,1,"range");
 	if(opt.from_time.empty()||opt.to_time.empty()){
 		throw std::invalid_argument(
@@ -267,17 +250,8 @@ SearchOpt parse_search(const std::vector<std::string>&args){
 	parser.add_value("--from",[&](const std::string&v){ opt.from_time=v; })
 		.add_value("--count",[&](const std::string&v){
 			opt.count=parse_int(v,"--count");
-		})
-		.add_value("--format",[&](const std::string&v){ opt.format=to_low(v); })
-		.add_value("--tz",[&](const std::string&v){ opt.tz=v; })
-		.add_value("--out",[&](const std::string&v){ opt.out_path=v; })
-		.add_value("--pretty",[&](const std::string&v){
-			opt.pretty=parse_bool01(v,"--pretty");
-		})
-		.add_flag("--quiet",[&](){ opt.quiet=true; })
-		.add_value("--eclipse",[&](const std::string&v){
-			opt.calc_ecl=parse_bool01(v,"--eclipse");
 		});
+	add_event_output_opts(parser,opt);
 	parser.parse_all(args,2,"search");
 	if(opt.count<1){
 		throw std::invalid_argument("--count must be >=1");

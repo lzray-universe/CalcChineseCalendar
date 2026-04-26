@@ -418,41 +418,8 @@ void chk_mode(const std::string&mode){
 	}
 }
 
-bool all_digits(const std::string&s){
-	if(s.empty()){
-		return false;
-	}
-	for(char c : s){
-		if(!std::isdigit(static_cast<unsigned char>(c))){
-			return false;
-		}
-	}
-	return true;
-}
-
 std::tuple<int,int,int> parse_ld(const std::string&s){
-	if(s.empty()){
-		throw std::invalid_argument("invalid date, expected YEAR-MM-DD: "+s);
-	}
-	std::size_t year_sep=s.find('-',((s[0]=='+'||s[0]=='-')?1u:0u));
-	std::size_t month_sep=
-		(year_sep==std::string::npos)?std::string::npos:s.find('-',year_sep+1);
-	if(year_sep==std::string::npos||month_sep==std::string::npos){
-		throw std::invalid_argument("invalid date, expected YEAR-MM-DD: "+s);
-	}
-	std::string ytxt=s.substr(0,year_sep);
-	std::string mtxt=s.substr(year_sep+1,month_sep-year_sep-1);
-	std::string dtxt=s.substr(month_sep+1);
-	if(mtxt.size()!=2||dtxt.size()!=2||!all_digits(mtxt)||!all_digits(dtxt)){
-		throw std::invalid_argument("invalid date, expected YEAR-MM-DD: "+s);
-	}
-	int y=parse_int(ytxt,"year");
-	int m=parse_int(mtxt,"month");
-	int d=parse_int(dtxt,"day");
-	if(m<1||m>12||d<1||d>31){
-		throw std::invalid_argument("invalid date value: "+s);
-	}
-	return {y,m,d};
+	return parse_ymd_fixed(s,"date");
 }
 
 void run_mout(const MonthsArgs&args,const std::vector<MonYrData>&data,

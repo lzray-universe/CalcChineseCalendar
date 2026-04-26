@@ -383,7 +383,7 @@ void wr_elics(std::ostream&os,const std::string&ephem,
 		out.push_back(event_to_ics(ev,false));
 	}
 	write_ics(os,"lunar-cli//"+tool_ver(),cal_name,out,
-			  {"schema=lunar.v1","ephem="+ephem,lunar::i18n::tz_note()});
+			  {"schema="+tool_ver(),"ephem="+ephem,lunar::i18n::tz_note()});
 }
 
 }

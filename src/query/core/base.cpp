@@ -20,6 +20,7 @@ using cli_util::OutTgt;
 using cli_util::bld_lpev;
 using cli_util::bld_stev;
 using cli_util::chk_fmt;
+using cli_util::current_jd_utc;
 using cli_util::is_opt;
 using cli_util::log_year_progress;
 using cli_util::mk_erec;
@@ -27,6 +28,7 @@ using cli_util::note_out;
 using cli_util::open_out;
 using cli_util::parse_bool01;
 using cli_util::parse_int;
+using cli_util::parse_ymd_fixed;
 using cli_util::req_val;
 using cli_util::to_low;
 using lunar::AstroObs;
@@ -181,7 +183,7 @@ void write_meta(JsonWriter&w,const std::string&ephem,
 	w.key("version");
 	w.value(tool_ver());
 	w.key("schema");
-	w.value("lunar.v1");
+	w.value(tool_ver());
 	w.key("ephem");
 	w.value(ephem);
 	w.key("tz_display");
@@ -259,6 +261,71 @@ double parse_double(const std::string&text,const std::string&name){
 	}
 }
 
+HliProfileCode parse_hli_profile_arg(const std::string&text,
+									 const std::string&opt){
+	HliProfileCode parsed=HliProfileCode::Folk;
+	if(!parse_hli_profile(text,&parsed)){
+		throw std::invalid_argument(
+			"invalid "+opt+": "+text+" (expected folk|ziping|purple|xieji)");
+	}
+	return parsed;
+}
+
+HliYearBoundary parse_hli_year_boundary_arg(const std::string&text){
+	HliYearBoundary parsed=HliYearBoundary::LunarNewYear;
+	if(!parse_hli_year_boundary(text,&parsed)){
+		throw std::invalid_argument(
+			"invalid --year-boundary: "+text+
+			" (expected lichun|lunar_new_year|dongzhi)");
+	}
+	return parsed;
+}
+
+HliMonthBoundary parse_hli_month_boundary_arg(const std::string&text){
+	HliMonthBoundary parsed=HliMonthBoundary::LunarFirstDay;
+	if(!parse_hli_month_boundary(text,&parsed)){
+		throw std::invalid_argument(
+			"invalid --month-boundary: "+text+
+			" (expected solar_term|lunar_first_day)");
+	}
+	return parsed;
+}
+
+HliLeapMonthMode parse_hli_leap_month_mode_arg(const std::string&text){
+	HliLeapMonthMode parsed=HliLeapMonthMode::InheritPrevious;
+	if(!parse_hli_leap_month_mode(text,&parsed)){
+		throw std::invalid_argument(
+			"invalid --leap-month-mode: "+text+
+			" (expected ignore|inherit_previous|split_midway|shift_to_next)");
+	}
+	return parsed;
+}
+
+HliDayBoundary parse_hli_day_boundary_arg(const std::string&text){
+	HliDayBoundary parsed=HliDayBoundary::Hour23;
+	if(!parse_hli_day_boundary(text,&parsed)){
+		throw std::invalid_argument(
+			"invalid --day-boundary: "+text+" (expected hour23|hour0)");
+	}
+	return parsed;
+}
+
+void set_hli_year_boundary(HliRuleSet&rules,const std::string&text){
+	rules.year_boundary=static_cast<int>(parse_hli_year_boundary_arg(text));
+}
+
+void set_hli_month_boundary(HliRuleSet&rules,const std::string&text){
+	rules.month_boundary=static_cast<int>(parse_hli_month_boundary_arg(text));
+}
+
+void set_hli_leap_month_mode(HliRuleSet&rules,const std::string&text){
+	rules.leap_month_mode=static_cast<int>(parse_hli_leap_month_mode_arg(text));
+}
+
+void set_hli_day_boundary(HliRuleSet&rules,const std::string&text){
+	rules.day_boundary=static_cast<int>(parse_hli_day_boundary_arg(text));
+}
+
 std::string join_pipe(const std::vector<std::string>&items){
 	std::string out;
 	for(std::size_t i=0;i<items.size();++i){
@@ -329,25 +396,43 @@ struct EvtFilt{
 	bool inc_ecl=false;
 };
 
+struct AstroSiteOpt{
+	double lat=0.0;
+	double lon=0.0;
+	double height=0.0;
+	bool has_lat=false;
+	bool has_lon=false;
+	bool has_height=false;
+};
+
+void add_astro_site_options(lunar::ArgParser&parser,AstroSiteOpt&site){
+	parser.add_value("--astro-lat",[&](const std::string&v){
+		site.lat=parse_double(v,"--astro-lat");
+		site.has_lat=true;
+	});
+	parser.add_value("--astro-lon",[&](const std::string&v){
+		site.lon=parse_double(v,"--astro-lon");
+		site.has_lon=true;
+	});
+	parser.add_value("--astro-height",[&](const std::string&v){
+		site.height=parse_double(v,"--astro-height");
+		site.has_height=true;
+	});
+}
+
+void validate_astro_site(const AstroSiteOpt&site){
+	if(site.has_lat!=site.has_lon){
+		throw std::invalid_argument(
+			"astro site requires both --astro-lat and --astro-lon");
+	}
+	if(site.has_height&&!site.has_lat){
+		throw std::invalid_argument(
+			"--astro-height requires --astro-lat and --astro-lon");
+	}
+}
+
 std::tuple<int,int,int> parse_ymd(const std::string&s){
-	if(s.empty()){
-		throw std::invalid_argument("invalid date, expected YEAR-MM-DD: "+s);
-	}
-	std::size_t year_sep=s.find('-',((s[0]=='+'||s[0]=='-')?1u:0u));
-	std::size_t month_sep=
-		(year_sep==std::string::npos)?std::string::npos:s.find('-',year_sep+1);
-	if(year_sep==std::string::npos||month_sep==std::string::npos){
-		throw std::invalid_argument("invalid date, expected YEAR-MM-DD: "+s);
-	}
-	std::string ytxt=s.substr(0,year_sep);
-	std::string mtxt=s.substr(year_sep+1,month_sep-year_sep-1);
-	std::string dtxt=s.substr(month_sep+1);
-	if(mtxt.size()!=2||dtxt.size()!=2||!all_digits(mtxt)||!all_digits(dtxt)){
-		throw std::invalid_argument("invalid date, expected YEAR-MM-DD: "+s);
-	}
-	int y=parse_int(ytxt,"year");
-	int m=parse_int(mtxt,"month");
-	int d=parse_int(dtxt,"day");
+	auto [y,m,d]=parse_ymd_fixed(s,"date");
 	if(m<1||m>12||d<1||d>days_gm(y,m)){
 		throw std::invalid_argument("invalid date value: "+s);
 	}

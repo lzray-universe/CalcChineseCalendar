@@ -269,12 +269,7 @@ ExportOpt parse_export(const std::vector<std::string>&args){
 	opt.hli_text=hli_profile_key(
 		static_cast<HliProfileCode>(opt.hli_rules.profile_code));
 
-	double astro_lat=0.0;
-	double astro_lon=0.0;
-	double astro_h=0.0;
-	bool has_lat=false;
-	bool has_lon=false;
-	bool has_h=false;
+	AstroSiteOpt site;
 	std::string from_year;
 	std::string to_year;
 	auto set_full_scope=[&](){
@@ -395,42 +390,19 @@ ExportOpt parse_export(const std::vector<std::string>&args){
 			opt.hli_lon_deg=parse_double(v,"--lon");
 		})
 		.add_value("--year-boundary",[&](const std::string&v){
-			HliYearBoundary parsed=HliYearBoundary::LunarNewYear;
-			if(!parse_hli_year_boundary(v,&parsed)){
-				throw std::invalid_argument(
-					"invalid --year-boundary: "+v+
-					" (expected lichun|lunar_new_year|dongzhi)");
-			}
-			opt.hli_rules.year_boundary=static_cast<int>(parsed);
+			set_hli_year_boundary(opt.hli_rules,v);
 			opt.year_boundary_set=true;
 		})
 		.add_value("--month-boundary",[&](const std::string&v){
-			HliMonthBoundary parsed=HliMonthBoundary::LunarFirstDay;
-			if(!parse_hli_month_boundary(v,&parsed)){
-				throw std::invalid_argument(
-					"invalid --month-boundary: "+v+
-					" (expected solar_term|lunar_first_day)");
-			}
-			opt.hli_rules.month_boundary=static_cast<int>(parsed);
+			set_hli_month_boundary(opt.hli_rules,v);
 			opt.month_boundary_set=true;
 		})
 		.add_value("--leap-month-mode",[&](const std::string&v){
-			HliLeapMonthMode parsed=HliLeapMonthMode::InheritPrevious;
-			if(!parse_hli_leap_month_mode(v,&parsed)){
-				throw std::invalid_argument(
-					"invalid --leap-month-mode: "+v+
-					" (expected ignore|inherit_previous|split_midway|shift_to_next)");
-			}
-			opt.hli_rules.leap_month_mode=static_cast<int>(parsed);
+			set_hli_leap_month_mode(opt.hli_rules,v);
 			opt.leap_month_mode_set=true;
 		})
 		.add_value("--day-boundary",[&](const std::string&v){
-			HliDayBoundary parsed=HliDayBoundary::Hour23;
-			if(!parse_hli_day_boundary(v,&parsed)){
-				throw std::invalid_argument(
-					"invalid --day-boundary: "+v+" (expected hour23|hour0)");
-			}
-			opt.hli_rules.day_boundary=static_cast<int>(parsed);
+			set_hli_day_boundary(opt.hli_rules,v);
 			opt.day_boundary_set=true;
 		})
 		.add_value("--astro",[&](const std::string&v){
@@ -439,19 +411,8 @@ ExportOpt parse_export(const std::vector<std::string>&args){
 		.add_value("--astro-mode",
 				   [&](const std::string&v){ opt.astro_mode_text=v; })
 		.add_value("--astro-pick",
-				   [&](const std::string&v){ opt.astro_pick_csv=v; })
-		.add_value("--astro-lat",[&](const std::string&v){
-			astro_lat=parse_double(v,"--astro-lat");
-			has_lat=true;
-		})
-		.add_value("--astro-lon",[&](const std::string&v){
-			astro_lon=parse_double(v,"--astro-lon");
-			has_lon=true;
-		})
-		.add_value("--astro-height",[&](const std::string&v){
-			astro_h=parse_double(v,"--astro-height");
-			has_h=true;
-		});
+				   [&](const std::string&v){ opt.astro_pick_csv=v; });
+	add_astro_site_options(parser,site);
 
 	bool used_pos_month=false;
 	for(std::size_t i=1;i<args.size();++i){
@@ -491,19 +452,12 @@ ExportOpt parse_export(const std::vector<std::string>&args){
 	if(opt.to_ym.empty()){
 		opt.to_ym=opt.from_ym;
 	}
-	if(has_lat!=has_lon){
-		throw std::invalid_argument(
-			"astro site requires both --astro-lat and --astro-lon");
-	}
-	if(has_h&&!has_lat){
-		throw std::invalid_argument(
-			"--astro-height requires --astro-lat and --astro-lon");
-	}
-	if(has_lat){
+	validate_astro_site(site);
+	if(site.has_lat){
 		opt.astro_obs.has_site=true;
-		opt.astro_obs.lat_deg=astro_lat;
-		opt.astro_obs.lon_deg=astro_lon;
-		opt.astro_obs.h_m=has_h?astro_h:0.0;
+		opt.astro_obs.lat_deg=site.lat;
+		opt.astro_obs.lon_deg=site.lon;
+		opt.astro_obs.h_m=site.has_height?site.height:0.0;
 	}
 	chk_fmt(opt.format,{"json","jsonl","csv","txt"},"export");
 	opt.lunar_day_tz=canonical_tz_text(opt.lunar_day_tz);
