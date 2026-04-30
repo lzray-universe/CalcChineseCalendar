@@ -167,11 +167,39 @@ lunar config set hli_trad xieji
 lunar config show --format json
 ```
 
+## 子命令详细页
+
+每个子命令的参数用法和输出解释见独立页面：
+
+| 命令 | 说明 |
+| --- | --- |
+| [months](./cli/months) | 枚举农历月 |
+| [calendar](./cli/calendar) | 年度节气、月相和农历月信息 |
+| [year](./cli/year) | 单年历法摘要 |
+| [event](./cli/event) | 单个节气、月相或食象事件 |
+| [download](./cli/download) | 列出和下载 BSP |
+| [at](./cli/at) | 指定时刻综合查询 |
+| [convert](./cli/convert) | 公历与农历互转 |
+| [day](./cli/day) | 单日历法、黄历和天象 |
+| [monthview](./cli/monthview) | 单月逐日视图 |
+| [export](./cli/export) | 批量逐日导出 |
+| [next](./cli/next) | 后续事件查询 |
+| [range](./cli/range) | 区间事件查询 |
+| [search](./cli/search) | 事件表达式搜索 |
+| [eclipse](./cli/eclipse) | 日食、月食和可见性 |
+| [festival](./cli/festival) | 年度节日 |
+| [almanac](./cli/almanac) | 单日黄历 |
+| [info](./cli/info) | 版本、配置和星历信息 |
+| [config](./cli/config) | 配置读写 |
+| [completion](./cli/completion) | shell 补全脚本 |
+| [zodiac](./cli/zodiac) | 太阳星座 |
+| [sky](./cli/sky) | 观测点天空位置 |
+
 ## 日历与日期命令
 
 ### months
 
-枚举农历月。
+枚举农历月。详细参数与输出见 [months](./cli/months)。
 
 ```bash
 lunar months [bsp] <years>
@@ -190,7 +218,7 @@ lunar months ./de442.bsp 2024-2026 --mode gregorian --format json --out months.j
 
 ### calendar
 
-生成年度节气、月相和可选农历月信息。
+生成年度节气、月相和可选农历月信息。详细参数与输出见 [calendar](./cli/calendar)。
 
 ```bash
 lunar calendar [bsp] [<years>]
@@ -208,7 +236,7 @@ lunar calendar ./de442.bsp 2024-2026 --format ics --out calendar.ics
 
 ### year
 
-生成单年历法摘要。
+生成单年历法摘要。详细参数与输出见 [year](./cli/year)。
 
 ```bash
 lunar year [bsp] <year>
@@ -223,7 +251,7 @@ lunar year @series 2025 --format json --out year-2025.json
 
 ### day
 
-查询单日农历、干支、节气/月相、可选黄历与天象事件。
+查询单日农历、干支、节气/月相、可选黄历与天象事件。详细参数与输出见 [day](./cli/day)。
 
 ```bash
 lunar day [bsp] <YYYY-MM-DD>
@@ -249,7 +277,7 @@ lunar day ./de442.bsp 2025-06-01 --astro 1 --astro-lat 31.23 --astro-lon 121.47
 
 ### monthview
 
-生成单个公历月的逐日视图。
+生成单个公历月的逐日视图。详细参数与输出见 [monthview](./cli/monthview)。
 
 ```bash
 lunar monthview [bsp] <YYYY-MM>
@@ -266,7 +294,7 @@ lunar monthview ./de442.bsp 2025-09 --format csv --out month.csv
 
 ### export
 
-批量导出公历月或年份范围内的逐日数据。
+批量导出公历月或年份范围内的逐日数据。详细参数与输出见 [export](./cli/export)。
 
 ```bash
 lunar export [bsp] <YYYY-MM>
@@ -297,7 +325,7 @@ lunar export ./de442.bsp --from 2025-01 --to 2025-12 --scope full --format json
 
 ### at
 
-查询指定时刻的综合历法与天象数据。
+查询指定时刻的综合历法与天象数据。详细参数与输出见 [at](./cli/at)。
 
 ```bash
 lunar at [bsp] <time>
@@ -325,7 +353,7 @@ lunar at ./de442.bsp --file times.txt --format jsonl --meta-once 1
 
 ### convert
 
-公历与农历互转。
+公历与农历互转。详细参数与输出见 [convert](./cli/convert)。
 
 ```bash
 lunar convert [bsp] <dt_or_tm>
@@ -356,7 +384,7 @@ lunar convert ./de442.bsp --from-lunar 2025 5 6 --leap 0 --format json
 
 ### event
 
-查询单个节气、月相或食象事件。
+查询单个节气、月相或食象事件。详细参数与输出见 [event](./cli/event)。
 
 ```bash
 lunar event [bsp] solar-term <code> <year>
@@ -394,7 +422,7 @@ lunar event ./de442.bsp solar-eclipse --near 2026-08-12 --format json
 
 ### next
 
-从指定时刻开始查询后续事件。
+从指定时刻开始查询后续事件。详细参数与输出见 [next](./cli/next)。
 
 ```bash
 lunar next [bsp] --from <time> --count N
@@ -412,7 +440,7 @@ lunar next ./de442.bsp --from 2025-06-01 --count 10 --format ics --out next.ics
 
 ### range
 
-查询时间区间内的事件。
+查询时间区间内的事件。详细参数与输出见 [range](./cli/range)。
 
 ```bash
 lunar range [bsp] --from <time> --to <time>
@@ -430,7 +458,7 @@ lunar range ./de442.bsp --from 2025-02-01 --to 2025-03-01 --format csv
 
 ### search
 
-使用受限查询表达式搜索事件。
+使用受限查询表达式搜索事件。详细参数与输出见 [search](./cli/search)。
 
 ```bash
 lunar search [bsp] <query>
@@ -448,7 +476,7 @@ lunar search ./de442.bsp "next lunar eclipse" --from 2025-01-01 --format json
 
 ### eclipse
 
-查询日食、月食以及给定地点附近可见食。
+查询日食、月食以及给定地点附近可见食。详细参数与输出见 [eclipse](./cli/eclipse)。
 
 ```bash
 lunar [--eclipse-method modern|legacy] eclipse [bsp] --near <YYYY-MM-DD> [--kind lunar|solar]
@@ -482,7 +510,7 @@ lunar eclipse ./de442.bsp --visible-near 2025-01-01T00:00:00+08:00 --point-lat 3
 
 ### festival
 
-生成指定年份节日数据。
+生成指定年份节日数据。详细参数与输出见 [festival](./cli/festival)。
 
 ```bash
 lunar festival [bsp] <year>
@@ -497,7 +525,7 @@ lunar festival ./de442.bsp 2025 --format csv --out festival.csv
 
 ### almanac
 
-查询指定日期黄历摘要与宜忌信息。
+查询指定日期黄历摘要与宜忌信息。详细参数与输出见 [almanac](./cli/almanac)。
 
 ```bash
 lunar almanac [bsp] <YYYY-MM-DD>
@@ -518,7 +546,7 @@ lunar almanac ./de442.bsp 2025-09-17 --trad xieji --format json
 
 ### zodiac
 
-查询太阳星座。
+查询太阳星座。详细参数与输出见 [zodiac](./cli/zodiac)。
 
 ```bash
 lunar zodiac <bsp> --time <time>
@@ -539,7 +567,7 @@ lunar zodiac ./de442.bsp --year 2025 --format csv
 
 ### sky
 
-查询指定观测点的地平坐标和视位置。
+查询指定观测点的地平坐标和视位置。详细参数与输出见 [sky](./cli/sky)。
 
 ```bash
 lunar sky <bsp> <time> --lat <deg> --lon <deg>
@@ -560,7 +588,7 @@ lunar sky ./de442.bsp --time 2025-06-01T20:00 --input-tz +08:00 --lat 31.23 --lo
 
 ### info
 
-查看版本、配置、星历文件状态和覆盖区间。
+查看版本、配置、星历文件状态和覆盖区间。详细参数与输出见 [info](./cli/info)。
 
 ```bash
 lunar info [bsp] [--format json|txt] [--out <path>] [--pretty 0|1] [--quiet]
@@ -575,7 +603,7 @@ lunar info ./de442.bsp --format json --out info.json
 
 ### download
 
-列出和下载内置下载表中的 BSP 文件。
+列出和下载内置下载表中的 BSP 文件。详细参数与输出见 [download](./cli/download)。
 
 ```bash
 lunar download list
@@ -589,7 +617,7 @@ lunar download get de442s --dir ./ephem
 
 ### completion
 
-生成 shell 补全脚本。
+生成 shell 补全脚本。详细参数与输出见 [completion](./cli/completion)。
 
 ```bash
 lunar completion bash|zsh|fish|powershell

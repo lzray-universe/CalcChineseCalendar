@@ -167,11 +167,39 @@ lunar config set hli_trad xieji
 lunar config show --format json
 ```
 
+## Subcommand Pages
+
+Each subcommand has a separate page for parameters and output:
+
+| Command | Description |
+| --- | --- |
+| [months](./cli/months) | Enumerate lunar months |
+| [calendar](./cli/calendar) | Yearly solar terms, lunar phases, and lunar months |
+| [year](./cli/year) | Single-year calendar summary |
+| [event](./cli/event) | Single solar-term, lunar-phase, or eclipse event |
+| [download](./cli/download) | List and download BSP files |
+| [at](./cli/at) | Instant query |
+| [convert](./cli/convert) | Gregorian/lunar conversion |
+| [day](./cli/day) | Single-day calendar, Huangli, and astronomy data |
+| [monthview](./cli/monthview) | Monthly daily view |
+| [export](./cli/export) | Bulk daily export |
+| [next](./cli/next) | Upcoming event query |
+| [range](./cli/range) | Time-range event query |
+| [search](./cli/search) | Event search expression |
+| [eclipse](./cli/eclipse) | Solar/lunar eclipse and visibility |
+| [festival](./cli/festival) | Yearly festival data |
+| [almanac](./cli/almanac) | One-day Huangli data |
+| [info](./cli/info) | Version, config, and ephemeris information |
+| [config](./cli/config) | Config reads and writes |
+| [completion](./cli/completion) | Shell completion scripts |
+| [zodiac](./cli/zodiac) | Solar zodiac |
+| [sky](./cli/sky) | Observer-site sky position |
+
 ## Calendar and date commands
 
 ### months
 
-Enumerate lunar months.
+Enumerate lunar months. See [months](./cli/months) for parameters and output.
 
 ```bash
 lunar months [bsp] <years>
@@ -190,7 +218,7 @@ lunar months ./de442.bsp 2024-2026 --mode gregorian --format json --out months.j
 
 ### calendar
 
-Generate yearly solar-term, lunar-phase, and optional lunar-month data.
+Generate yearly solar-term, lunar-phase, and optional lunar-month data. See [calendar](./cli/calendar) for parameters and output.
 
 ```bash
 lunar calendar [bsp] [<years>]
@@ -208,7 +236,7 @@ lunar calendar ./de442.bsp 2024-2026 --format ics --out calendar.ics
 
 ### year
 
-Generate a single-year calendar summary.
+Generate a single-year calendar summary. See [year](./cli/year) for parameters and output.
 
 ```bash
 lunar year [bsp] <year>
@@ -223,7 +251,7 @@ lunar year @series 2025 --format json --out year-2025.json
 
 ### day
 
-Query one day for lunar date, Ganzhi, solar-term or lunar-phase events, optional Huangli data, and optional astronomy events.
+Query one day for lunar date, Ganzhi, solar-term or lunar-phase events, optional Huangli data, and optional astronomy events. See [day](./cli/day) for parameters and output.
 
 ```bash
 lunar day [bsp] <YYYY-MM-DD>
@@ -249,7 +277,7 @@ lunar day ./de442.bsp 2025-06-01 --astro 1 --astro-lat 31.23 --astro-lon 121.47
 
 ### monthview
 
-Generate a daily view for one Gregorian month.
+Generate a daily view for one Gregorian month. See [monthview](./cli/monthview) for parameters and output.
 
 ```bash
 lunar monthview [bsp] <YYYY-MM>
@@ -266,7 +294,7 @@ lunar monthview ./de442.bsp 2025-09 --format csv --out month.csv
 
 ### export
 
-Export daily data for one month, a month range, or a year range.
+Export daily data for one month, a month range, or a year range. See [export](./cli/export) for parameters and output.
 
 ```bash
 lunar export [bsp] <YYYY-MM>
@@ -297,7 +325,7 @@ lunar export ./de442.bsp --from 2025-01 --to 2025-12 --scope full --format json
 
 ### at
 
-Query full calendar and astronomy data for a specific instant.
+Query full calendar and astronomy data for a specific instant. See [at](./cli/at) for parameters and output.
 
 ```bash
 lunar at [bsp] <time>
@@ -325,7 +353,7 @@ lunar at ./de442.bsp --file times.txt --format jsonl --meta-once 1
 
 ### convert
 
-Convert between Gregorian and lunar dates.
+Convert between Gregorian and lunar dates. See [convert](./cli/convert) for parameters and output.
 
 ```bash
 lunar convert [bsp] <dt_or_tm>
@@ -356,7 +384,7 @@ lunar convert ./de442.bsp --from-lunar 2025 5 6 --leap 0 --format json
 
 ### event
 
-Query one solar-term, lunar-phase, or eclipse event.
+Query one solar-term, lunar-phase, or eclipse event. See [event](./cli/event) for parameters and output.
 
 ```bash
 lunar event [bsp] solar-term <code> <year>
@@ -394,7 +422,7 @@ lunar event ./de442.bsp solar-eclipse --near 2026-08-12 --format json
 
 ### next
 
-Query upcoming events from a starting instant.
+Query upcoming events from a starting instant. See [next](./cli/next) for parameters and output.
 
 ```bash
 lunar next [bsp] --from <time> --count N
@@ -412,7 +440,7 @@ lunar next ./de442.bsp --from 2025-06-01 --count 10 --format ics --out next.ics
 
 ### range
 
-Query events inside a time range.
+Query events inside a time range. See [range](./cli/range) for parameters and output.
 
 ```bash
 lunar range [bsp] --from <time> --to <time>
@@ -430,7 +458,7 @@ lunar range ./de442.bsp --from 2025-02-01 --to 2025-03-01 --format csv
 
 ### search
 
-Search events with a restricted query expression.
+Search events with a restricted query expression. See [search](./cli/search) for parameters and output.
 
 ```bash
 lunar search [bsp] <query>
@@ -448,7 +476,7 @@ lunar search ./de442.bsp "next lunar eclipse" --from 2025-01-01 --format json
 
 ### eclipse
 
-Query solar eclipses, lunar eclipses, and the nearest eclipse visible from a point.
+Query solar eclipses, lunar eclipses, and the nearest eclipse visible from a point. See [eclipse](./cli/eclipse) for parameters and output.
 
 ```bash
 lunar [--eclipse-method modern|legacy] eclipse [bsp] --near <YYYY-MM-DD> [--kind lunar|solar]
@@ -482,7 +510,7 @@ lunar eclipse ./de442.bsp --visible-near 2025-01-01T00:00:00+08:00 --point-lat 3
 
 ### festival
 
-Generate festival data for a year.
+Generate festival data for a year. See [festival](./cli/festival) for parameters and output.
 
 ```bash
 lunar festival [bsp] <year>
@@ -497,7 +525,7 @@ lunar festival ./de442.bsp 2025 --format csv --out festival.csv
 
 ### almanac
 
-Query Huangli summary and auspicious / inauspicious items for a date.
+Query Huangli summary and auspicious / inauspicious items for a date. See [almanac](./cli/almanac) for parameters and output.
 
 ```bash
 lunar almanac [bsp] <YYYY-MM-DD>
@@ -518,7 +546,7 @@ lunar almanac ./de442.bsp 2025-09-17 --trad xieji --format json
 
 ### zodiac
 
-Query solar zodiac data.
+Query solar zodiac data. See [zodiac](./cli/zodiac) for parameters and output.
 
 ```bash
 lunar zodiac <bsp> --time <time>
@@ -539,7 +567,7 @@ lunar zodiac ./de442.bsp --year 2025 --format csv
 
 ### sky
 
-Query topocentric sky position for an observer site.
+Query topocentric sky position for an observer site. See [sky](./cli/sky) for parameters and output.
 
 ```bash
 lunar sky <bsp> <time> --lat <deg> --lon <deg>
@@ -560,7 +588,7 @@ lunar sky ./de442.bsp --time 2025-06-01T20:00 --input-tz +08:00 --lat 31.23 --lo
 
 ### info
 
-Show version, config, ephemeris file status, and coverage interval.
+Show version, config, ephemeris file status, and coverage interval. See [info](./cli/info) for parameters and output.
 
 ```bash
 lunar info [bsp] [--format json|txt] [--out <path>] [--pretty 0|1] [--quiet]
@@ -575,7 +603,7 @@ lunar info ./de442.bsp --format json --out info.json
 
 ### download
 
-List and download BSP files from the built-in download table.
+List and download BSP files from the built-in download table. See [download](./cli/download) for parameters and output.
 
 ```bash
 lunar download list
@@ -589,7 +617,7 @@ lunar download get de442s --dir ./ephem
 
 ### completion
 
-Generate shell completion scripts.
+Generate shell completion scripts. See [completion](./cli/completion) for parameters and output.
 
 ```bash
 lunar completion bash|zsh|fish|powershell

@@ -14,5 +14,9 @@
   "sidebar.docsSidebar.category.集成与实现": {
     "message": "Integration and implementation",
     "description": "The label for category '集成与实现' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.子命令参考": {
+    "message": "Subcommand reference",
+    "description": "The label for category '子命令参考' in sidebar 'docsSidebar'"
   }
 }
