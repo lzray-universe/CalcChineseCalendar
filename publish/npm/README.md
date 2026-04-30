@@ -77,13 +77,13 @@ import { search } from "calcchinesecalendar";
 
 const result = await search({
   ephem: "@series",
-  query: "next full_moon",
+  query: "next full moon",
   fromTime: "2025-06-01T00:00:00+08:00",
   count: 2,
 });
 
-for (const item of result.data.items) {
-  console.log(item.time.iso);
+for (const item of result.data) {
+  console.log(item.code, item.loc_iso);
 }
 ```
 

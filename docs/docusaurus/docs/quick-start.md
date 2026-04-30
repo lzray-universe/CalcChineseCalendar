@@ -52,7 +52,7 @@ lunar download get de442s
 ```bash
 lunar day @series 2025-06-01
 lunar monthview @series 2025-06
-lunar search @series "next full_moon" --from 2025-06-01T00:00:00+08:00
+lunar search @series next full moon --from 2025-06-01T00:00:00+08:00
 lunar zodiac @series 2025-09-07
 ```
 

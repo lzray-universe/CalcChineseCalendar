@@ -642,6 +642,8 @@ lunar search [bsp] <query>
 说明：
 
 - 当前仅支持以 `next ...` 开头的 query。
+- query 可以作为一个带引号参数传入（`"next full moon"`），也可以拆成多个
+  CLI 词（`next full moon`）；受支持的事件名会统一处理空格、连字符和下划线。
 - 内部会把 query 解析成受限的事件检索条件，而不是把整串文本原样转发给 `next`。
 - 默认值：`from=当前 UTC 时刻`、`count=1`；`tz/format/pretty` 来自配置。
 
@@ -960,7 +962,7 @@ lunar eclipse --visible-near 2025-01-01T00:00:00+08:00 --point-lat 31.23 --point
 
 - 本节专门解释结构化输出里的缩写、代号、以及 `*_code` / `*_key` / `*_codes` / `*_mask_hex` 字段。
 - `year`、`month`、`name`、`data`、`events`、`input` 这类语义直白字段不重复展开。
-- 字段名以当前实现 `src/query/core/base.cpp`、`src/query/day_output.cpp`、`src/cli/output.cpp`、`src/query/cmd_day_mview.cpp`、`src/query/cmd_export.cpp`、`src/query/cmd_eclipse.cpp` 为准。
+- 字段名以当前实现 `src/query/core/base.cpp`、`src/query/core/events.cpp`、`src/query/day_output.cpp`、`src/cli/output.cpp`、`src/query/cmd_day_mview.cpp`、`src/query/cmd_export.cpp`、`src/query/cmd_eclipse.cpp` 为准。
 
 ### 17.1 通用时间与采样字段
 
@@ -975,8 +977,8 @@ lunar eclipse --visible-near 2025-01-01T00:00:00+08:00 --point-lat 31.23 --point
 | `lunar_day_tz` | `at/day/almanac/monthview/export` | 农历判日时区。 |
 | `smp_time` | `day.input` | `day` 命令在该日内取样的时刻，默认 `12:00:00`。 |
 | `smp_jdutc` | `day.input` | `day` 取样点的 UTC 儒略日。 |
-| `smp_uiso` | `day.data` | `day` 取样点的 UTC ISO 时间。 |
-| `smp_liso` | `day.data` | `day` 取样点在显示时区下的 ISO 时间。 |
+| `smp_uiso` | `day.data` / `day.csv` / `export.csv` | 取样点的 UTC ISO 时间。 |
+| `smp_liso` | `day.data` / `day.csv` / `export.csv` | 取样点在显示时区下的 ISO 时间。 |
 | `st_jdutc` / `ed_jdutc` | `months` | 农历月起止时刻的 UTC 儒略日。 |
 | `st_utc` / `ed_utc` | `months` | 农历月起止时刻的 UTC ISO 时间。 |
 | `st_loc` / `ed_loc` | `months` | 农历月起止时刻在显示时区下的 ISO 时间。 |
@@ -1147,8 +1149,8 @@ lunar eclipse --visible-near 2025-01-01T00:00:00+08:00 --point-lat 31.23 --point
 | `p1` / `u1` / `u2` / `u3` / `u4` / `p4` | `lunar_eclipse` | 月食各接触时刻节点对象。 |
 | `opp` | `lunar_eclipse` | 望 / 对冲时刻节点对象。 |
 | `max` | `eclipse` | 食甚节点对象。 |
-| `c1` / `c2` / `c3` / `c4` | `solar.point_vis` | 日食初亏 / 食既 / 生光 / 复圆节点对象。 |
-| `c1_loc` / `c2_loc` / `max_loc` / `c3_loc` / `c4_loc` | `solar_eclipse` | 日食各节点在显示时区下的本地时间。 |
+| `c1` / `c2` / `c3` / `c4` | `solar_eclipse` / `solar.point_vis` | 日食初亏 / 食既 / 生光 / 复圆节点对象。 |
+| `solar_eclipse_c1_loc_iso` / `solar_eclipse_c2_loc_iso` / `solar_eclipse_max_loc_iso` / `solar_eclipse_c3_loc_iso` / `solar_eclipse_c4_loc_iso` | `next/range/search.csv` | 日食接触节点在扁平 CSV 输出中的本地 ISO 时间列。 |
 | `zen_lat_deg` / `zen_lon_deg` | `eclipse.node` | 对应节点的天顶点纬度 / 经度。 |
 | `pa_deg` | `eclipse.node` | 对应节点的位置角。 |
 | `axis_deg` | `eclipse.node` | 对应节点的轴角参数。 |

@@ -11,6 +11,7 @@
 #include "lunar/format.hpp"
 #include "lunar/i18n.hpp"
 #include "lunar/math.hpp"
+#include "lunar/time_scale.hpp"
 
 namespace cli_util{
 
@@ -168,8 +169,8 @@ EventRec mk_erec(const std::string&kind,const std::string&code,
 
 EventRec mk_erec(const std::string&kind,const std::string&code,
 				 const std::string&name,int year,double jd_utc,int tz_off){
-	return mk_erec(kind,code,name,year,std::numeric_limits<double>::quiet_NaN(),
-				   jd_utc,tz_off);
+	return mk_erec(kind,code,name,year,TimeScale::utc_to_tdb(jd_utc),jd_utc,
+				   tz_off);
 }
 
 std::vector<EventRec> bld_stev(const YearResult&yr,int tz_off){

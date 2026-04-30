@@ -198,6 +198,16 @@ void write_meta(JsonWriter&w,const std::string&ephem,
 	w.obj_end();
 }
 
+double event_jd_tdb(const EventRec&ev){
+	if(std::isfinite(ev.jd_tdb)){
+		return ev.jd_tdb;
+	}
+	if(std::isfinite(ev.jd_utc)){
+		return TimeScale::utc_to_tdb(ev.jd_utc);
+	}
+	return std::numeric_limits<double>::quiet_NaN();
+}
+
 void wr_ejson0(JsonWriter&w,const NearEvt&ne){
 	if(!ne.has){
 		w.null_val();
@@ -213,6 +223,8 @@ void wr_ejson0(JsonWriter&w,const NearEvt&ne){
 	w.value(ev.name);
 	w.key("year");
 	w.value(ev.year);
+	w.key("jd_tdb");
+	w.value(event_jd_tdb(ev));
 	w.key("jd_utc");
 	w.value(ev.jd_utc);
 	w.key("utc_iso");

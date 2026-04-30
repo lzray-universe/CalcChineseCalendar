@@ -90,7 +90,7 @@ void write_sol_besselian_txt(std::ostream&os,const SolarBesselianElements&b,
 	os<<"epoch_jd_utc="; out_num(os,TimeScale::tdb_to_utc(b.jd_tdb_epoch)); os<<"\n";
 	os<<"epoch_utc="<<fmt_iso(TimeScale::tdb_to_utc(b.jd_tdb_epoch),0,true)<<"\n";
 	os<<"epoch_td="<<fmt_iso(TimeScale::tdb_to_tt(b.jd_tdb_epoch),0,true)<<"\n";
-	os<<"epoch_loc="<<node_liso(b.jd_tdb_epoch,tz_off)<<"\n";
+	os<<"epoch_loc_iso="<<node_liso(b.jd_tdb_epoch,tz_off)<<"\n";
 	os<<"time_argument=hours_from_epoch_tdb\n";
 	os<<"polynomial_order=3\n";
 	os<<"x="; out_num(os,b.x); os<<"\n";
@@ -463,7 +463,7 @@ void write_lun_txt(std::ostream&os,const EclOpt&opt,const EclRes&res){
 	if(res.visible_search){
 		os<<"input.visible_near="<<opt.visible_near<<"\n";
 		os<<"input.visible_years="<<opt.visible_years<<"\n";
-		os<<"data.visible_target_loc="
+		os<<"data.visible_target_loc_iso="
 		  <<fmt_iso(res.visible_target_jd_utc,res.tz_off,true)<<"\n";
 		os<<"data.visible_delta_days="<<format_num(res.visible_delta_days)<<"\n";
 	}
@@ -499,14 +499,14 @@ void write_lun_txt(std::ostream&os,const EclOpt&opt,const EclRes&res){
 	os<<"lib_l_deg="; out_num(os,e.lib.l_deg); os<<"\n";
 	os<<"lib_b_deg="; out_num(os,e.lib.b_deg); os<<"\n";
 	os<<"lib_c_deg="; out_num(os,e.lib.c_deg); os<<"\n";
-	os<<"p1_loc="<<node_liso(e.jd_tdb_p1,res.tz_off)<<"\n";
-	os<<"u1_loc="<<node_liso(e.jd_tdb_u1,res.tz_off)<<"\n";
-	os<<"opp_loc="<<node_liso(e.jd_tdb_opp,res.tz_off)<<"\n";
-	os<<"max_loc="<<node_liso(e.jd_tdb_max,res.tz_off)<<"\n";
-	os<<"u4_loc="<<node_liso(e.jd_tdb_u4,res.tz_off)<<"\n";
-	os<<"p4_loc="<<node_liso(e.jd_tdb_p4,res.tz_off)<<"\n";
-	os<<"u2_loc="<<node_liso(e.jd_tdb_u2,res.tz_off)<<"\n";
-	os<<"u3_loc="<<node_liso(e.jd_tdb_u3,res.tz_off)<<"\n";
+	os<<"p1_loc_iso="<<node_liso(e.jd_tdb_p1,res.tz_off)<<"\n";
+	os<<"u1_loc_iso="<<node_liso(e.jd_tdb_u1,res.tz_off)<<"\n";
+	os<<"opp_loc_iso="<<node_liso(e.jd_tdb_opp,res.tz_off)<<"\n";
+	os<<"max_loc_iso="<<node_liso(e.jd_tdb_max,res.tz_off)<<"\n";
+	os<<"u4_loc_iso="<<node_liso(e.jd_tdb_u4,res.tz_off)<<"\n";
+	os<<"p4_loc_iso="<<node_liso(e.jd_tdb_p4,res.tz_off)<<"\n";
+	os<<"u2_loc_iso="<<node_liso(e.jd_tdb_u2,res.tz_off)<<"\n";
+	os<<"u3_loc_iso="<<node_liso(e.jd_tdb_u3,res.tz_off)<<"\n";
 	wr_node_kv(os,"p1",e.jd_tdb_p1,e.p1_meta); wr_node_kv(os,"u1",e.jd_tdb_u1,e.u1_meta);
 	wr_node_kv(os,"u2",e.jd_tdb_u2,e.u2_meta); wr_node_kv(os,"max",e.jd_tdb_max,e.max_meta);
 	wr_node_kv(os,"u3",e.jd_tdb_u3,e.u3_meta); wr_node_kv(os,"u4",e.jd_tdb_u4,e.u4_meta);
@@ -539,7 +539,7 @@ void write_sol_txt(std::ostream&os,const EclOpt&opt,const EclRes&res){
 	if(res.visible_search){
 		os<<"input.visible_near="<<opt.visible_near<<"\n";
 		os<<"input.visible_years="<<opt.visible_years<<"\n";
-		os<<"data.visible_target_loc="
+		os<<"data.visible_target_loc_iso="
 		  <<fmt_iso(res.visible_target_jd_utc,res.tz_off,true)<<"\n";
 		os<<"data.visible_delta_days="<<format_num(res.visible_delta_days)<<"\n";
 	}
@@ -563,11 +563,11 @@ void write_sol_txt(std::ostream&os,const EclOpt&opt,const EclRes&res){
 	os<<"rp_re="; out_num(os,e.rp_re); os<<"\n";
 	os<<"ru_re="; out_num(os,e.ru_re); os<<"\n";
 	write_sol_besselian_txt(os,e.besselian,res.tz_off);
-	os<<"c1_loc="<<node_liso(e.jd_tdb_c1,res.tz_off)<<"\n";
-	os<<"c2_loc="<<node_liso(e.jd_tdb_c2,res.tz_off)<<"\n";
-	os<<"max_loc="<<node_liso(e.jd_tdb_max,res.tz_off)<<"\n";
-	os<<"c3_loc="<<node_liso(e.jd_tdb_c3,res.tz_off)<<"\n";
-	os<<"c4_loc="<<node_liso(e.jd_tdb_c4,res.tz_off)<<"\n";
+	os<<"c1_loc_iso="<<node_liso(e.jd_tdb_c1,res.tz_off)<<"\n";
+	os<<"c2_loc_iso="<<node_liso(e.jd_tdb_c2,res.tz_off)<<"\n";
+	os<<"max_loc_iso="<<node_liso(e.jd_tdb_max,res.tz_off)<<"\n";
+	os<<"c3_loc_iso="<<node_liso(e.jd_tdb_c3,res.tz_off)<<"\n";
+	os<<"c4_loc_iso="<<node_liso(e.jd_tdb_c4,res.tz_off)<<"\n";
 	if(res.has_spt){
 		os<<"[point_visibility]\n";
 		os<<"has_eclipse="<<(res.spt.has_eclipse?"1":"0")<<"\n";
@@ -576,11 +576,11 @@ void write_sol_txt(std::ostream&os,const EclOpt&opt,const EclRes&res){
 		os<<"max_mag="<<format_num(res.spt.max_mag)<<"\n";
 		os<<"max_obscuration="<<format_num(res.spt.max_obscuration)<<"\n";
 		os<<"max_sun_alt_deg="<<format_num(res.spt.max_sun_alt_deg)<<"\n";
-		out_loc(os,"c1_loc",res.spt.c1_jd_utc,res.tz_off);
-		out_loc(os,"c2_loc",res.spt.c2_jd_utc,res.tz_off);
-		out_loc(os,"max_loc",res.spt.max_jd_utc,res.tz_off);
-		out_loc(os,"c3_loc",res.spt.c3_jd_utc,res.tz_off);
-		out_loc(os,"c4_loc",res.spt.c4_jd_utc,res.tz_off);
+		out_loc(os,"c1_loc_iso",res.spt.c1_jd_utc,res.tz_off);
+		out_loc(os,"c2_loc_iso",res.spt.c2_jd_utc,res.tz_off);
+		out_loc(os,"max_loc_iso",res.spt.max_jd_utc,res.tz_off);
+		out_loc(os,"c3_loc_iso",res.spt.c3_jd_utc,res.tz_off);
+		out_loc(os,"c4_loc_iso",res.spt.c4_jd_utc,res.tz_off);
 		out_loc(os,"first_visible",res.spt.first_jd_utc,res.tz_off);
 		out_loc(os,"last_visible",res.spt.last_jd_utc,res.tz_off);
 		os<<"sample_count="<<res.spt.sample_count<<"\n";

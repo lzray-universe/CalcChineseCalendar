@@ -68,13 +68,13 @@ import calcchinesecalendar as ccc
 
 result = ccc.search(
     "@series",
-    "next full_moon",
+    "next full moon",
     from_time="2025-06-01T00:00:00+08:00",
     count=2,
 )
 
-for item in result["data"]["items"]:
-    print(item["time"]["iso"])
+for item in result["data"]:
+    print(item["code"], item["loc_iso"])
 ```
 
 ## `Lunar` client example
@@ -91,7 +91,7 @@ print(result["data"]["phase_name"])
 
 - Python package name: `calcchinesecalendar`
 - Import name: `calcchinesecalendar`
-- Python 3.9 or newer is required
+- Python 3.10 or newer is required
 - The package bundles the native extension; a compiler is not required for
   normal wheel installation
 

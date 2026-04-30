@@ -256,16 +256,16 @@ void wr_sol_ecljson(JsonWriter&w,const SolarEclipse&ecl,int year,int tz_off){
 	wr_num_or_null(w,ecl.ru_re);
 	w.key("besselian");
 	wr_sol_besselian_json(w,ecl.besselian,tz_off);
-	w.key("c1_loc");
-	w.value(node_liso(ecl.jd_tdb_c1,tz_off));
-	w.key("c2_loc");
-	w.value(node_liso(ecl.jd_tdb_c2,tz_off));
-	w.key("max_loc");
-	w.value(node_liso(ecl.jd_tdb_max,tz_off));
-	w.key("c3_loc");
-	w.value(node_liso(ecl.jd_tdb_c3,tz_off));
-	w.key("c4_loc");
-	w.value(node_liso(ecl.jd_tdb_c4,tz_off));
+	w.key("c1");
+	wr_enode(w,ecl.jd_tdb_c1,tz_off);
+	w.key("c2");
+	wr_enode(w,ecl.jd_tdb_c2,tz_off);
+	w.key("max");
+	wr_enode(w,ecl.jd_tdb_max,tz_off);
+	w.key("c3");
+	wr_enode(w,ecl.jd_tdb_c3,tz_off);
+	w.key("c4");
+	wr_enode(w,ecl.jd_tdb_c4,tz_off);
 	w.obj_end();
 }
 

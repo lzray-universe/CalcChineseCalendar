@@ -10,7 +10,7 @@ void wr_csv_num(CsvWriter&w,const std::string&key,double v){
 
 std::vector<std::string> el_csv_hdr(bool calc_eclipse){
 	std::vector<std::string> out={
-		"kind","code","name","year","jd_utc","utc_iso","loc_iso"
+		"kind","code","name","year","jd_tdb","jd_utc","utc_iso","loc_iso"
 	};
 	if(!calc_eclipse){
 		return out;
@@ -45,7 +45,27 @@ std::vector<std::string> el_csv_hdr(bool calc_eclipse){
 		"p4_pa_deg","p4_axis_deg"
 	}};
 	out.insert(out.end(),extra.begin(),extra.end());
+	const std::array<const char*,17> solar_extra={{
+		"solar_eclipse_type","solar_eclipse_mag",
+		"solar_eclipse_obscuration","solar_eclipse_gamma",
+		"solar_eclipse_sep_max_deg","solar_eclipse_sun_sd_max_deg",
+		"solar_eclipse_moon_sd_max_deg","solar_eclipse_sun_dist_km",
+		"solar_eclipse_moon_dist_km","solar_eclipse_dt_max_sec",
+		"solar_eclipse_rp_re","solar_eclipse_ru_re",
+		"solar_eclipse_c1_loc_iso","solar_eclipse_c2_loc_iso",
+		"solar_eclipse_max_loc_iso","solar_eclipse_c3_loc_iso",
+		"solar_eclipse_c4_loc_iso"
+	}};
+	out.insert(out.end(),solar_extra.begin(),solar_extra.end());
 	return out;
+}
+
+void wr_csv_liso(CsvWriter&w,const std::string&key,double jd_tdb,int tz_off){
+	if(std::isfinite(jd_tdb)){
+		w.write_field(key,node_liso(jd_tdb,tz_off));
+	}else{
+		w.write_raw(key,"");
+	}
 }
 
 void wr_csv_node_blank(CsvWriter&w,const std::string&tag){
@@ -100,16 +120,16 @@ void wr_csv_ecl(CsvWriter&w,const LunarEclipse&ecl,int tz_off){
 	wr_csv_num(w,"eclipse_lib_l_deg",ecl.lib.l_deg);
 	wr_csv_num(w,"eclipse_lib_b_deg",ecl.lib.b_deg);
 	wr_csv_num(w,"eclipse_lib_c_deg",ecl.lib.c_deg);
-	w.write_field("eclipse_opp_loc_iso",node_liso(ecl.jd_tdb_opp,tz_off));
-	w.write_field("eclipse_max_loc_iso",node_liso(ecl.jd_tdb_max,tz_off));
+	wr_csv_liso(w,"eclipse_opp_loc_iso",ecl.jd_tdb_opp,tz_off);
+	wr_csv_liso(w,"eclipse_max_loc_iso",ecl.jd_tdb_max,tz_off);
 	wr_csv_num(w,"eclipse_pen_mag",ecl.pen_mag);
 	wr_csv_num(w,"eclipse_umb_mag",ecl.umb_mag);
-	w.write_field("eclipse_p1_loc_iso",node_liso(ecl.jd_tdb_p1,tz_off));
-	w.write_field("eclipse_u1_loc_iso",node_liso(ecl.jd_tdb_u1,tz_off));
-	w.write_field("eclipse_u2_loc_iso",node_liso(ecl.jd_tdb_u2,tz_off));
-	w.write_field("eclipse_u3_loc_iso",node_liso(ecl.jd_tdb_u3,tz_off));
-	w.write_field("eclipse_u4_loc_iso",node_liso(ecl.jd_tdb_u4,tz_off));
-	w.write_field("eclipse_p4_loc_iso",node_liso(ecl.jd_tdb_p4,tz_off));
+	wr_csv_liso(w,"eclipse_p1_loc_iso",ecl.jd_tdb_p1,tz_off);
+	wr_csv_liso(w,"eclipse_u1_loc_iso",ecl.jd_tdb_u1,tz_off);
+	wr_csv_liso(w,"eclipse_u2_loc_iso",ecl.jd_tdb_u2,tz_off);
+	wr_csv_liso(w,"eclipse_u3_loc_iso",ecl.jd_tdb_u3,tz_off);
+	wr_csv_liso(w,"eclipse_u4_loc_iso",ecl.jd_tdb_u4,tz_off);
+	wr_csv_liso(w,"eclipse_p4_loc_iso",ecl.jd_tdb_p4,tz_off);
 	wr_csv_node(w,"p1",ecl.jd_tdb_p1,ecl.p1_meta);
 	wr_csv_node(w,"u1",ecl.jd_tdb_u1,ecl.u1_meta);
 	wr_csv_node(w,"u2",ecl.jd_tdb_u2,ecl.u2_meta);
@@ -164,6 +184,53 @@ void wr_csv_ecl_blank(CsvWriter&w){
 	wr_csv_node_blank(w,"p4");
 }
 
+void wr_csv_sol_ecl(CsvWriter&w,const SolarEclipse&ecl,int tz_off){
+	w.write_field("solar_eclipse_type",ecl.type);
+	wr_csv_num(w,"solar_eclipse_mag",ecl.mag);
+	wr_csv_num(w,"solar_eclipse_obscuration",ecl.obscuration);
+	wr_csv_num(w,"solar_eclipse_gamma",ecl.gamma);
+	wr_csv_num(w,"solar_eclipse_sep_max_deg",ecl.sep_max_deg);
+	wr_csv_num(w,"solar_eclipse_sun_sd_max_deg",ecl.sun_sd_max_deg);
+	wr_csv_num(w,"solar_eclipse_moon_sd_max_deg",ecl.moon_sd_max_deg);
+	wr_csv_num(w,"solar_eclipse_sun_dist_km",ecl.sun_dist_km);
+	wr_csv_num(w,"solar_eclipse_moon_dist_km",ecl.moon_dist_km);
+	wr_csv_num(w,"solar_eclipse_dt_max_sec",ecl.dt_max_sec);
+	wr_csv_num(w,"solar_eclipse_rp_re",ecl.rp_re);
+	wr_csv_num(w,"solar_eclipse_ru_re",ecl.ru_re);
+	wr_csv_liso(w,"solar_eclipse_c1_loc_iso",ecl.jd_tdb_c1,tz_off);
+	wr_csv_liso(w,"solar_eclipse_c2_loc_iso",ecl.jd_tdb_c2,tz_off);
+	wr_csv_liso(w,"solar_eclipse_max_loc_iso",ecl.jd_tdb_max,tz_off);
+	wr_csv_liso(w,"solar_eclipse_c3_loc_iso",ecl.jd_tdb_c3,tz_off);
+	wr_csv_liso(w,"solar_eclipse_c4_loc_iso",ecl.jd_tdb_c4,tz_off);
+}
+
+void wr_csv_sol_ecl_blank(CsvWriter&w){
+	w.write_raw("solar_eclipse_type","");
+	wr_csv_num(w,"solar_eclipse_mag",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"solar_eclipse_obscuration",
+			   std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"solar_eclipse_gamma",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"solar_eclipse_sep_max_deg",
+			   std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"solar_eclipse_sun_sd_max_deg",
+			   std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"solar_eclipse_moon_sd_max_deg",
+			   std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"solar_eclipse_sun_dist_km",
+			   std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"solar_eclipse_moon_dist_km",
+			   std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"solar_eclipse_dt_max_sec",
+			   std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"solar_eclipse_rp_re",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"solar_eclipse_ru_re",std::numeric_limits<double>::quiet_NaN());
+	w.write_raw("solar_eclipse_c1_loc_iso","");
+	w.write_raw("solar_eclipse_c2_loc_iso","");
+	w.write_raw("solar_eclipse_max_loc_iso","");
+	w.write_raw("solar_eclipse_c3_loc_iso","");
+	w.write_raw("solar_eclipse_c4_loc_iso","");
+}
+
 void wr_eljs(std::ostream&os,const std::string&ephem,const std::string&tz,
 			 bool pretty,const std::vector<EventRec>&events,
 			 const std::string&type,EphRead&eph,bool calc_eclipse=false,
@@ -187,8 +254,9 @@ void wr_eltxt(std::ostream&os,const std::string&tz,
 	constexpr int kEclSummaryCols=33;
 	constexpr int kEclNodeCols=8*7;
 	constexpr int kEclExtraCols=kEclSummaryCols+kEclNodeCols;
+	constexpr int kSolarEclExtraCols=17;
 	os<<"tool=lunar format=txt type="<<type<<" tz_display="<<tz<<"\n";
-	os<<"kind\tcode\tname\tyear\tjd_utc\ttm_uiso\ttm_liso";
+	os<<"kind\tcode\tname\tyear\tjd_tdb\tjd_utc\tutc_iso\tloc_iso";
 	if(calc_eclipse){
 		os<<"\tecl_type\tecl_gamma\tecl_eps_deg\tecl_dt_max_sec\tecl_dur_pen_sec"
 		  <<"\tecl_dur_umb_sec\tecl_dur_tot_sec\tecl_rp_re\tecl_ru_re"
@@ -210,12 +278,20 @@ void wr_eltxt(std::ostream&os,const std::string&tz,
 		  <<"u3_zen_lon_deg\tu3_pa_deg\tu3_axis_deg\tu4_jd_ut1\tu4_jd_td\tu4_jd\t"
 		  <<"u4_zen_lat_deg\tu4_zen_lon_deg\tu4_pa_deg\tu4_axis_deg\t"
 		  <<"p4_jd_ut1\tp4_jd_td\tp4_jd\tp4_zen_lat_deg\tp4_zen_lon_deg\t"
-		  <<"p4_pa_deg\tp4_axis_deg";
+		  <<"p4_pa_deg\tp4_axis_deg"
+		  <<"\tsolar_ecl_type\tsolar_ecl_mag\tsolar_ecl_obscuration"
+		  <<"\tsolar_ecl_gamma\tsolar_ecl_sep_max_deg"
+		  <<"\tsolar_ecl_sun_sd_max_deg\tsolar_ecl_moon_sd_max_deg"
+		  <<"\tsolar_ecl_sun_dist_km\tsolar_ecl_moon_dist_km"
+		  <<"\tsolar_ecl_dt_max_sec\tsolar_ecl_rp_re\tsolar_ecl_ru_re"
+		  <<"\tsolar_ecl_c1_liso\tsolar_ecl_c2_liso\tsolar_ecl_max_liso"
+		  <<"\tsolar_ecl_c3_liso\tsolar_ecl_c4_liso";
 	}
 	os<<"\n";
 	for(const auto&ev : events){
 		os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"<<ev.year<<"\t"
-		  <<format_num(ev.jd_utc)<<"\t"<<ev.utc_iso<<"\t"<<ev.loc_iso;
+		  <<node_num(event_jd_tdb(ev))<<"\t"<<format_num(ev.jd_utc)<<"\t"
+		  <<ev.utc_iso<<"\t"<<ev.loc_iso;
 		if(calc_eclipse){
 			if(eph&&(is_full_moon_ev(ev)||ev.kind=="lunar_eclipse")){
 				LunarEclipse ecl=calc_ecl_for_event(*eph,ev);
@@ -299,8 +375,51 @@ void wr_eltxt(std::ostream&os,const std::string&tz,
 				wr_node_txt(os,ecl.jd_tdb_u4,ecl.u4_meta);
 				os<<"\t";
 				wr_node_txt(os,ecl.jd_tdb_p4,ecl.p4_meta);
-			}else{
+				for(int i=0;i<kSolarEclExtraCols;++i){
+					os<<"\tnull";
+				}
+			}else if(eph&&(is_new_moon_ev(ev)||ev.kind=="solar_eclipse")){
 				for(int i=0;i<kEclExtraCols;++i){
+					os<<"\tnull";
+				}
+				SolarEclipse ecl=calc_sol_ecl_for_event(*eph,ev);
+				auto out_num=[&](double v){
+					if(std::isfinite(v)){
+						os<<format_num(v);
+					}else{
+						os<<"null";
+					}
+				};
+				os<<"\t"<<ecl.type;
+				os<<"\t";
+				out_num(ecl.mag);
+				os<<"\t";
+				out_num(ecl.obscuration);
+				os<<"\t";
+				out_num(ecl.gamma);
+				os<<"\t";
+				out_num(ecl.sep_max_deg);
+				os<<"\t";
+				out_num(ecl.sun_sd_max_deg);
+				os<<"\t";
+				out_num(ecl.moon_sd_max_deg);
+				os<<"\t";
+				out_num(ecl.sun_dist_km);
+				os<<"\t";
+				out_num(ecl.moon_dist_km);
+				os<<"\t";
+				out_num(ecl.dt_max_sec);
+				os<<"\t";
+				out_num(ecl.rp_re);
+				os<<"\t";
+				out_num(ecl.ru_re);
+				os<<"\t"<<node_liso(ecl.jd_tdb_c1,tz_off)
+				  <<"\t"<<node_liso(ecl.jd_tdb_c2,tz_off)
+				  <<"\t"<<node_liso(ecl.jd_tdb_max,tz_off)
+				  <<"\t"<<node_liso(ecl.jd_tdb_c3,tz_off)
+				  <<"\t"<<node_liso(ecl.jd_tdb_c4,tz_off);
+			}else{
+				for(int i=0;i<kEclExtraCols+kSolarEclExtraCols;++i){
 					os<<"\tnull";
 				}
 			}
@@ -318,14 +437,20 @@ void wr_elcsv(std::ostream&os,const std::vector<EventRec>&events,
 		csv.write_field("code",ev.code);
 		csv.write_field("name",ev.name);
 		csv.write_field("year",ev.year);
+		wr_csv_num(csv,"jd_tdb",event_jd_tdb(ev));
 		csv.write_raw("jd_utc",format_num(ev.jd_utc));
 		csv.write_field("utc_iso",ev.utc_iso);
 		csv.write_field("loc_iso",ev.loc_iso);
 		if(calc_eclipse){
 			if(eph&&(is_full_moon_ev(ev)||ev.kind=="lunar_eclipse")){
 				wr_csv_ecl(csv,calc_ecl_for_event(*eph,ev),tz_off);
+				wr_csv_sol_ecl_blank(csv);
+			}else if(eph&&(is_new_moon_ev(ev)||ev.kind=="solar_eclipse")){
+				wr_csv_ecl_blank(csv);
+				wr_csv_sol_ecl(csv,calc_sol_ecl_for_event(*eph,ev),tz_off);
 			}else{
 				wr_csv_ecl_blank(csv);
+				wr_csv_sol_ecl_blank(csv);
 			}
 		}
 		csv.finish_row();

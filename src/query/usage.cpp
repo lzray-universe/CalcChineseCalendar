@@ -150,8 +150,8 @@ void use_search(){
 		<<"    [--tz ...] [--format json|txt|csv|ics|jsonl] [--out ...] "
 		  "[--pretty 0|1] [--quiet] [--eclipse 0|1]\n"
 		<<"Examples:\n"
-		<<"  lunar search D:\\de442.bsp \"next full_moon\" --from 2025-06-01\n"
-		<<"  lunar search D:\\de442.bsp \"next lunar_eclipse\" --from "
+		<<"  lunar search D:\\de442.bsp next full moon --from 2025-06-01\n"
+		<<"  lunar search D:\\de442.bsp \"next lunar eclipse\" --from "
 		  "2025-01-01 --format json\n";
 }
 

@@ -131,7 +131,8 @@ void format_day_output(std::ostream&os,const DayResult&result,
 		csv.write_field("moon_xg_region",result.at_data.moon_xg.region);
 		csv.write_field("moon_xg_star",result.at_data.moon_xg.star_name);
 		csv.write_raw("moon_xg_sep_deg",format_num(result.at_data.moon_xg.sep_deg));
-		csv.write_field("smp_tlociso",result.at_data.local_iso);
+		csv.write_field("smp_uiso",result.at_data.utc_iso);
+		csv.write_field("smp_liso",result.at_data.local_iso);
 		csv.write_field("ev_sum",summary);
 		csv.write_field("astro_ev_sum",astro_summary);
 		wr_hli_csv(csv,result.at_data.hli,HliCsvLayout::Day);
@@ -166,18 +167,21 @@ void format_day_output(std::ostream&os,const DayResult&result,
 		os<<"data.moon_xg.sep_deg="<<format_num(result.at_data.moon_xg.sep_deg)
 		  <<"\n";
 		wr_hli_txt(os,result.at_data.hli,HliTxtLayout::Day);
+		os<<"data.smp_uiso="<<result.at_data.utc_iso<<"\n";
 		os<<"data.smp_liso="<<result.at_data.local_iso<<"\n";
 		os<<"[events]\n";
-		os<<"kind\tcode\tname\tjd_utc\ttm_liso\n";
+		os<<"kind\tcode\tname\tyear\tjd_tdb\tjd_utc\tutc_iso\tloc_iso\n";
 		for(const auto&ev : result.day_events){
-			os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"
-			  <<format_num(ev.jd_utc)<<"\t"<<ev.loc_iso<<"\n";
+			os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"<<ev.year<<"\t"
+			  <<node_num(event_jd_tdb(ev))<<"\t"<<format_num(ev.jd_utc)<<"\t"
+			  <<ev.utc_iso<<"\t"<<ev.loc_iso<<"\n";
 		}
 		os<<"[astro_events]\n";
-		os<<"kind\tcode\tname\tjd_utc\ttm_liso\n";
+		os<<"kind\tcode\tname\tyear\tjd_tdb\tjd_utc\tutc_iso\tloc_iso\n";
 		for(const auto&ev : result.astro_events){
-			os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"
-			  <<format_num(ev.jd_utc)<<"\t"<<ev.loc_iso<<"\n";
+			os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"<<ev.year<<"\t"
+			  <<node_num(event_jd_tdb(ev))<<"\t"<<format_num(ev.jd_utc)<<"\t"
+			  <<ev.utc_iso<<"\t"<<ev.loc_iso<<"\n";
 		}
 		wr_hli_hour_txt(os,result.at_data.hli);
 		return;

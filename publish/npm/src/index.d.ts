@@ -178,6 +178,23 @@ export type SearchOptions = JsonCommandOptions & {
 
 export type NullableNumber = number | null;
 
+export type EclipseNode = {
+  jd: number;
+  jd_tdb: number;
+  jd_td: number;
+  jd_ut1: number;
+  jd_utc: number;
+  utc_iso: string;
+  ut1_iso: string;
+  td_iso: string;
+  loc_iso: string;
+  zen_lat_deg: NullableNumber;
+  zen_lon_deg: NullableNumber;
+  pa_deg: NullableNumber;
+  axis_deg: NullableNumber;
+  [key: string]: unknown;
+};
+
 export type SolarBesselianElements = {
   epoch: Record<string, unknown> | null;
   time_argument: string;
@@ -224,7 +241,32 @@ export type SolarEclipseData = {
   rp_re: NullableNumber;
   ru_re: NullableNumber;
   besselian: SolarBesselianElements | null;
+  c1: EclipseNode | null;
+  c2: EclipseNode | null;
+  max: EclipseNode | null;
+  c3: EclipseNode | null;
+  c4: EclipseNode | null;
   [key: string]: unknown;
+};
+
+export type EventRecord = {
+  kind: string;
+  code: string;
+  name: string;
+  year: number;
+  jd_tdb: NullableNumber;
+  jd_utc: number;
+  utc_iso: string;
+  loc_iso: string;
+  moon_dist_km?: number;
+  lunar_eclipse?: Record<string, unknown> | null;
+  solar_eclipse?: SolarEclipseData | null;
+  [key: string]: unknown;
+};
+
+export type EventListResult = {
+  meta: Record<string, unknown>;
+  data: EventRecord[];
 };
 
 export type EclipseResult = {
@@ -328,9 +370,9 @@ export class LunarClient {
   at(options: AtOptions): unknown;
   convert(options: ConvertOptions): unknown;
   fromLunar(options: FromLunarOptions): unknown;
-  nextEvents(options: NextOptions): unknown;
-  rangeEvents(options: RangeOptions): unknown;
-  search(options: SearchOptions): unknown;
+  nextEvents(options: NextOptions): EventListResult;
+  rangeEvents(options: RangeOptions): EventListResult;
+  search(options: SearchOptions): EventListResult;
   zodiac(options: ZodiacOptions): unknown;
   sky(options: SkyOptions): unknown;
   eclipse(options: EclipseOptions): EclipseResult;
@@ -352,9 +394,9 @@ export function exportDays(options: ExportDaysOptions): Promise<unknown>;
 export function at(options: AtOptions): Promise<unknown>;
 export function convert(options: ConvertOptions): Promise<unknown>;
 export function fromLunar(options: FromLunarOptions): Promise<unknown>;
-export function nextEvents(options: NextOptions): Promise<unknown>;
-export function rangeEvents(options: RangeOptions): Promise<unknown>;
-export function search(options: SearchOptions): Promise<unknown>;
+export function nextEvents(options: NextOptions): Promise<EventListResult>;
+export function rangeEvents(options: RangeOptions): Promise<EventListResult>;
+export function search(options: SearchOptions): Promise<EventListResult>;
 export function zodiac(options: ZodiacOptions): Promise<unknown>;
 export function sky(options: SkyOptions): Promise<unknown>;
 export function eclipse(options: EclipseOptions): Promise<EclipseResult>;

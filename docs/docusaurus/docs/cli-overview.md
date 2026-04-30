@@ -27,7 +27,7 @@ lunar convert @series solar 2025-06-01
 
 ```bash
 lunar event @series full_moon 2025
-lunar search @series "next solar_term" --from 2025-06-01T00:00:00+08:00
+lunar search @series next solar term --from 2025-06-01T00:00:00+08:00
 ```
 
 ## 天文扩展

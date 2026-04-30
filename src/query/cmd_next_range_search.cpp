@@ -131,6 +131,10 @@ SearchQuerySpec resolve_search_query(const std::string&token){
 		{"new_moon",{"lunar_phase","new_moon"}},
 		{"fst_qtr",{"lunar_phase","fst_qtr"}},
 		{"lst_qtr",{"lunar_phase","lst_qtr"}},
+		{"first_qtr",{"lunar_phase","fst_qtr"}},
+		{"last_qtr",{"lunar_phase","lst_qtr"}},
+		{"first_quarter",{"lunar_phase","fst_qtr"}},
+		{"last_quarter",{"lunar_phase","lst_qtr"}},
 		{"solar_term",{"solar_term",""}},
 		{"lunar_phase",{"lunar_phase",""}},
 		{"lunar_eclipse",{"lunar_eclipse",""}},
@@ -141,6 +145,9 @@ SearchQuerySpec resolve_search_query(const std::string&token){
 		{"total_eclipse",{"lunar_eclipse","total"}},
 		{"partial_eclipse",{"lunar_eclipse","partial"}},
 		{"penumbral_eclipse",{"lunar_eclipse","penumbral"}},
+		{"total_lunar_eclipse",{"lunar_eclipse","total"}},
+		{"partial_lunar_eclipse",{"lunar_eclipse","partial"}},
+		{"penumbral_lunar_eclipse",{"lunar_eclipse","penumbral"}},
 		{"total_solar_eclipse",{"solar_eclipse","total"}},
 		{"annular_eclipse",{"solar_eclipse","annular"}},
 		{"hybrid_eclipse",{"solar_eclipse","hybrid"}},
@@ -151,6 +158,15 @@ SearchQuerySpec resolve_search_query(const std::string&token){
 		return {};
 	}
 	return it->second;
+}
+
+std::string normalize_search_token(std::string token){
+	for(char&ch : token){
+		if(ch=='-'){
+			ch='_';
+		}
+	}
+	return token;
 }
 
 std::string normalize_search_key(const std::string&query){
@@ -166,12 +182,23 @@ std::string normalize_search_key(const std::string&query){
 		if(!key.empty()){
 			key.push_back('_');
 		}
-		key+=token;
+		key+=normalize_search_token(token);
 	}
 	if(key.empty()){
 		throw std::invalid_argument("search requires a target after 'next'");
 	}
 	return key;
+}
+
+std::string join_search_query(const std::vector<std::string>&parts){
+	std::string query;
+	for(std::size_t i=0;i<parts.size();++i){
+		if(i!=0){
+			query.push_back(' ');
+		}
+		query+=parts[i];
+	}
+	return query;
 }
 
 EvOpt mk_ev_opt(const InterCfg&cfg,const std::string&ephem,
@@ -245,14 +272,26 @@ SearchOpt parse_search(const std::vector<std::string>&args){
 	InterCfg cfg=load_def();
 	SearchOpt opt;
 	static_cast<EvOpt&>(opt)=mk_ev_opt(cfg,args[0],"search",cfg.def_fmt);
-	opt.query=args[1];
 	lunar::ArgParser parser;
 	parser.add_value("--from",[&](const std::string&v){ opt.from_time=v; })
 		.add_value("--count",[&](const std::string&v){
 			opt.count=parse_int(v,"--count");
 		});
 	add_event_output_opts(parser,opt);
-	parser.parse_all(args,2,"search");
+	std::vector<std::string> query_parts;
+	for(std::size_t i=1;i<args.size();++i){
+		if(parser.parse_one(args,i,"search")){
+			continue;
+		}
+		if(is_opt(args[i])){
+			throw std::invalid_argument("unknown option for search: "+args[i]);
+		}
+		query_parts.push_back(args[i]);
+	}
+	if(query_parts.empty()){
+		throw std::invalid_argument("search requires a <query>");
+	}
+	opt.query=join_search_query(query_parts);
 	if(opt.count<1){
 		throw std::invalid_argument("--count must be >=1");
 	}

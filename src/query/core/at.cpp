@@ -201,11 +201,12 @@ void wr_aijs(JsonWriter&w,const AtData&d){
 void wr_etln(std::ostream&os,const std::string&slot,const NearEvt&ne){
 	os<<slot<<"\t";
 	if(!ne.has){
-		os<<"null\tnull\tnull\tnull\tnull\tnull\n";
+		os<<"null\tnull\tnull\tnull\tnull\tnull\tnull\tnull\n";
 		return;
 	}
 	const EventRec&ev=ne.event;
-	os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"<<format_num(ev.jd_utc)<<"\t"
+	os<<ev.kind<<"\t"<<ev.code<<"\t"<<ev.name<<"\t"<<ev.year<<"\t"
+	  <<node_num(event_jd_tdb(ev))<<"\t"<<format_num(ev.jd_utc)<<"\t"
 	  <<ev.utc_iso<<"\t"<<ev.loc_iso<<"\n";
 }
 
@@ -259,7 +260,7 @@ void wr_atxt(std::ostream&os,const AtData&d,bool hdr_on){
 	}
 	if(d.inc_ev){
 		os<<"[near_ev]\n";
-		os<<"slot\tkind\tcode\tname\tjd_utc\ttm_uiso\ttm_liso\n";
+		os<<"slot\tkind\tcode\tname\tyear\tjd_tdb\tjd_utc\tutc_iso\tloc_iso\n";
 		wr_etln(os,"st_prev",d.near_ev.solar_prev);
 		wr_etln(os,"st_next",d.near_ev.solar_next);
 		wr_etln(os,"lp_prev",d.near_ev.phase_prev);

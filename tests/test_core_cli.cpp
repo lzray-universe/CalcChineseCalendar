@@ -721,6 +721,56 @@ TEST(CliSearch, NaturalLanguageEclipseAliasWorks){
 	std::filesystem::remove(out_path,ec);
 }
 
+TEST(CliSearch, UnquotedMultiWordQueryAndHyphenAliasWork){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path out_path=make_temp_path("search_words",".txt");
+	std::vector<std::string> args={
+		"search",test_ephem(),"next","full-moon",
+		"--from","2025-01-01T00:00:00+08:00",
+		"--count","1",
+		"--format","txt",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args));
+	const std::string txt=read_file_text(out_path);
+	EXPECT_NE(txt.find("kind\tcode\tname\tyear\tjd_tdb\tjd_utc\tutc_iso\tloc_iso"),
+			  std::string::npos);
+	EXPECT_NE(txt.find("\tfull_moon\t"),std::string::npos);
+	EXPECT_EQ(txt.find("tm_uiso"),std::string::npos);
+	EXPECT_EQ(txt.find("tm_liso"),std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(out_path,ec);
+}
+
+TEST(CliSearch, SolarEclipseCsvIncludesSolarDetails){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	const std::filesystem::path out_path=make_temp_path("search_solar_eclipse",".csv");
+	std::vector<std::string> args={
+		"search",test_ephem(),"next solar-eclipse",
+		"--from","2025-01-01T00:00:00+08:00",
+		"--count","1",
+		"--format","csv",
+		"--out",out_path.string(),
+		"--quiet"
+	};
+	ASSERT_EQ(0,run_cli_args(args));
+	const std::string csv=read_file_text(out_path);
+	EXPECT_NE(csv.find("kind,code,name,year,jd_tdb,jd_utc,utc_iso,loc_iso"),
+			  std::string::npos);
+	EXPECT_NE(csv.find("solar_eclipse_type"),std::string::npos);
+	EXPECT_NE(csv.find("solar_eclipse,partial"),std::string::npos);
+	EXPECT_NE(csv.find(",P,"),std::string::npos);
+
+	std::error_code ec;
+	std::filesystem::remove(out_path,ec);
+}
+
 TEST(CliSearch, UnknownTargetIsRejected){
 	if(!has_test_ephem()){
 		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";

@@ -749,6 +749,7 @@ void write_export_csv(std::ostream&os,const ExportOpt&opt,const ExportRes&res){
 		csv.write_field("moon_xg_region",atd.moon_xg.region);
 		csv.write_field("moon_xg_star",atd.moon_xg.star_name);
 		csv.write_raw("moon_xg_sep_deg",format_num(atd.moon_xg.sep_deg));
+		csv.write_field("smp_uiso",atd.utc_iso);
 		csv.write_field("smp_liso",atd.local_iso);
 		csv.write_field("events",join_event_names(day.events));
 		csv.write_field("event_times",join_event_times(day.events));
@@ -795,6 +796,7 @@ void write_export_txt(std::ostream&os,const ExportOpt&opt,const ExportRes&res){
 		os<<"gz_day="<<atd.hli.d_gz.text<<"\n";
 		os<<"ill_pct="<<format_num(atd.ill_pct)<<"\n";
 		os<<"phase_name="<<atd.phase_name<<"\n";
+		os<<"sample_uiso="<<atd.utc_iso<<"\n";
 		os<<"sample_liso="<<atd.local_iso<<"\n";
 		os<<"events="<<join_event_names(day.events)<<"\n";
 		os<<"event_times="<<join_event_times(day.events)<<"\n";

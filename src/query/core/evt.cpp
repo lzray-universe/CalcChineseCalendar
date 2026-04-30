@@ -81,6 +81,8 @@ void wr_ejson(JsonWriter&w,const EventRec&ev,EphRead&eph,bool calc_eclipse=false
 	w.value(ev.name);
 	w.key("year");
 	w.value(ev.year);
+	w.key("jd_tdb");
+	w.value(event_jd_tdb(ev));
 	w.key("jd_utc");
 	w.value(ev.jd_utc);
 	w.key("utc_iso");

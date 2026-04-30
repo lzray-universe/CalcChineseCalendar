@@ -709,7 +709,7 @@ def sky(ephem: str, time: str, **kwargs: Any) -> JsonValue:
     return _DEFAULT.sky(ephem, time, **kwargs)
 
 
-def eclipse(ephem: str, near: str, **kwargs: Any) -> JsonValue:
+def eclipse(ephem: str, near: str | None = None, **kwargs: Any) -> JsonValue:
     return _DEFAULT.eclipse(ephem, near, **kwargs)
 
 

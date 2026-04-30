@@ -645,6 +645,9 @@ lunar search [bsp] <query>
 Notes:
 
 - Currently only queries beginning with `next ...` are supported
+- Query words may be passed as one quoted argument (`"next full moon"`) or as
+  separate CLI words (`next full moon`); spaces, hyphens, and underscores are
+  normalized for supported event names
 - Internally the query is parsed into restricted event-search conditions instead of forwarding the full text directly to `next`
 - Defaults are `from=current UTC time` and `count=1`; `tz/format/pretty` come from config
 
@@ -963,7 +966,7 @@ Notes:
 
 - This section specifically explains abbreviations, codes, and fields such as `*_code`, `*_key`, `*_codes`, and `*_mask_hex` in structured output
 - Obvious semantic fields such as `year`, `month`, `name`, `data`, `events`, and `input` are not repeated here
-- Field names follow the current implementation in `src/query/core/base.cpp`, `src/query/day_output.cpp`, `src/cli/output.cpp`, `src/query/cmd_day_mview.cpp`, `src/query/cmd_export.cpp`, and `src/query/cmd_eclipse.cpp`
+- Field names follow the current implementation in `src/query/core/base.cpp`, `src/query/core/events.cpp`, `src/query/day_output.cpp`, `src/cli/output.cpp`, `src/query/cmd_day_mview.cpp`, `src/query/cmd_export.cpp`, and `src/query/cmd_eclipse.cpp`
 
 ### 17.1 Common Time and Sampling Fields
 
@@ -978,8 +981,8 @@ Notes:
 | `lunar_day_tz` | `at/day/almanac/monthview/export` | Timezone used for lunar day boundaries. |
 | `smp_time` | `day.input` | Sampling time used by `day` within that date, default `12:00:00`. |
 | `smp_jdutc` | `day.input` | UTC Julian day of the `day` sample point. |
-| `smp_uiso` | `day.data` | UTC ISO time of the `day` sample point. |
-| `smp_liso` | `day.data` | ISO time of the `day` sample point under the display timezone. |
+| `smp_uiso` | `day.data` / `day.csv` / `export.csv` | UTC ISO time of the sample point. |
+| `smp_liso` | `day.data` / `day.csv` / `export.csv` | ISO time of the sample point under the display timezone. |
 | `st_jdutc` / `ed_jdutc` | `months` | UTC Julian day of the lunar month start / end. |
 | `st_utc` / `ed_utc` | `months` | UTC ISO time of the lunar month start / end. |
 | `st_loc` / `ed_loc` | `months` | Local ISO time of the lunar month start / end under the display timezone. |
@@ -1150,8 +1153,8 @@ Notes:
 | `p1` / `u1` / `u2` / `u3` / `u4` / `p4` | `lunar_eclipse` | Node objects for each contact instant of the lunar eclipse. |
 | `opp` | `lunar_eclipse` | Node object for full moon / opposition. |
 | `max` | `eclipse` | Node object for maximum eclipse. |
-| `c1` / `c2` / `c3` / `c4` | `solar.point_vis` | Node objects for first contact / second contact / third contact / fourth contact of the solar eclipse. |
-| `c1_loc` / `c2_loc` / `max_loc` / `c3_loc` / `c4_loc` | `solar_eclipse` | Local times of each solar-eclipse node under the display timezone. |
+| `c1` / `c2` / `c3` / `c4` | `solar_eclipse` / `solar.point_vis` | Node objects for first contact / second contact / third contact / fourth contact of the solar eclipse. |
+| `solar_eclipse_c1_loc_iso` / `solar_eclipse_c2_loc_iso` / `solar_eclipse_max_loc_iso` / `solar_eclipse_c3_loc_iso` / `solar_eclipse_c4_loc_iso` | `next/range/search.csv` | Flat local ISO columns for solar-eclipse contact nodes. |
 | `zen_lat_deg` / `zen_lon_deg` | `eclipse.node` | Zenith latitude / longitude corresponding to that node. |
 | `pa_deg` | `eclipse.node` | Position angle of that node. |
 | `axis_deg` | `eclipse.node` | Axis-angle parameter of that node. |
