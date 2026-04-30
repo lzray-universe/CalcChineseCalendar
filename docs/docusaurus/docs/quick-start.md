@@ -53,11 +53,11 @@ lunar download get de442s
 lunar day @series 2025-06-01
 lunar monthview @series 2025-06
 lunar search @series next full moon --from 2025-06-01T00:00:00+08:00
-lunar zodiac @series 2025-09-07
+lunar zodiac @series --time 2025-09-07T00:00:00+08:00
 ```
 
 ## 推荐的阅读顺序
 
 1. 先看 [运行时与星历](./runtime-and-ephemeris.md)，避免在 BSP 选择上踩坑。
-2. 再看 [CLI 概览](./cli-overview.md)，按命令族理解功能边界。
+2. 再看 [命令行使用方法](./cli-overview)，按命令族理解功能边界。
 3. 如果要嵌入到程序里，再看 [语言绑定](./bindings.md)。

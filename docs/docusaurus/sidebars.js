@@ -8,7 +8,7 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: '使用说明',
+      label: '命令行使用方法',
       items: ['cli-overview'],
     },
     {

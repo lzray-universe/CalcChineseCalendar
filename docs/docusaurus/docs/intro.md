@@ -36,8 +36,7 @@ CalcChineseCalendar 是一个偏工程化的历法与天文计算项目。它优
 
 - [快速开始](./quick-start.md)：先把项目跑起来并执行几个典型命令
 - [运行时与星历](./runtime-and-ephemeris.md)：理解 BSP、配置文件和时区规则
-- [CLI 概览](./cli-overview.md)：按命令族查看主要能力
+- [命令行使用方法](./cli-overview)：查看完整命令语法、参数和示例
 - [语言绑定](./bindings.md)：了解 C++ / C / Python / npm 的接入方式
 - [架构与仓库结构](./architecture.md)：查看模块边界与源码分布
-
 

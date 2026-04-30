@@ -1,0 +1,18 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.docsSidebar.category.开始使用": {
+    "message": "Getting started",
+    "description": "The label for category '开始使用' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.命令行使用方法": {
+    "message": "Command-line usage",
+    "description": "The label for category '命令行使用方法' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.集成与实现": {
+    "message": "Integration and implementation",
+    "description": "The label for category '集成与实现' in sidebar 'docsSidebar'"
+  }
+}

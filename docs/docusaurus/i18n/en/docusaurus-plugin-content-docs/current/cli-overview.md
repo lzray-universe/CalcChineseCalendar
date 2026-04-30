@@ -1,14 +1,14 @@
 ---
 sidebar_position: 4
-title: 命令行使用方法
-description: lunar 命令行工具的完整用法、全局参数、星历选择、配置、输出格式与命令参考。
+title: Command-line usage
+description: Complete usage reference for the lunar command-line tool, including global options, ephemeris selection, configuration, output formats, and commands.
 ---
 
-# 命令行使用方法
+# Command-line usage
 
-`lunar` 是 CalcChineseCalendar 的命令行入口，用于生成农历、节气、月相、食象、黄历、节日、星座和观测位置等数据。本文按当前代码实现整理命令语法；命令参考中写作 `[bsp]` 的位置参数可省略，写作 `<bsp>` 的位置参数必须显式提供。
+`lunar` is the command-line entry point for CalcChineseCalendar. It generates lunar calendar data, solar terms, lunar phases, eclipses, Huangli data, festivals, solar zodiac intervals, and observer-site sky positions. This page follows the current CLI implementation. In the command reference, `[bsp]` means the positional ephemeris argument may be omitted; `<bsp>` means it must be provided explicitly.
 
-## 基本形式
+## Basic form
 
 ```bash
 lunar --help
@@ -17,21 +17,21 @@ lunar [--lang zh|zht|en|ja|ko] [--eclipse-method modern|legacy] <command> ...
 lunar
 ```
 
-无参数运行会进入交互模式。所有子命令都支持 `--help` 查看当前编译版本内置的帮助文本。
+Running without arguments starts interactive mode. Every subcommand supports `--help` for the help text compiled into the current binary.
 
-兼容旧语法：
+Compatible legacy syntax:
 
 ```bash
 lunar <bsp> <years> [months options...]
 ```
 
-该形式等价于：
+This is equivalent to:
 
 ```bash
 lunar months <bsp> <years> [months options...]
 ```
 
-## 全局参数
+## Global options
 
 ```bash
 --lang zh|zht|en|ja|ko
@@ -40,57 +40,57 @@ lunar months <bsp> <years> [months options...]
 --bsp=<path>
 ```
 
-- `--lang` 控制输出语言，也接受 `zh-cn`、`zh-hans`、`zh-tw`、`zh-hant`、`en-us`、`ja-jp`、`ko-kr` 等常见别名。
-- `--eclipse-method` 控制食象计算方法，默认 `modern`。
-- `--bsp` 可为所有需要星历且支持自动补齐星历的命令提供显式星历路径。
+- `--lang` controls output language. It also accepts common aliases such as `zh-cn`, `zh-hans`, `zh-tw`, `zh-hant`, `en-us`, `ja-jp`, and `ko-kr`.
+- `--eclipse-method` selects the eclipse calculation method. The default is `modern`.
+- `--bsp` explicitly supplies the ephemeris path for commands that need ephemerides and support automatic ephemeris insertion.
 
-示例：
+Examples:
 
 ```bash
 lunar day 2025-06-01 --bsp ./de442.bsp
 lunar --lang en day @series 2025-06-01 --format json
 ```
 
-## 星历参数
+## Ephemeris argument
 
-`<bsp>` 或 `[bsp]` 可使用以下值：
+`<bsp>` or `[bsp]` may be:
 
-- `.bsp` 文件路径，例如 `./de442.bsp`
+- a `.bsp` file path, for example `./de442.bsp`
 - `@series`
 - `series`
 
-`@series` 和 `series` 使用内置 VSOP87A + ELPMPP02 级数模型，要求构建时启用 `LUNAR_ENABLE_SERIES_FALLBACK`。默认构建启用该能力。
+`@series` and `series` use the built-in VSOP87A + ELPMPP02 series model. This requires the build option `LUNAR_ENABLE_SERIES_FALLBACK`; the default build enables it.
 
-以下命令支持省略 `[bsp]`，省略时会自动选择星历：
+The following commands allow `[bsp]` to be omitted. When omitted, the CLI selects an ephemeris automatically:
 
 ```text
 months calendar year event at convert day monthview export next range search eclipse festival almanac info
 ```
 
-以下命令不需要 BSP：
+The following commands do not require BSP:
 
 ```text
 download config completion
 ```
 
-以下命令当前仍要求显式传入位置参数 `<bsp>`：
+The following commands still require an explicit positional `<bsp>`:
 
 ```text
 zodiac sky
 ```
 
-自动选择星历时，候选来源按以下顺序收集并去重：
+Automatic ephemeris selection collects and deduplicates candidates in this order:
 
-1. 配置项 `def_bsp`
-2. 配置项 `bsp_list`
-3. 配置项 `bsp_dir` 目录下的 `.bsp` 文件
-4. 当前工作目录下的 `.bsp` 文件
+1. `def_bsp` from config
+2. `bsp_list` from config
+3. `.bsp` files under `bsp_dir`
+4. `.bsp` files under the current working directory
 
-如果命令可推断时间区间，优先选择完整覆盖该区间的 BSP；否则选择重叠最多的 BSP。没有可用 BSP 且启用级数回退时，自动使用 `@series`；未启用级数回退时，命令会报错并提示使用 `--bsp` 或 `lunar config set def_bsp`。
+If the command implies a time range, the CLI prefers a BSP that fully covers the range; otherwise it chooses the BSP with the largest overlap. If no BSP is available and series fallback is enabled, it uses `@series`. If series fallback is disabled, the command fails and suggests `--bsp` or `lunar config set def_bsp`.
 
-## 时间、时区与输出
+## Time, timezone, and output
 
-支持的时间格式：
+Supported time formats:
 
 ```text
 YYYY-MM-DD
@@ -101,9 +101,9 @@ YYYY-MM-DDTHH:MM:SS
 YYYY-MM-DDTHH:MM:SS.sss
 ```
 
-上述带时间的形式均可追加 `Z` 或 `+HH:MM` / `-HH:MM` 时区后缀。输入不带时区时，优先使用命令参数 `--input-tz`，再使用配置项 `default_tz`。
+The time forms above may include a `Z`, `+HH:MM`, or `-HH:MM` timezone suffix. If the input has no timezone suffix, parsing first uses `--input-tz`, then the config value `default_tz`.
 
-常用输出参数：
+Common output options:
 
 ```bash
 --format txt|json|jsonl|csv|ics|geojson
@@ -114,21 +114,21 @@ YYYY-MM-DDTHH:MM:SS.sss
 --lunar-day-tz Z|+08:00|-05:00
 ```
 
-- `--tz` 通常只影响显示时区；`zodiac --year` 例外，它也决定公历年裁剪窗口。
-- `--lunar-day-tz` 控制农历日期映射所用的民用日边界。未指定时读取 `default_lunar_day_tz`；再为空时按语言推断，`ja` / `ko` 为 `+09:00`，其余为 `+08:00`。
-- `geojson` 仅用于食象相关输出。
-- 多数 JSON 输出包含 `meta`，常见字段包括 `tool`、`version`、`schema`、`ephem`、`tz_display` 和 `notes`。
+- `--tz` usually affects only display time. `zodiac --year` is an exception because it also defines the civil-year clipping window.
+- `--lunar-day-tz` controls the civil-day boundary used for lunar date mapping. If omitted, the CLI reads `default_lunar_day_tz`; if that is empty, it infers from language, using `+09:00` for `ja` / `ko` and `+08:00` otherwise.
+- `geojson` is used only for eclipse-related output.
+- Most JSON outputs contain `meta`; common fields include `tool`, `version`, `schema`, `ephem`, `tz_display`, and `notes`.
 
-## 配置文件
+## Configuration file
 
-CLI 使用 `lun_cfg.txt` 保存默认参数。
+The CLI stores defaults in `lun_cfg.txt`.
 
 ```bash
 lunar config show [--format json|txt] [--out <path>] [--pretty 0|1] [--quiet]
 lunar config set <key> <value>
 ```
 
-支持的配置键：
+Supported config keys:
 
 ```text
 def_bsp
@@ -146,17 +146,17 @@ hli_day_boundary
 def_prety
 ```
 
-说明：
+Notes:
 
-- `bsp_list` 支持逗号或分号分隔。
-- 设置 `def_bsp` 后，如果该值不在 `bsp_list` 中，会自动追加。
-- `default_lang` 仅允许 `zh`、`zht`、`en`、`ja`、`ko`。
-- `def_fmt` 允许 `txt`、`json`、`csv`、`jsonl`、`ics`。
-- `def_prety` 使用 `0` 或 `1`。
-- `default_lunar_day_tz` 可用 `default`、`auto` 或 `inherit` 清空并恢复自动推断。
-- `hli_*` 配置为 `day`、`almanac` 和相关导出命令提供默认黄历规则。
+- `bsp_list` accepts comma-separated or semicolon-separated values.
+- When `def_bsp` is set, the value is appended to `bsp_list` if it is not already present.
+- `default_lang` only allows `zh`, `zht`, `en`, `ja`, and `ko`.
+- `def_fmt` allows `txt`, `json`, `csv`, `jsonl`, and `ics`.
+- `def_prety` uses `0` or `1`.
+- `default_lunar_day_tz` can be cleared with `default`, `auto`, or `inherit` to restore automatic inference.
+- `hli_*` values provide default Huangli rules for `day`, `almanac`, and related export commands.
 
-示例：
+Examples:
 
 ```bash
 lunar config set def_bsp ./de442.bsp
@@ -167,11 +167,11 @@ lunar config set hli_trad xieji
 lunar config show --format json
 ```
 
-## 日历与日期命令
+## Calendar and date commands
 
 ### months
 
-枚举农历月。
+Enumerate lunar months.
 
 ```bash
 lunar months [bsp] <years>
@@ -181,7 +181,7 @@ lunar months [bsp] <years>
   [--output <json>] [--output-txt <txt>]
 ```
 
-`<years>` 支持 `2025`、`2024-2026`、`2024,2026,2030-2032`。`--output` 和 `--output-txt` 是旧参数，不能与 `--out` 同时使用。
+`<years>` supports `2025`, `2024-2026`, and `2024,2026,2030-2032`. `--output` and `--output-txt` are legacy options and cannot be used together with `--out`.
 
 ```bash
 lunar months @series 2025
@@ -190,7 +190,7 @@ lunar months ./de442.bsp 2024-2026 --mode gregorian --format json --out months.j
 
 ### calendar
 
-生成年度节气、月相和可选农历月信息。
+Generate yearly solar-term, lunar-phase, and optional lunar-month data.
 
 ```bash
 lunar calendar [bsp] [<years>]
@@ -199,7 +199,7 @@ lunar calendar [bsp] [<years>]
   [--pretty 0|1] [--quiet]
 ```
 
-省略 `<years>` 时默认使用 `2025`。`ics` 只导出节气和月相事件。
+If `<years>` is omitted, the default is `2025`. `ics` exports only solar-term and lunar-phase events.
 
 ```bash
 lunar calendar @series 2025
@@ -208,7 +208,7 @@ lunar calendar ./de442.bsp 2024-2026 --format ics --out calendar.ics
 
 ### year
 
-生成单年历法摘要。
+Generate a single-year calendar summary.
 
 ```bash
 lunar year [bsp] <year>
@@ -223,7 +223,7 @@ lunar year @series 2025 --format json --out year-2025.json
 
 ### day
 
-查询单日农历、干支、节气/月相、可选黄历与天象事件。
+Query one day for lunar date, Ganzhi, solar-term or lunar-phase events, optional Huangli data, and optional astronomy events.
 
 ```bash
 lunar day [bsp] <YYYY-MM-DD>
@@ -239,7 +239,7 @@ lunar day [bsp] <YYYY-MM-DD>
   [--astro-lat <deg> --astro-lon <deg> [--astro-height <m>]]
 ```
 
-`--astro-lat` 与 `--astro-lon` 必须同时提供。`--trad` 和各类 boundary / mode 参数也接受常见 ASCII 别名。
+`--astro-lat` and `--astro-lon` must be provided together. `--trad` and the boundary / mode parameters also accept common ASCII aliases.
 
 ```bash
 lunar day @series 2025-06-01
@@ -249,7 +249,7 @@ lunar day ./de442.bsp 2025-06-01 --astro 1 --astro-lat 31.23 --astro-lon 121.47
 
 ### monthview
 
-生成单个公历月的逐日视图。
+Generate a daily view for one Gregorian month.
 
 ```bash
 lunar monthview [bsp] <YYYY-MM>
@@ -266,7 +266,7 @@ lunar monthview ./de442.bsp 2025-09 --format csv --out month.csv
 
 ### export
 
-批量导出公历月或年份范围内的逐日数据。
+Export daily data for one month, a month range, or a year range.
 
 ```bash
 lunar export [bsp] <YYYY-MM>
@@ -286,18 +286,18 @@ lunar export [bsp] --from-year <year> --to-year <year>
   [--astro-lat <deg> --astro-lon <deg> [--astro-height <m>]]
 ```
 
-区间按 `--lunar-day-tz` 下的公历月闭区间导出。`--scope full` 会开启食事件、天象事件和全部黄历流派；JSON / JSONL 保留逐日嵌套结构，CSV 为扁平摘要格式。
+Ranges are inclusive by Gregorian month under `--lunar-day-tz`. `--scope full` enables eclipse events, astronomy events, and all Huangli schools. JSON and JSONL preserve nested daily structures; CSV is a flat summary format.
 
 ```bash
 lunar export @series 2025-09 --format jsonl --out days.jsonl
 lunar export ./de442.bsp --from 2025-01 --to 2025-12 --scope full --format json
 ```
 
-## 转换与时刻查询
+## Conversion and instant queries
 
 ### at
 
-查询指定时刻的综合历法与天象数据。
+Query full calendar and astronomy data for a specific instant.
 
 ```bash
 lunar at [bsp] <time>
@@ -316,7 +316,7 @@ lunar at [bsp] --file <path>
   [--jobs N] [--meta-once 0|1]
 ```
 
-`--stdin` 与 `--file` 互斥。单次模式下 `--format jsonl` 会自动回退为 `json`。`--eot-lon` 使用东经为正的经度，输出视太阳时与平太阳时差值。
+`--stdin` and `--file` are mutually exclusive. In single-run mode, `--format jsonl` falls back to `json`. `--eot-lon` uses east-positive longitude and outputs apparent minus mean solar time.
 
 ```bash
 lunar at @series 2025-06-01T00:00:00+08:00 --format json
@@ -325,7 +325,7 @@ lunar at ./de442.bsp --file times.txt --format jsonl --meta-once 1
 
 ### convert
 
-公历与农历互转。
+Convert between Gregorian and lunar dates.
 
 ```bash
 lunar convert [bsp] <dt_or_tm>
@@ -345,18 +345,18 @@ lunar convert [bsp] --file <path>
   [--jobs N] [--meta-once 0|1]
 ```
 
-`--from-lunar` 模式不能再传位置参数 `<dt_or_tm>`。批模式下 `--stdin` 与 `--file` 互斥。
+In `--from-lunar` mode, the positional `<dt_or_tm>` must not be supplied. In batch mode, `--stdin` and `--file` are mutually exclusive.
 
 ```bash
 lunar convert @series 2025-06-01
 lunar convert ./de442.bsp --from-lunar 2025 5 6 --leap 0 --format json
 ```
 
-## 事件、搜索与食象
+## Events, search, and eclipses
 
 ### event
 
-查询单个节气、月相或食象事件。
+Query one solar-term, lunar-phase, or eclipse event.
 
 ```bash
 lunar event [bsp] solar-term <code> <year>
@@ -384,7 +384,7 @@ lunar event [bsp] solar-eclipse --near <YYYY-MM-DD>
   [--pretty 0|1] [--quiet]
 ```
 
-`solar-term` 的 `<code>` 使用 `J1..J12`、`Z1..Z12`。`lunar-eclipse` 和 `solar-eclipse` 会转发到 `eclipse` 命令，因此校验规则保持一致。
+`solar-term` uses `<code>` values `J1..J12` and `Z1..Z12`. `lunar-eclipse` and `solar-eclipse` forward to the `eclipse` command, so validation rules stay consistent.
 
 ```bash
 lunar event @series solar-term Z2 2025
@@ -394,7 +394,7 @@ lunar event ./de442.bsp solar-eclipse --near 2026-08-12 --format json
 
 ### next
 
-从指定时刻开始查询后续事件。
+Query upcoming events from a starting instant.
 
 ```bash
 lunar next [bsp] --from <time> --count N
@@ -403,7 +403,7 @@ lunar next [bsp] --from <time> --count N
   [--out <path>] [--pretty 0|1] [--quiet] [--eclipse 0|1]
 ```
 
-`--from` 必填，`--count` 必须大于等于 `1`。`--kinds` 未指定时使用全部事件类型。
+`--from` is required, and `--count` must be at least `1`. If `--kinds` is omitted, all event types are used.
 
 ```bash
 lunar next @series --from 2025-06-01T00:00:00+08:00 --count 5
@@ -412,7 +412,7 @@ lunar next ./de442.bsp --from 2025-06-01 --count 10 --format ics --out next.ics
 
 ### range
 
-查询时间区间内的事件。
+Query events inside a time range.
 
 ```bash
 lunar range [bsp] --from <time> --to <time>
@@ -421,7 +421,7 @@ lunar range [bsp] --from <time> --to <time>
   [--out <path>] [--pretty 0|1] [--quiet] [--eclipse 0|1]
 ```
 
-`--from` 与 `--to` 必填，且 `--to` 不能早于 `--from`。
+`--from` and `--to` are required, and `--to` must not be earlier than `--from`.
 
 ```bash
 lunar range @series --from 2025-01-01 --to 2025-12-31
@@ -430,7 +430,7 @@ lunar range ./de442.bsp --from 2025-02-01 --to 2025-03-01 --format csv
 
 ### search
 
-使用受限查询表达式搜索事件。
+Search events with a restricted query expression.
 
 ```bash
 lunar search [bsp] <query>
@@ -439,7 +439,7 @@ lunar search [bsp] <query>
   [--pretty 0|1] [--quiet] [--eclipse 0|1]
 ```
 
-当前支持以 `next ...` 开头的查询。查询可作为一个带引号参数传入，也可拆成多个 CLI 词；事件名会统一处理空格、连字符和下划线。
+Currently, supported queries begin with `next ...`. The query may be passed as one quoted argument or split into multiple CLI words. Supported event names normalize spaces, hyphens, and underscores.
 
 ```bash
 lunar search @series next full moon --from 2025-06-01
@@ -448,7 +448,7 @@ lunar search ./de442.bsp "next lunar eclipse" --from 2025-01-01 --format json
 
 ### eclipse
 
-查询日食、月食以及给定地点附近可见食。
+Query solar eclipses, lunar eclipses, and the nearest eclipse visible from a point.
 
 ```bash
 lunar [--eclipse-method modern|legacy] eclipse [bsp] --near <YYYY-MM-DD> [--kind lunar|solar]
@@ -470,7 +470,7 @@ lunar eclipse [bsp] --visible-near <time> --point-lat <deg> --point-lon <deg>
   [--out <path>] [--pretty 0|1] [--quiet]
 ```
 
-`--near` 与 `--visible-near` 二选一。`--point-lat` 与 `--point-lon` 必须同时提供。`--format geojson` 会强制开启全局可见性计算；`--visible-near` 不支持 `geojson` 或全局可见性参数。
+Use either `--near` or `--visible-near`. `--point-lat` and `--point-lon` must be provided together. `--format geojson` forces global-visibility computation. `--visible-near` does not support `geojson` or global-visibility options.
 
 ```bash
 lunar eclipse @series --near 2025-09-07 --format json
@@ -478,11 +478,11 @@ lunar eclipse ./de442.bsp --kind solar --near 2026-08-12 --format json
 lunar eclipse ./de442.bsp --visible-near 2025-01-01T00:00:00+08:00 --point-lat 31.23 --point-lon 121.47 --kind both --format json
 ```
 
-## 黄历、节日与天文扩展
+## Huangli, festivals, and astronomy extensions
 
 ### festival
 
-生成指定年份节日数据。
+Generate festival data for a year.
 
 ```bash
 lunar festival [bsp] <year>
@@ -497,7 +497,7 @@ lunar festival ./de442.bsp 2025 --format csv --out festival.csv
 
 ### almanac
 
-查询指定日期黄历摘要与宜忌信息。
+Query Huangli summary and auspicious / inauspicious items for a date.
 
 ```bash
 lunar almanac [bsp] <YYYY-MM-DD>
@@ -518,7 +518,7 @@ lunar almanac ./de442.bsp 2025-09-17 --trad xieji --format json
 
 ### zodiac
 
-查询太阳星座。
+Query solar zodiac data.
 
 ```bash
 lunar zodiac <bsp> --time <time>
@@ -530,7 +530,7 @@ lunar zodiac <bsp> --year <year>
   [--format json|txt|csv] [--out <path>] [--pretty 0|1] [--quiet]
 ```
 
-`--time` 与 `--year` 二选一。太阳星座按地心太阳视黄经计算，已包含光行时修正。
+Choose one of `--time` or `--year`. Solar zodiac is calculated from geocentric apparent solar ecliptic longitude with light-time correction.
 
 ```bash
 lunar zodiac @series --time 2025-03-20T18:01:00+08:00
@@ -539,7 +539,7 @@ lunar zodiac ./de442.bsp --year 2025 --format csv
 
 ### sky
 
-查询指定观测点的地平坐标和视位置。
+Query topocentric sky position for an observer site.
 
 ```bash
 lunar sky <bsp> <time> --lat <deg> --lon <deg>
@@ -549,24 +549,24 @@ lunar sky <bsp> --time <time> --lat <deg> --lon <deg>
   [--format json|txt|csv] [--out <path>] [--pretty 0|1] [--quiet]
 ```
 
-`--lat` 与 `--lon` 必须同时提供。`--mode pick` 可用 `--pick` 指定输出目标；太阳系目标会排在星表恒星之前输出。
+`--lat` and `--lon` must be provided together. In `--mode pick`, use `--pick` to select output targets. Solar-system targets are listed before catalog stars.
 
 ```bash
 lunar sky @series 2025-06-01T20:00:00+08:00 --lat 31.23 --lon 121.47
 lunar sky ./de442.bsp --time 2025-06-01T20:00 --input-tz +08:00 --lat 31.23 --lon 121.47 --mode pick --pick sun,moon,Spica
 ```
 
-## 工具命令
+## Utility commands
 
 ### info
 
-查看版本、配置、星历文件状态和覆盖区间。
+Show version, config, ephemeris file status, and coverage interval.
 
 ```bash
 lunar info [bsp] [--format json|txt] [--out <path>] [--pretty 0|1] [--quiet]
 ```
 
-`info` 默认输出 `txt`，不读取 `def_fmt` 作为默认格式。
+`info` defaults to `txt` and does not use `def_fmt` as its default format.
 
 ```bash
 lunar info
@@ -575,7 +575,7 @@ lunar info ./de442.bsp --format json --out info.json
 
 ### download
 
-列出和下载内置下载表中的 BSP 文件。
+List and download BSP files from the built-in download table.
 
 ```bash
 lunar download list
@@ -589,24 +589,24 @@ lunar download get de442s --dir ./ephem
 
 ### completion
 
-生成 shell 补全脚本。
+Generate shell completion scripts.
 
 ```bash
 lunar completion bash|zsh|fish|powershell
 ```
 
-脚本输出到 stdout，可按 shell 要求重定向到文件。
+The script is written to stdout and can be redirected as required by the shell.
 
 ```bash
 lunar completion powershell > lunar-completion.ps1
 lunar completion bash > lunar-completion.bash
 ```
 
-## 交互模式
+## Interactive mode
 
-直接运行 `lunar` 会进入交互模式。启动流程会读取 `lun_cfg.txt`，检查默认 BSP，可扫描额外目录、下载 BSP 或在启用级数回退时改用 `@series`。
+Run `lunar` directly to enter interactive mode. Startup reads `lun_cfg.txt`, checks the default BSP, can scan an extra directory, can download a BSP, and can switch to `@series` when series fallback is enabled.
 
-交互菜单包含：
+The interactive menu contains:
 
 ```text
 1 months

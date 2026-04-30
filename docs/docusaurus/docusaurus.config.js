@@ -5,8 +5,8 @@ const config = {
   tagline: '面向历法、黄历与天文计算的文档站点',
   favicon: 'img/logo.svg',
 
-  url: 'http://localhost',
-  baseUrl: '/',
+  url: 'https://lzray-universe.github.io',
+  baseUrl: '/CalcChineseCalendar/',
 
   organizationName: 'lzray-universe',
   projectName: 'CalcChineseCalendar',
@@ -16,7 +16,7 @@ const config = {
 
   i18n: {
     defaultLocale: 'zh-Hans',
-    locales: ['zh-Hans'],
+    locales: ['zh-Hans', 'en'],
   },
 
   presets: [
@@ -56,6 +56,10 @@ const config = {
           position: 'left',
         },
         {
+          type: 'localeDropdown',
+          position: 'right',
+        },
+        {
           href: 'https://github.com/lzray-universe/CalcChineseCalendar',
           label: 'GitHub',
           position: 'right',
@@ -77,7 +81,7 @@ const config = {
               to: '/docs/quick-start',
             },
             {
-              label: 'CLI 概览',
+              label: '命令行使用方法',
               to: '/docs/cli-overview',
             },
           ],
