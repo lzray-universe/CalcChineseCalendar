@@ -10,6 +10,7 @@ const config = {
 
   organizationName: 'lzray-universe',
   projectName: 'CalcChineseCalendar',
+  trailingSlash: true,
 
   onBrokenLinks: 'throw',
   onBrokenAnchors: 'warn',

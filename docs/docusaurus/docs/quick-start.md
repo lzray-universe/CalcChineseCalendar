@@ -59,5 +59,5 @@ lunar zodiac @series --time 2025-09-07T00:00:00+08:00
 ## 推荐的阅读顺序
 
 1. 先看 [运行时与星历](./runtime-and-ephemeris.md)，避免在 BSP 选择上踩坑。
-2. 再看 [命令行使用方法](./cli-overview)，按命令族理解功能边界。
+2. 再看 [命令行使用方法](/docs/cli-overview/)，按命令族理解功能边界。
 3. 如果要嵌入到程序里，再看 [语言绑定](./bindings.md)。
