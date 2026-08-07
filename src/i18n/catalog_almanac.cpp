@@ -836,6 +836,7 @@ void localize_hli(::HliData*data){
 	tr_gz_node(data->y_lchun);
 	tr_gz_node(data->y_rule);
 	tr_gz_node(data->m_gz);
+	tr_gz_node(data->god_month);
 	tr_gz_node(data->d_gz);
 	tr_gz_node(data->h_gz);
 	tr_gz_node(data->h_gz_true);

@@ -348,7 +348,7 @@ jobs:
 
           sections: list[str] = []
           for item in log_text.split("\x1e"):
-              item = item.strip()
+              item = item.strip("\r\n")
               if not item:
                   continue
               commit, subject, body = item.split("\x1f", 2)

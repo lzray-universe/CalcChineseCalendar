@@ -1426,11 +1426,21 @@ HliData calc_hli(EphRead&eph,LunCal6&lc,SolLunCal&solver,AppLon&app,
 		out.m_gz=
 			month_gz_lunar(out.y_rule,in.lun_month,in.lun_leap,in.lun_day,leap_mode);
 	}
-	int mon_b=out.m_gz.branch;
+	out.god_month=out.m_gz;
+	out.god_month_basis=
+		month_boundary==HliMonthBoundary::SolarTerm
+			?"solar_term_instant"
+			:"lunar_month";
 	if(traditional_profile&&
 	   out.rule_profile_code==static_cast<int>(HliProfileCode::Folk)){
-		mon_b=(in.lun_month+1)%12;
+		out.god_month=month_gz_lunar(
+			out.y_rule,in.lun_month,in.lun_leap,in.lun_day,
+			HliLeapMonthMode::InheritPrevious);
+		out.god_month_basis="lunar_month";
+	}else if(traditional_profile){
+		out.god_month_basis="solar_term_civil_day";
 	}
+	int mon_b=out.god_month.branch;
 	int season_mon_b=traditional_profile?solar_mon_b:mon_b;
 	int sn=((season_mon_b-2+12)%12)/3;
 

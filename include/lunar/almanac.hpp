@@ -241,6 +241,8 @@ struct HliData{
 	GzNode y_lchun;
 	GzNode y_rule;
 	GzNode m_gz;
+	GzNode god_month;
+	std::string god_month_basis;
 	GzNode d_gz;
 	GzNode h_gz;
 	GzNode h_gz_true;

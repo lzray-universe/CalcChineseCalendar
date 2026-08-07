@@ -30,6 +30,8 @@ HliData make_hli_sample(){
 	h.y_lchun={0,4,"甲辰"};
 	h.y_rule={1,5,"乙巳"};
 	h.m_gz={0,8,"甲申"};
+	h.god_month={9,7,"癸未"};
+	h.god_month_basis="lunar_month";
 	h.d_gz={5,3,"己卯"};
 	h.h_gz={6,6,"庚午"};
 	h.h_gz_true={6,6,"庚午"};
@@ -173,6 +175,29 @@ TEST(AlmanacRules, TraditionalProfilesUseDateLevelSolarTermBoundary){
 	}
 }
 
+TEST(AlmanacRules, MonthFieldsExposeRuleBasis){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	lunar::core::DayComputeOptions folk_opt=make_day_opt("2026-08-11");
+	folk_opt.hli_rules=make_hli_rule_set(HliProfileCode::Folk);
+	lunar::core::DayComputeOptions xieji_opt=folk_opt;
+	xieji_opt.hli_rules=make_hli_rule_set(HliProfileCode::XieJi);
+
+	DayResult folk_day=lunar::core::compute_day(folk_opt);
+	const HliData&folk=folk_day.at_data.hli;
+	EXPECT_EQ(folk.m_gz.text,"丙申");
+	EXPECT_EQ(folk.god_month.text,"乙未");
+	EXPECT_EQ(folk.god_month_basis,"lunar_month");
+	EXPECT_EQ(folk.jianchu,"开");
+
+	DayResult xieji_day=lunar::core::compute_day(xieji_opt);
+	const HliData&xieji=xieji_day.at_data.hli;
+	EXPECT_EQ(xieji.m_gz.text,"丙申");
+	EXPECT_EQ(xieji.god_month.text,"丙申");
+	EXPECT_EQ(xieji.god_month_basis,"solar_term_civil_day");
+}
+
 TEST(AlmanacRules, FolkAndZiPingKeepDistinctYearBoundary){
 	if(!has_test_ephem()){
 		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
@@ -274,6 +299,7 @@ TEST(AlmanacI18n, CatalogCoverageStaysClean){
 		HliData catalog=make_hli_sample();
 		lunar::i18n::localize_hli(&catalog);
 		ok=ok&&clean_text(catalog.rule_profile)&&
+		   clean_text(catalog.god_month.text)&&
 		   clean_text(catalog.year_boundary_text)&&
 		   clean_text(catalog.month_boundary_text)&&
 		   clean_text(catalog.leap_month_mode_text)&&
