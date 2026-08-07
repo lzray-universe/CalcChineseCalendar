@@ -7,6 +7,7 @@
 #include<initializer_list>
 #include<map>
 #include<stdexcept>
+#include<string_view>
 
 #include "lunar/math.hpp"
 #include "lunar/time_scale.hpp"
@@ -18,10 +19,8 @@ constexpr std::size_t to_idx(Enum code){
 	return static_cast<std::size_t>(code);
 }
 
-constexpr std::size_t kGodCount=
-	static_cast<std::size_t>(HliGodCode::MonthlyHarm)+1;
-constexpr std::size_t kActCount=
-	static_cast<std::size_t>(HliActCode::NoMajorTaboo)+1;
+constexpr std::size_t kGodCount=178;
+constexpr std::size_t kActCount=87;
 constexpr std::size_t kXiuCount=
 	static_cast<std::size_t>(HliXiuCode::Zhen)+1;
 
@@ -31,7 +30,7 @@ struct ActSeq{
 };
 
 struct GodSeq{
-	std::uint64_t mask=0;
+	std::array<std::uint64_t,3> mask{{0,0,0}};
 	std::vector<int> order;
 };
 
@@ -69,7 +68,20 @@ constexpr std::array<const char*,kGodCount> kGodText={{
 	"青龙","明堂","天刑","朱雀","金匮","天德","白虎","玉堂","天牢","玄武","司命","勾陈",
 	"月破","岁破","杨公忌","四离","四绝","三合","六合","月德","月德合","天德合","岁德",
 	"岁德合","王日","官日","守日","相日","民日","时德","天贵","天喜","月恩","天赦","大耗",
-	"五鬼","咸池","血支","天狗","往亡","四击","月刑","月害"
+	"五鬼","咸池","血支","天狗","往亡","四击","月刑","月害",
+	"凤凰日","麒麟日","四相","五合","五富","六仪","不将","大葬","鸣吠","小葬","鸣吠对",
+	"不守塚","临日","天富","天恩","天愿","天成","天官","天医","天马","驿马","天财",
+	"福生","福厚","福德","天巫","地财","月财","月空","母仓","明星","圣心","禄库",
+	"吉庆","阴德","活曜","除神","解神","生气","普护","益后","续世","要安","天后",
+	"天仓","敬安","玉宇","金堂","吉期","小时","兵福","兵宝","兵吉","天罡","河魁",
+	"死神","死气","伏兵","官符","月建","月煞","月厌","月忌","月虚","灾煞","劫煞",
+	"厌对","招摇","小红砂","重丧","重复","神号","妨择","披麻","大祸","天吏","天瘟",
+	"天狱","天火","天棒","天狗下食","天贼","地囊","地火","独火","受死","黄沙",
+	"六不成","小耗","神隔","木马","破败","殃败","雷公","飞廉","大煞","枯鱼",
+	"九空","八座","八风触水龙","血忌","阴错","三娘煞","四耗","四穷","四忌",
+	"四废","五墓","五虚","五离","八专","九坎","九焦","天转","地转","月建转杀",
+	"荒芜","蚩尤","大时","大败","土符","土府","土王用事","游祸","归忌","岁薄",
+	"逐阵","阴阳交破","宝日","义日","制日","伐日","专日","重日","复日"
 }};
 
 constexpr std::array<const char*,10> kPengStem={
@@ -134,10 +146,12 @@ constexpr std::array<const char*,kActCount> kActText={{
 	"穿井","安碓硙","扫舍宇","平治道涂","破屋坏垣","伐木","捕捉","畋猎","栽种","牧养","破土","安葬",
 	"启攒","施恩","招贤","举正直","临政","解除","整容","整手足甲","裁制","开仓","塞穴","补垣","修饰垣墙",
 	"祈福","求嗣","纳采","搬移","营建","筑堤防","安抚边境","选将","诉讼","纳畜","酝酿","修仓库","取鱼",
-	"乘船渡水","针刺","出师","庆赐","行船","登高","苫盖","诸事不宜","诸事不忌"
+	"乘船渡水","针刺","出师","庆赐","行船","登高","苫盖","诸事不宜","诸事不忌",
+	"上册","修宫室","入宅","宣政事","布政事","开张","恤孤茕","疗目","立券",
+	"缮城郭","覃恩","赴任","远回","雪冤","颁诏","鼓铸"
 }};
 
-constexpr std::array<HliActCode,kActCount> kActOrder={{
+constexpr std::array<HliActCode,71> kActOrder={{
 	HliActCode::Sacrifice,HliActCode::Travel,HliActCode::Relocation,HliActCode::ArrangeMarriage,HliActCode::Banquet,HliActCode::Wedding,
 	HliActCode::SetBed,HliActCode::Bathing,HliActCode::Haircut,HliActCode::Construction,HliActCode::SeekMedical,HliActCode::SubmitMemorial,
 	HliActCode::TakeOffice,HliActCode::EnterSchool,HliActCode::Crowning,HliActCode::AddPeople,HliActCode::CutClothes,HliActCode::Tailoring,
@@ -151,6 +165,8 @@ constexpr std::array<HliActCode,kActCount> kActOrder={{
 	HliActCode::Fishing,HliActCode::BoatCrossing,HliActCode::Needling,HliActCode::DeployTroops,HliActCode::CelebrationGrant,HliActCode::Sailing,
 	HliActCode::ClimbHeights,HliActCode::ThatchCovering,HliActCode::AvoidAll,HliActCode::NoMajorTaboo
 }};
+
+#include "almanac_rule_data.inc"
 
 constexpr std::array<int,60> kHourMask={
 	0x2d3,0xcb4,0x32d,0x4cb,0xd32,0xb4c,0x2d3,0xcb4,0x32d,0x4cb,0xd22,0xb5c,
@@ -206,6 +222,40 @@ const char*god_text(HliGodCode code){
 	return kGodText[to_idx(code)];
 }
 
+const char*god_text(int code){
+	if(code<0||code>=static_cast<int>(kGodText.size())){
+		return "";
+	}
+	return kGodText[static_cast<std::size_t>(code)];
+}
+
+int god_code(const char*text){
+	for(std::size_t i=0;i<kGodText.size();++i){
+		if(std::string_view(kGodText[i])==text){
+			return static_cast<int>(i);
+		}
+	}
+	throw std::logic_error(std::string("unknown almanac god: ")+text);
+}
+
+int act_code(const char*text){
+	for(std::size_t i=0;i<kActText.size();++i){
+		if(std::string_view(kActText[i])==text){
+			return static_cast<int>(i);
+		}
+	}
+	throw std::logic_error(std::string("unknown almanac activity: ")+text);
+}
+
+int find_act_code(const char*text){
+	for(std::size_t i=0;i<kActText.size();++i){
+		if(std::string_view(kActText[i])==text){
+			return static_cast<int>(i);
+		}
+	}
+	return -1;
+}
+
 const char*xiu_text(int code){
 	if(code<0||code>=static_cast<int>(kXiuCount)){
 		return "";
@@ -220,16 +270,35 @@ bool act_has(const ActSeq&seq,HliActCode code){
 	return (seq.mask[static_cast<std::size_t>(word)]&(std::uint64_t{1}<<bit))!=0;
 }
 
-void act_add(ActSeq&seq,HliActCode code){
-	int idx=static_cast<int>(code);
-	int word=idx/64;
-	int bit=idx%64;
+bool act_has(const ActSeq&seq,int code){
+	int word=code/64;
+	int bit=code%64;
+	return (seq.mask[static_cast<std::size_t>(word)]&
+			(std::uint64_t{1}<<bit))!=0;
+}
+
+bool act_has(const ActSeq&seq,const char*text){
+	int code=find_act_code(text);
+	return code>=0&&act_has(seq,code);
+}
+
+void act_add(ActSeq&seq,int code){
+	int word=code/64;
+	int bit=code%64;
 	std::uint64_t mask=std::uint64_t{1}<<bit;
 	if((seq.mask[static_cast<std::size_t>(word)]&mask)!=0){
 		return;
 	}
 	seq.mask[static_cast<std::size_t>(word)]|=mask;
-	seq.order.push_back(idx);
+	seq.order.push_back(code);
+}
+
+void act_add(ActSeq&seq,HliActCode code){
+	act_add(seq,static_cast<int>(code));
+}
+
+void act_add(ActSeq&seq,const char*text){
+	act_add(seq,act_code(text));
 }
 
 void act_add_many(ActSeq&seq,std::initializer_list<HliActCode> list){
@@ -247,17 +316,57 @@ void act_remove(ActSeq&seq,HliActCode code){
 					seq.order.end());
 }
 
+void act_remove(ActSeq&seq,int code){
+	int word=code/64;
+	int bit=code%64;
+	seq.mask[static_cast<std::size_t>(word)]&=~(std::uint64_t{1}<<bit);
+	seq.order.erase(std::remove(seq.order.begin(),seq.order.end(),code),
+					seq.order.end());
+}
+
+void act_remove(ActSeq&seq,const char*text){
+	int code=find_act_code(text);
+	if(code>=0){
+		act_remove(seq,code);
+	}
+}
+
 bool god_has(const GodSeq&seq,HliGodCode code){
-	return (seq.mask&(std::uint64_t{1}<<static_cast<int>(code)))!=0;
+	int idx=static_cast<int>(code);
+	return (seq.mask[static_cast<std::size_t>(idx/64)]&
+			(std::uint64_t{1}<<(idx%64)))!=0;
+}
+
+bool god_has(const GodSeq&seq,int code){
+	return (seq.mask[static_cast<std::size_t>(code/64)]&
+			(std::uint64_t{1}<<(code%64)))!=0;
+}
+
+bool god_has(const GodSeq&seq,const char*text){
+	for(std::size_t i=0;i<kGodText.size();++i){
+		if(std::string_view(kGodText[i])==text){
+			return god_has(seq,static_cast<int>(i));
+		}
+	}
+	return false;
+}
+
+void god_add(GodSeq&seq,int code){
+	std::size_t word=static_cast<std::size_t>(code/64);
+	std::uint64_t mask=std::uint64_t{1}<<(code%64);
+	if((seq.mask[word]&mask)!=0){
+		return;
+	}
+	seq.mask[word]|=mask;
+	seq.order.push_back(code);
 }
 
 void god_add(GodSeq&seq,HliGodCode code){
-	std::uint64_t mask=std::uint64_t{1}<<static_cast<int>(code);
-	if((seq.mask&mask)!=0){
-		return;
-	}
-	seq.mask|=mask;
-	seq.order.push_back(static_cast<int>(code));
+	god_add(seq,static_cast<int>(code));
+}
+
+void god_add(GodSeq&seq,const char*text){
+	god_add(seq,god_code(text));
 }
 
 bool in_set_branch(int b,std::initializer_list<int> a){
@@ -725,8 +834,8 @@ void sort_act_codes(std::vector<int>&codes){
 
 void sync_codes(HliData&out,const GodSeq&good,const GodSeq&bad,const ActSeq&yi,
 			   const ActSeq&ji){
-	out.good_god_mask=good.mask;
-	out.bad_god_mask=bad.mask;
+	out.good_god_mask=good.mask[0];
+	out.bad_god_mask=bad.mask[0];
 	out.yi_mask=yi.mask;
 	out.ji_mask=ji.mask;
 	out.good_god_codes=good.order;
@@ -999,6 +1108,8 @@ GzNode month_gz_lunar(const GzNode&year_gz,int lun_month,bool is_leap,int lun_da
 	return out;
 }
 
+#include "almanac_rule_engine.inc"
+
 HliRuleSet rule_set_from_profile(HliProfileCode profile){
 	switch(profile){
 		case HliProfileCode::ZiPing:
@@ -1015,7 +1126,7 @@ HliRuleSet rule_set_from_profile(HliProfileCode profile){
 					static_cast<int>(HliDayBoundary::Hour0)};
 		case HliProfileCode::XieJi:
 			return {static_cast<int>(profile),
-					static_cast<int>(HliYearBoundary::LiChun),
+					static_cast<int>(HliYearBoundary::LunarNewYear),
 					static_cast<int>(HliMonthBoundary::SolarTerm),
 					static_cast<int>(HliLeapMonthMode::InheritPrevious),
 					static_cast<int>(HliDayBoundary::Hour23)};
@@ -1295,18 +1406,33 @@ HliData calc_hli(EphRead&eph,LunCal6&lc,SolLunCal&solver,AppLon&app,
 		static_cast<HliLeapMonthMode>(out.leap_month_mode_code);
 	HliDayBoundary day_boundary=
 		static_cast<HliDayBoundary>(out.day_boundary_code);
+	const bool traditional_profile=
+		out.rule_profile_code==static_cast<int>(HliProfileCode::Folk)||
+		out.rule_profile_code==static_cast<int>(HliProfileCode::XieJi);
 
 	out.y_rule=select_year_gz(out,year_boundary,lc,in.jd_utc,in.gy);
 
 	int solar_mon_b=month_branch(lc,in.jd_utc,in.gy);
-	if(month_boundary==HliMonthBoundary::SolarTerm){
+	int next_solar_num=-1;
+	if(traditional_profile){
+		out.y_rule=out.y_lun;
+		next_solar_num=civil_term_cursor(
+			lc,in.gy,in.gm,in.gd,in.tz_off);
+		out.m_gz=month_gz_by_term_cursor(in.gy,next_solar_num,in.gm);
+		solar_mon_b=out.m_gz.branch;
+	}else if(month_boundary==HliMonthBoundary::SolarTerm){
 		out.m_gz=month_gz_solar(out.y_rule,solar_mon_b);
 	}else{
 		out.m_gz=
 			month_gz_lunar(out.y_rule,in.lun_month,in.lun_leap,in.lun_day,leap_mode);
 	}
 	int mon_b=out.m_gz.branch;
-	int sn=((mon_b-2+12)%12)/3;
+	if(traditional_profile&&
+	   out.rule_profile_code==static_cast<int>(HliProfileCode::Folk)){
+		mon_b=(in.lun_month+1)%12;
+	}
+	int season_mon_b=traditional_profile?solar_mon_b:mon_b;
+	int sn=((season_mon_b-2+12)%12)/3;
 
 	int day_number=effective_day_number(in.jd_utc,in.tz_off,day_boundary);
 	int day60=pos_mod(static_cast<long long>(day_number)-11,60);
@@ -1351,17 +1477,60 @@ HliData calc_hli(EphRead&eph,LunCal6&lc,SolLunCal&solver,AppLon&app,
 	out.duty_god_code=dg_idx;
 	out.duty_is_yellow=
 		(dg_idx==0||dg_idx==1||dg_idx==4||dg_idx==5||dg_idx==7||dg_idx==10);
+
+	double jd_tdb=TimeScale::utc_to_tdb(in.jd_utc);
+	double moon_lam=app.moon_calc(jd_tdb).first;
+	out.xiu28_code=xiu_exact_code(in.moon_xg.region,moon_lam);
+	out.xiu28_mod28_code=traditional_profile
+		?xiu_cycle_by_civil_day(in.gy,in.gm,in.gd,in.tz_off)
+		:xiu_mod28_code(moon_lam);
+	out.xiu_id=in.moon_xg.star_name;
+
+	if(traditional_profile){
+		RuleDayContext ctx;
+		ctx.lunar_month=in.lun_month;
+		ctx.lunar_day=in.lun_day;
+		ctx.year_stem=out.y_rule.stem;
+		ctx.year_branch=out.y_rule.branch;
+		ctx.solar_month_branch=solar_mon_b;
+		ctx.god_month_branch=mon_b;
+		ctx.season=sn;
+		ctx.month_type=solar_mon_b%3;
+		ctx.day_stem=out.d_gz.stem;
+		ctx.day_branch=out.d_gz.branch;
+		ctx.day60=day60;
+		ctx.next_solar_num=next_solar_num;
+		ctx.xiu28_cycle=out.xiu28_mod28_code;
+		ctx.day_gz=out.d_gz.text;
+		ctx.four_separations=
+			is_next_day_term(lc,in.gy,in.gm,in.gd,in.tz_off,"Z2")||
+			is_next_day_term(lc,in.gy,in.gm,in.gd,in.tz_off,"Z5")||
+			is_next_day_term(lc,in.gy,in.gm,in.gd,in.tz_off,"Z8")||
+			is_next_day_term(lc,in.gy,in.gm,in.gd,in.tz_off,"Z11");
+		ctx.four_extinctions=
+			is_next_day_term(lc,in.gy,in.gm,in.gd,in.tz_off,"J1")||
+			is_next_day_term(lc,in.gy,in.gm,in.gd,in.tz_off,"J4")||
+			is_next_day_term(lc,in.gy,in.gm,in.gd,in.tz_off,"J7")||
+			is_next_day_term(lc,in.gy,in.gm,in.gd,in.tz_off,"J10");
+		int earth_days=days_to_next_season_term(
+			lc,in.gy,in.gm,in.gd,in.tz_off);
+		ctx.earth_king=earth_days>=1&&earth_days<=18;
+
+		evaluate_traditional_rules(
+			ctx,out.jianchu_code,
+			is_long_lunar_month(lc,in.gy,in.gm,in.gd,in.tz_off),
+			good,bad,yi,ji,out);
+		sync_codes(out,good,bad,yi,ji);
+		materialize_zh(out,day60,hb);
+		if(out.duty_god_code==4){
+			out.duty_god="金贵";
+		}
+	}else{
 	if(out.duty_is_yellow){
 		god_add(good,static_cast<HliGodCode>(dg_idx));
 	}else{
 		god_add(bad,static_cast<HliGodCode>(dg_idx));
 	}
-
-	double jd_tdb=TimeScale::utc_to_tdb(in.jd_utc);
-	double moon_lam=app.moon_calc(jd_tdb).first;
-	out.xiu28_code=xiu_exact_code(in.moon_xg.region,moon_lam);
-	out.xiu28_mod28_code=xiu_mod28_code(moon_lam);
-	out.xiu_id=in.moon_xg.star_name;
 
 	if(out.d_gz.branch==((mon_b+6)%12)){
 		god_add(bad,HliGodCode::MonthBreak);
@@ -1763,6 +1932,7 @@ HliData calc_hli(EphRead&eph,LunCal6&lc,SolLunCal&solver,AppLon&app,
 	sort_act_codes(ji.order);
 	sync_codes(out,good,bad,yi,ji);
 	materialize_zh(out,day60,hb);
+	}
 
 	int day_slot_start=(day60*12)%60;
 	int mask_today=kHourMask[static_cast<std::size_t>(day60)];

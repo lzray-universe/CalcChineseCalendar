@@ -83,6 +83,20 @@ bool all_clean(const std::vector<std::string>&items){
 	});
 }
 
+std::vector<std::string> sorted(std::initializer_list<const char*> items){
+	std::vector<std::string> out;
+	for(const char*item : items){
+		out.emplace_back(item);
+	}
+	std::sort(out.begin(),out.end());
+	return out;
+}
+
+std::vector<std::string> sorted(std::vector<std::string> items){
+	std::sort(items.begin(),items.end());
+	return items;
+}
+
 }
 
 TEST(AlmanacSeries, CodesAndMod28ArePresent){
@@ -107,7 +121,59 @@ TEST(AlmanacSeries, CodesAndMod28ArePresent){
 	EXPECT_GE(h.hour_jx.front().gz_index,0);
 }
 
-TEST(AlmanacRules, TradPresetChangesYearAndMonthGanzhi){
+TEST(AlmanacRules, FolkAndXieJiProfilesMatchExpectedCase){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	lunar::core::DayComputeOptions old_opt=make_day_opt("2025-09-17");
+	old_opt.hli_rules=make_hli_rule_set(HliProfileCode::Folk);
+	lunar::core::DayComputeOptions xieji_opt=old_opt;
+	xieji_opt.hli_rules=make_hli_rule_set(HliProfileCode::XieJi);
+
+	DayResult old_day=lunar::core::compute_day(old_opt);
+	const HliData&old=old_day.at_data.hli;
+	EXPECT_EQ(old.m_gz.text,"乙酉");
+	EXPECT_EQ(old.jianchu,"执");
+	EXPECT_EQ(old.duty_god,"明堂");
+	EXPECT_EQ(sorted(old.good_gods),sorted({"母仓"}));
+	EXPECT_EQ(sorted(old.bad_gods),sorted({"受死","五鬼","归忌","专日"}));
+	EXPECT_EQ(sorted(old.yi),sorted({"纳财","捕捉","栽种","牧养","纳畜"}));
+	EXPECT_EQ(sorted(old.ji),sorted({
+		"出行","冠带","畋猎","搬移","远回","安抚边境","选将","出师"
+	}));
+	EXPECT_EQ(old.yi_ji_rule,"从宜亦从忌");
+
+	DayResult xieji_day=lunar::core::compute_day(xieji_opt);
+	const HliData&xieji=xieji_day.at_data.hli;
+	EXPECT_EQ(xieji.m_gz.text,"乙酉");
+	EXPECT_EQ(xieji.jianchu,"定");
+	EXPECT_EQ(xieji.duty_god,"勾陈");
+	EXPECT_EQ(sorted(xieji.good_gods),
+			  sorted({"天德","三合","母仓","金堂"}));
+	EXPECT_EQ(sorted(xieji.bad_gods),
+			  sorted({"死气","官符","大耗","勾陈","木马","专日"}));
+	EXPECT_EQ(sorted(xieji.ji),
+			  sorted({"开市","修置产室","畋猎","开仓","取鱼"}));
+	EXPECT_EQ(xieji.yi_ji_rule,"从宜亦从忌");
+}
+
+TEST(AlmanacRules, TraditionalProfilesUseDateLevelSolarTermBoundary){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	for(HliProfileCode profile :
+		{HliProfileCode::Folk,HliProfileCode::XieJi}){
+		lunar::core::DayComputeOptions opt=make_day_opt("2024-02-04");
+		opt.hli_rules=make_hli_rule_set(profile);
+		DayResult day=lunar::core::compute_day(opt);
+		const HliData&h=day.at_data.hli;
+		EXPECT_EQ(h.m_gz.text,"丙寅");
+		EXPECT_EQ(h.y_rule.text,"癸卯");
+		EXPECT_EQ(h.rule_profile_code,static_cast<int>(profile));
+	}
+}
+
+TEST(AlmanacRules, FolkAndZiPingKeepDistinctYearBoundary){
 	if(!has_test_ephem()){
 		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
 	}
@@ -123,7 +189,7 @@ TEST(AlmanacRules, TradPresetChangesYearAndMonthGanzhi){
 	EXPECT_EQ(ziping.at_data.hli.rule_profile_code,
 			  static_cast<int>(HliProfileCode::ZiPing));
 	EXPECT_NE(folk.at_data.hli.y_rule.text,ziping.at_data.hli.y_rule.text);
-	EXPECT_NE(folk.at_data.hli.m_gz.text,ziping.at_data.hli.m_gz.text);
+	EXPECT_EQ(folk.at_data.hli.m_gz.text,ziping.at_data.hli.m_gz.text);
 }
 
 TEST(AlmanacRules, DayBoundaryChangesDayGanzhi){

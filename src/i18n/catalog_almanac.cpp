@@ -861,7 +861,12 @@ void localize_hli(::HliData*data){
 		data->jianchu=tr_dict(data->jianchu);
 	}
 	if(data->duty_god_code>=0){
-		data->duty_god=tr_god_code(data->duty_god_code);
+		bool traditional_profile=
+			data->rule_profile_code==static_cast<int>(HliProfileCode::Folk)||
+			data->rule_profile_code==static_cast<int>(HliProfileCode::XieJi);
+		data->duty_god=traditional_profile&&data->duty_god_code==4
+			?tr_dict("金贵")
+			:tr_god_code(data->duty_god_code);
 		data->duty_tag=tr_duty_tag_code(data->duty_tag_code);
 	}else{
 		data->duty_god=tr_dict(data->duty_god);
@@ -934,33 +939,53 @@ void localize_hli(::HliData*data){
 	data->xiu_id=tr_star_name_text(data->xiu_id);
 
 	if(!data->good_god_codes.empty()){
+		std::vector<std::string> source=data->good_gods;
 		data->good_gods.clear();
-		for(int code : data->good_god_codes){
-			data->good_gods.push_back(tr_god_code(code));
+		for(std::size_t i=0;i<data->good_god_codes.size();++i){
+			std::string text=tr_god_code(data->good_god_codes[i]);
+			if(text.empty()&&i<source.size()){
+				text=tr_dict(source[i]);
+			}
+			data->good_gods.push_back(std::move(text));
 		}
 	}else{
 		tr_vec(data->good_gods);
 	}
 	if(!data->bad_god_codes.empty()){
+		std::vector<std::string> source=data->bad_gods;
 		data->bad_gods.clear();
-		for(int code : data->bad_god_codes){
-			data->bad_gods.push_back(tr_god_code(code));
+		for(std::size_t i=0;i<data->bad_god_codes.size();++i){
+			std::string text=tr_god_code(data->bad_god_codes[i]);
+			if(text.empty()&&i<source.size()){
+				text=tr_dict(source[i]);
+			}
+			data->bad_gods.push_back(std::move(text));
 		}
 	}else{
 		tr_vec(data->bad_gods);
 	}
 	if(!data->yi_codes.empty()){
+		std::vector<std::string> source=data->yi;
 		data->yi.clear();
-		for(int code : data->yi_codes){
-			data->yi.push_back(tr_act_code(code));
+		for(std::size_t i=0;i<data->yi_codes.size();++i){
+			std::string text=tr_act_code(data->yi_codes[i]);
+			if(text.empty()&&i<source.size()){
+				text=tr_dict(source[i]);
+			}
+			data->yi.push_back(std::move(text));
 		}
 	}else{
 		tr_vec(data->yi);
 	}
 	if(!data->ji_codes.empty()){
+		std::vector<std::string> source=data->ji;
 		data->ji.clear();
-		for(int code : data->ji_codes){
-			data->ji.push_back(tr_act_code(code));
+		for(std::size_t i=0;i<data->ji_codes.size();++i){
+			std::string text=tr_act_code(data->ji_codes[i]);
+			if(text.empty()&&i<source.size()){
+				text=tr_dict(source[i]);
+			}
+			data->ji.push_back(std::move(text));
 		}
 	}else{
 		tr_vec(data->ji);
