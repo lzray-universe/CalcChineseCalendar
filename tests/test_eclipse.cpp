@@ -53,8 +53,17 @@ TEST(SolarEclipseSeries, TotalEclipseRegression){
 	EXPECT_NEAR(ecl.besselian.l2,ecl.ru_re,1e-12);
 	EXPECT_NEAR(ecl.besselian.x_coeff[0],ecl.besselian.x,1e-12);
 	EXPECT_NEAR(ecl.besselian.y_coeff[0],ecl.besselian.y,1e-12);
-	EXPECT_NEAR(ecl.besselian.x*ecl.besselian.x_dot+
-				ecl.besselian.y*ecl.besselian.y_dot,0.0,1e-6);
+	auto axis_distance2=[&](double hour){
+		auto eval=[&](const std::array<double,4>&coeff){
+			return ((coeff[3]*hour+coeff[2])*hour+coeff[1])*hour+coeff[0];
+		};
+		double x=eval(ecl.besselian.x_coeff);
+		double y=eval(ecl.besselian.y_coeff);
+		return x*x+y*y;
+	};
+	constexpr double kTenSecondsInHours=10.0/3600.0;
+	EXPECT_LT(axis_distance2(0.0),axis_distance2(-kTenSecondsInHours));
+	EXPECT_LT(axis_distance2(0.0),axis_distance2(kTenSecondsInHours));
 	EXPECT_NEAR(std::hypot(ecl.besselian.x,ecl.besselian.y),
 				std::fabs(ecl.gamma),1e-10);
 	EXPECT_NEAR(ecl.jd_tdb_max,2461265.241032,10.0/86400.0);
