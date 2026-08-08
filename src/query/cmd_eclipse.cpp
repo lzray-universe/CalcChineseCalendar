@@ -323,7 +323,7 @@ bool try_visible_solar(EphRead&eph,const EclOpt&opt,const EventRec&ev,
 	cand.tz_off=parse_tz(opt.tz);
 	cand.ev=ev;
 	cand.lunar=false;
-	if(!calc_solar_eclipse(eph,jd_tdb,&cand.se)||!cand.se.has){
+	if(!calc_solar_eclipse_from_max(eph,jd_tdb,&cand.se)||!cand.se.has){
 		return false;
 	}
 	if(!solar_eclipse_point_visibility(eph,cand.se,opt.stage,opt.point_lat,
@@ -432,7 +432,7 @@ EclRes run_ecl(const EclOpt&opt){
 		}
 		return res;
 	}
-	if(!calc_solar_eclipse(eph,jd_tdb,&res.se)||!res.se.has){
+	if(!calc_solar_eclipse_from_max(eph,jd_tdb,&res.se)||!res.se.has){
 		throw std::runtime_error("failed to compute solar eclipse details");
 	}
 	if(opt.has_point_lat){

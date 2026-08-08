@@ -58,6 +58,8 @@ struct SolarEclipse{
 
 bool calc_solar_eclipse(EphRead&eph,double jd_tdb_near_new_moon,SolarEclipse*out);
 
+bool calc_solar_eclipse_from_max(EphRead&eph,double jd_tdb_max,SolarEclipse*out);
+
 std::vector<EventRec> bld_solar_eclipse_events(EphRead&eph,
 												const YearResult&yr,
 												int tz_off);

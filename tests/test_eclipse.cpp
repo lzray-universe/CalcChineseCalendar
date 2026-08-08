@@ -53,6 +53,17 @@ TEST(SolarEclipseSeries, TotalEclipseRegression){
 	EXPECT_NEAR(ecl.besselian.l2,ecl.ru_re,1e-12);
 	EXPECT_NEAR(ecl.besselian.x_coeff[0],ecl.besselian.x,1e-12);
 	EXPECT_NEAR(ecl.besselian.y_coeff[0],ecl.besselian.y,1e-12);
+	EXPECT_NEAR(ecl.besselian.x*ecl.besselian.x_dot+
+				ecl.besselian.y*ecl.besselian.y_dot,0.0,1e-6);
+	EXPECT_NEAR(std::hypot(ecl.besselian.x,ecl.besselian.y),
+				std::fabs(ecl.gamma),1e-10);
+	EXPECT_NEAR(ecl.jd_tdb_max,2461265.241032,10.0/86400.0);
 	EXPECT_TRUE(std::isfinite(ecl.besselian.tan_f1));
 	EXPECT_TRUE(std::isfinite(ecl.besselian.tan_f2));
+
+	SolarEclipse detail;
+	ASSERT_TRUE(calc_solar_eclipse_from_max(eph,ecl.jd_tdb_max,&detail));
+	EXPECT_DOUBLE_EQ(detail.jd_tdb_max,ecl.jd_tdb_max);
+	EXPECT_DOUBLE_EQ(detail.gamma,ecl.gamma);
+	EXPECT_DOUBLE_EQ(detail.besselian.jd_tdb_epoch,ecl.jd_tdb_max);
 }

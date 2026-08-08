@@ -661,7 +661,7 @@ bool find_global_metric_minimum(EphRead&eph,double jd_near,bool central,
 	return true;
 }
 
-bool find_sep_minimum(EphRead&eph,double jd_near,double*jd_min,GeoEval*out){
+bool find_axis_minimum(EphRead&eph,double jd_near,double*jd_min,GeoEval*out){
 	if(jd_min==nullptr||out==nullptr||!std::isfinite(jd_near)){
 		return false;
 	}
@@ -669,19 +669,20 @@ bool find_sep_minimum(EphRead&eph,double jd_near,double*jd_min,GeoEval*out){
 	constexpr double span=2.0;
 	constexpr double step=1.0/24.0;
 	double best_t=std::numeric_limits<double>::quiet_NaN();
-	double best_sep=std::numeric_limits<double>::infinity();
+	double best_d2=std::numeric_limits<double>::infinity();
 
 	for(double t=jd_near-span;t<=jd_near+span+1e-12;t+=step){
 		GeoEval g;
-		if(!eval_geo(eph,t,g)){
+		if(!eval_geo(eph,t,g)||!(g.x>0.0)){
 			continue;
 		}
-		if(g.sep<best_sep){
-			best_sep=g.sep;
+		double d2=g.d*g.d;
+		if(d2<best_d2){
+			best_d2=d2;
 			best_t=t;
 		}
 	}
-	if(!std::isfinite(best_t)||!std::isfinite(best_sep)){
+	if(!std::isfinite(best_t)||!std::isfinite(best_d2)){
 		return false;
 	}
 
@@ -694,10 +695,10 @@ bool find_sep_minimum(EphRead&eph,double jd_near,double*jd_min,GeoEval*out){
 
 	auto fn=[&](double jd) -> double{
 		GeoEval g;
-		if(!eval_geo(eph,jd,g)){
+		if(!eval_geo(eph,jd,g)||!(g.x>0.0)){
 			return std::numeric_limits<double>::infinity();
 		}
-		return g.sep;
+		return g.d*g.d;
 	};
 
 	const double gr=(std::sqrt(5.0)-1.0)*0.5;
@@ -1253,7 +1254,11 @@ std::vector<double> build_lon_grid(double step_deg){
 
 }
 
-bool calc_solar_eclipse(EphRead&eph,double jd_tdb_near_new_moon,SolarEclipse*out){
+namespace{
+
+bool calc_solar_eclipse_impl(EphRead&eph,double jd_tdb_near_new_moon,
+							 bool fixed_max,double jd_tdb_fixed_max,
+							 SolarEclipse*out){
 	if(out==nullptr){
 		throw std::invalid_argument("out must not be null");
 	}
@@ -1262,14 +1267,24 @@ bool calc_solar_eclipse(EphRead&eph,double jd_tdb_near_new_moon,SolarEclipse*out
 	}
 	*out=SolarEclipse{};
 
-	double jd_max=0.0;
+	double jd_any_min=0.0;
 	double f_any_min=std::numeric_limits<double>::quiet_NaN();
-	GeoEval g_max;
-	if(!find_global_metric_minimum(eph,jd_tdb_near_new_moon,false,&jd_max,
-								   &f_any_min,&g_max)){
+	GeoEval g_any;
+	if(!find_global_metric_minimum(eph,jd_tdb_near_new_moon,false,&jd_any_min,
+								   &f_any_min,&g_any)){
 		return false;
 	}
 	if(!(f_any_min<=0.0)){
+		return false;
+	}
+
+	double jd_max=jd_tdb_fixed_max;
+	GeoEval g_max;
+	if(fixed_max){
+		if(!std::isfinite(jd_max)||!eval_geo(eph,jd_max,g_max)||!(g_max.x>0.0)){
+			return false;
+		}
+	}else if(!find_axis_minimum(eph,jd_tdb_near_new_moon,&jd_max,&g_max)){
 		return false;
 	}
 
@@ -1323,7 +1338,8 @@ bool calc_solar_eclipse(EphRead&eph,double jd_tdb_near_new_moon,SolarEclipse*out
 		}
 		return f_any;
 	};
-	if(!solve_contact_pair(outer_fn,jd_max,f_any_min,ans.jd_tdb_c1,ans.jd_tdb_c4)){
+	if(!solve_contact_pair(outer_fn,jd_any_min,f_any_min,
+						   ans.jd_tdb_c1,ans.jd_tdb_c4)){
 		return false;
 	}
 
@@ -1360,6 +1376,18 @@ bool calc_solar_eclipse(EphRead&eph,double jd_tdb_near_new_moon,SolarEclipse*out
 
 	*out=ans;
 	return true;
+}
+
+}
+
+bool calc_solar_eclipse(EphRead&eph,double jd_tdb_near_new_moon,SolarEclipse*out){
+	return calc_solar_eclipse_impl(
+		eph,jd_tdb_near_new_moon,false,
+		std::numeric_limits<double>::quiet_NaN(),out);
+}
+
+bool calc_solar_eclipse_from_max(EphRead&eph,double jd_tdb_max,SolarEclipse*out){
+	return calc_solar_eclipse_impl(eph,jd_tdb_max,true,jd_tdb_max,out);
 }
 
 std::vector<EventRec> bld_solar_eclipse_events(EphRead&eph,const YearResult&yr,

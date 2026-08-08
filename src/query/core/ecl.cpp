@@ -412,7 +412,11 @@ SolarEclipse calc_sol_ecl_for_event(EphRead&eph,const EventRec&ev){
 	if(is_new_moon_ev(ev)||ev.kind=="solar_eclipse"){
 		double jd_tdb=
 			std::isfinite(ev.jd_tdb)?ev.jd_tdb:TimeScale::utc_to_tdb(ev.jd_utc);
-		calc_solar_eclipse(eph,jd_tdb,&ecl);
+		if(ev.kind=="solar_eclipse"){
+			calc_solar_eclipse_from_max(eph,jd_tdb,&ecl);
+		}else{
+			calc_solar_eclipse(eph,jd_tdb,&ecl);
+		}
 	}
 	return ecl;
 }
