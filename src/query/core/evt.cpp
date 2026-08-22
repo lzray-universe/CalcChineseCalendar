@@ -278,11 +278,20 @@ EventRec mk_lun_ecl_ev(const LunarEclipse&ecl,int year,int tz_off){
 	ev.kind="lunar_eclipse";
 	ev.code=lun_ecl_code(ecl.type);
 	ev.name=lun_ecl_name(ecl.type);
-	ev.year=year;
 	ev.jd_tdb=ecl.jd_tdb_max;
 	ev.jd_utc=TimeScale::tdb_to_utc(ecl.jd_tdb_max);
 	ev.utc_iso=fmt_iso(ev.jd_utc,0,true);
 	ev.loc_iso=fmt_iso(ev.jd_utc,tz_off,true);
+	int event_year=0;
+	int month=0;
+	int day=0;
+	int hour=0;
+	int minute=0;
+	double second=0.0;
+	jd2greg(ev.jd_utc+static_cast<double>(tz_off)/1440.0,event_year,month,day,
+			 hour,minute,second);
+	ev.year=event_year;
+	(void)year;
 	return ev;
 }
 
@@ -291,11 +300,20 @@ EventRec mk_sol_ecl_ev(const SolarEclipse&ecl,int year,int tz_off){
 	ev.kind="solar_eclipse";
 	ev.code=sol_ecl_code(ecl.type);
 	ev.name=sol_ecl_name(ecl.type);
-	ev.year=year;
 	ev.jd_tdb=ecl.jd_tdb_max;
 	ev.jd_utc=TimeScale::tdb_to_utc(ecl.jd_tdb_max);
 	ev.utc_iso=fmt_iso(ev.jd_utc,0,true);
 	ev.loc_iso=fmt_iso(ev.jd_utc,tz_off,true);
+	int event_year=0;
+	int month=0;
+	int day=0;
+	int hour=0;
+	int minute=0;
+	double second=0.0;
+	jd2greg(ev.jd_utc+static_cast<double>(tz_off)/1440.0,event_year,month,day,
+			 hour,minute,second);
+	ev.year=event_year;
+	(void)year;
 	return ev;
 }
 

@@ -48,6 +48,7 @@ struct LunarEclipse{
 	double dur_pen_sec=std::numeric_limits<double>::quiet_NaN();
 	double dur_umb_sec=std::numeric_limits<double>::quiet_NaN();
 	double dur_tot_sec=std::numeric_limits<double>::quiet_NaN();
+	// Delta T = TT-UT1 at maximum, in seconds.
 	double dt_max_sec=std::numeric_limits<double>::quiet_NaN();
 	double moon_dist_km=std::numeric_limits<double>::quiet_NaN();
 	double gamma=std::numeric_limits<double>::quiet_NaN();

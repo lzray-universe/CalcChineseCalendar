@@ -170,7 +170,7 @@ inline void wr_node_txt(std::ostream&os,double jd_tdb,
 	}
 	double jd_td=TimeScale::tdb_to_tt(jd_tdb);
 	double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
-	double jd_ut1=jd_utc;
+	double jd_ut1=TimeScale::tdb_to_ut1(jd_tdb);
 	os<<node_num(jd_ut1)<<"\t"<<node_num(jd_td)<<"\t"<<node_num(jd_utc)<<"\t"
 	  <<node_num(meta.zen_lat_deg)<<"\t"<<node_num(meta.zen_lon_deg)<<"\t"
 	  <<node_num(meta.pa_deg)<<"\t"<<node_num(meta.axis_deg);
@@ -184,7 +184,7 @@ inline void wr_node_kv(std::ostream&os,const std::string&tag,double jd_tdb,
 	if(std::isfinite(jd_tdb)){
 		jd_td=TimeScale::tdb_to_tt(jd_tdb);
 		jd_utc=TimeScale::tdb_to_utc(jd_tdb);
-		jd_ut1=jd_utc;
+		jd_ut1=TimeScale::tdb_to_ut1(jd_tdb);
 	}
 	os<<tag<<"_jd_ut1="<<node_num(jd_ut1)<<"\n";
 	os<<tag<<"_jd_td="<<node_num(jd_td)<<"\n";
@@ -235,7 +235,7 @@ inline void wr_enode(JsonWriter&w,double jd_tdb,int tz_off,
 	}
 	double jd_td=TimeScale::tdb_to_tt(jd_tdb);
 	double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
-	double jd_ut1=jd_utc;
+	double jd_ut1=TimeScale::tdb_to_ut1(jd_tdb);
 	w.obj_begin();
 	w.key("jd");
 	w.value(jd_utc);

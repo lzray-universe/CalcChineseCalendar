@@ -491,9 +491,9 @@ Vec3 apply_diurnal_aberration(const Vec3&dir,const Vec3&obs_beta){
 }
 
 Mat3 ecef_rot(double jd_tdb){
-	double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
-	double uta=std::floor(jd_utc);
-	double utb=jd_utc-uta;
+	double jd_ut1=TimeScale::tdb_to_ut1(jd_tdb);
+	double uta=std::floor(jd_ut1);
+	double utb=jd_ut1-uta;
 	double tta=std::floor(jd_tdb);
 	double ttb=jd_tdb-tta;
 	double gast=lunar::precnut::gst06a(uta,utb,tta,ttb);

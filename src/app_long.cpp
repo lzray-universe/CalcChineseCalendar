@@ -205,8 +205,9 @@ EoTData AppLon::eot_calc(double jd_utc,double lon_deg){
 	Vec3 sun_eq=eq_true*sun_app;
 	double ra_app=norm2pi(std::atan2(sun_eq.y,sun_eq.x));
 
-	double uta=std::floor(jd_utc);
-	double utb=jd_utc-uta;
+	double jd_ut1=TimeScale::tdb_to_ut1(out.jd_tdb);
+	double uta=std::floor(jd_ut1);
+	double utb=jd_ut1-uta;
 	double tta=std::floor(out.jd_tdb);
 	double ttb=out.jd_tdb-tta;
 	double gast=lunar::precnut::gst06a(uta,utb,tta,ttb);
@@ -214,7 +215,7 @@ EoTData AppLon::eot_calc(double jd_utc,double lon_deg){
 	double h_app=gast+out.lon_rad-ra_app;
 	out.apparent_solar_time_rad=norm2pi(h_app+PI);
 
-	double lmst=day_frac_utc(jd_utc)*TWO_PI+out.lon_rad;
+	double lmst=day_frac_utc(jd_ut1)*TWO_PI+out.lon_rad;
 	out.mean_solar_time_rad=norm2pi(lmst);
 
 	out.eot_rad=norm_pm_pi(out.apparent_solar_time_rad-out.mean_solar_time_rad);

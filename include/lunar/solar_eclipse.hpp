@@ -42,7 +42,15 @@ struct SolarEclipse{
 	double jd_tdb_max=std::numeric_limits<double>::quiet_NaN();
 	double jd_tdb_c3=std::numeric_limits<double>::quiet_NaN();
 	double jd_tdb_c4=std::numeric_limits<double>::quiet_NaN();
+	// Geocentric apparent-disc overlap depth.  Retained for compatibility;
+	// this is not the catalog magnitude measured at greatest eclipse on Earth.
 	double mag=std::numeric_limits<double>::quiet_NaN();
+	// Standard global eclipse magnitude at the terrestrial point of greatest
+	// eclipse: obscured solar-diameter fraction for partial eclipses, Moon/Sun
+	// diameter ratio for annular, total, and hybrid eclipses.
+	double catalog_mag=std::numeric_limits<double>::quiet_NaN();
+	// Obscured solar-disc area fraction at the catalog magnitude location.
+	double catalog_obscuration=std::numeric_limits<double>::quiet_NaN();
 	double obscuration=std::numeric_limits<double>::quiet_NaN();
 	double gamma=std::numeric_limits<double>::quiet_NaN();
 	double sep_max_deg=std::numeric_limits<double>::quiet_NaN();
@@ -50,14 +58,20 @@ struct SolarEclipse{
 	double moon_sd_max_deg=std::numeric_limits<double>::quiet_NaN();
 	double moon_dist_km=std::numeric_limits<double>::quiet_NaN();
 	double sun_dist_km=std::numeric_limits<double>::quiet_NaN();
+	// Delta T = TT-UT1 at maximum, in seconds.
 	double dt_max_sec=std::numeric_limits<double>::quiet_NaN();
 	double rp_re=std::numeric_limits<double>::quiet_NaN();
 	double ru_re=std::numeric_limits<double>::quiet_NaN();
 	SolarBesselianElements besselian;
 };
 
+// Solve greatest eclipse from a conjunction seed.  jd_tdb_max is defined by
+// the minimum shadow-axis distance to the geocentre, independently of the
+// cone/terrestrial-limb contact functions.
 bool calc_solar_eclipse(EphRead&eph,double jd_tdb_near_new_moon,SolarEclipse*out);
 
+// Rebuild details around an already selected greatest-eclipse instant without
+// re-optimizing or changing that instant.
 bool calc_solar_eclipse_from_max(EphRead&eph,double jd_tdb_max,SolarEclipse*out);
 
 // Recompute only the catalog magnitude and obscuration at an already known

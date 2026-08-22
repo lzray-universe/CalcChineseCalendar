@@ -22,17 +22,12 @@ constexpr double kReEqKm=6378.137;
 constexpr double kRePolKm=6356.7523142;
 constexpr double kRsKm=695700.0;
 constexpr double kRmKm=1737.4;
-// Eclipse-catalog radii follow the convention used by the Five Millennium
-// Canon.  Exterior/partial circumstances use the mean penumbral lunar limb;
-// central (umbral/antumbral) circumstances use the mean minimum lunar limb.
-// The ordinary apparent-body calculations above retain the IAU nominal
-// physical radii.
-constexpr double kEclipseRsKm=696000.0;
-constexpr double kEclipseRmPenumbralKm=0.2724880*kReEqKm;
-constexpr double kEclipseRmUmbralKm=0.2722810*kReEqKm;
-constexpr double kEclipseRsA=kEclipseRsKm/AU_KM;
-constexpr double kEclipseRmPenumbralA=kEclipseRmPenumbralKm/AU_KM;
-constexpr double kEclipseRmUmbralA=kEclipseRmUmbralKm/AU_KM;
+constexpr double kCatalogRsKm=696000.0;
+constexpr double kCatalogRmPenumbralKm=0.2724880*kReEqKm;
+constexpr double kCatalogRmUmbralKm=0.2722810*kReEqKm;
+constexpr double kCatalogRsA=kCatalogRsKm/AU_KM;
+constexpr double kCatalogRmPenumbralA=kCatalogRmPenumbralKm/AU_KM;
+constexpr double kCatalogRmUmbralA=kCatalogRmUmbralKm/AU_KM;
 constexpr double kDegPerRad=180.0/PI;
 constexpr double kRadPerDeg=PI/180.0;
 constexpr double kEarthRotationRateRadPerDay=1.00273781191135448*TWO_PI;
@@ -391,10 +386,10 @@ bool eval_geo(EphRead&eph,double jd_tdb,GeoEval&g){
 	double x=Vec3::dot(r,axis);
 	Vec3 dvec=r-x*axis;
 	double d=dvec.norm();
-	double rp=kEclipseRmPenumbralA+
-		x*(kEclipseRsA+kEclipseRmPenumbralA)/D;
-	double ru=kEclipseRmUmbralA-
-		x*(kEclipseRsA-kEclipseRmUmbralA)/D;
+	double rp=kCatalogRmPenumbralA+
+		x*(kCatalogRsA+kCatalogRmPenumbralA)/D;
+	double ru=kCatalogRmUmbralA-
+		x*(kCatalogRsA-kCatalogRmUmbralA)/D;
 
 	double outer=sep-(sd_sun+sd_moon);
 	double inner=sep-std::fabs(sd_moon-sd_sun);
@@ -459,9 +454,8 @@ bool eval_besselian(EphRead&eph,double jd_tdb,SolarBesselianElements&out){
 	if(!(an>0.0)||!finite_vec(axis_eq)||!finite_vec(moon_eq)){
 		return false;
 	}
-	// The standard Besselian +z axis points toward the Sun.  The internal
-	// shadow ray points away from the Sun, so using it directly mirrored x and
-	// d and displaced mu by 180 degrees.
+	// Standard Besselian +z points toward the Sun; the internal shadow ray
+	// points away from it.
 	Vec3 z_axis=(-1.0/an)*axis_eq;
 	Vec3 x_axis;
 	Vec3 y_axis;
@@ -474,9 +468,9 @@ bool eval_besselian(EphRead&eph,double jd_tdb,SolarBesselianElements&out){
 	double dec=std::asin(clamp_unit(z_axis.z));
 
 	double jd_td=TimeScale::tdb_to_tt(jd_tdb);
-	// Besselian mu is the ephemeris hour angle tabulated as a function of
-	// dynamical time.  Using UT1 here subtracts Earth rotation during Delta T
-	// a second time (about 0.122 deg in 1950).
+	// mu is the ephemeris hour angle and is tabulated on the dynamical-time
+	// argument. UT1 is used later for terrestrial rotation/visibility, not for
+	// this Besselian polynomial element.
 	double uta=std::floor(jd_td);
 	double utb=jd_td-uta;
 	double tta=std::floor(jd_td);
@@ -491,11 +485,9 @@ bool eval_besselian(EphRead&eph,double jd_tdb,SolarBesselianElements&out){
 	out.d_deg=dec*kDegPerRad;
 	out.mu_deg=norm_deg360(norm2pi(gast-ra)*kDegPerRad);
 	out.l1=g.rp/kReA;
-	// In the standard convention l2 is positive for antumbra (annular) and
-	// negative for umbra (total), opposite to the internal signed cone radius.
 	out.l2=-g.ru/kReA;
-	out.tan_f1=(kEclipseRsA+kEclipseRmPenumbralA)/g.D;
-	out.tan_f2=(kEclipseRsA-kEclipseRmUmbralA)/g.D;
+	out.tan_f1=(kCatalogRsA+kCatalogRmPenumbralA)/g.D;
+	out.tan_f2=(kCatalogRsA-kCatalogRmUmbralA)/g.D;
 	return std::isfinite(out.x)&&std::isfinite(out.y)&&
 		   std::isfinite(out.d_deg)&&std::isfinite(out.mu_deg)&&
 		   std::isfinite(out.l1)&&std::isfinite(out.l2)&&
@@ -601,8 +593,11 @@ bool eval_global_metrics(EphRead&eph,double jd_tdb,double&f_any,double&f_cen,
 	return true;
 }
 
-bool find_global_metric_minimum(EphRead&eph,double jd_near,bool central,
-								double*jd_min,double*f_min,GeoEval*out){
+// Locate an interior anchor for contact solving.  This metric measures the
+// penetration of a shadow cone into the projected terrestrial limb; it is not
+// the definition of greatest eclipse and must never be used as jd_tdb_max.
+bool find_contact_metric_minimum(EphRead&eph,double jd_near,bool central,
+                                 double*jd_min,double*f_min,GeoEval*out){
 	if(jd_min==nullptr||f_min==nullptr||out==nullptr||!std::isfinite(jd_near)){
 		return false;
 	}
@@ -683,71 +678,97 @@ bool find_global_metric_minimum(EphRead&eph,double jd_near,bool central,
 	return true;
 }
 
+bool eval_axis_distance2_re(EphRead&eph,double jd_tdb,double&distance2_re){
+	GeoEval g;
+	if(!eval_geo(eph,jd_tdb,g)||!(g.x>0.0)){
+		return false;
+	}
+	double gamma_abs=g.d/kReA;
+	distance2_re=gamma_abs*gamma_abs;
+	return std::isfinite(distance2_re);
+}
+
+bool eval_axis_distance_rate(EphRead&eph,double jd_tdb,double&rate){
+	// A symmetric difference is sufficient here because the root is refined in
+	// time, while the objective itself comes directly from the ephemeris rather
+	// than from the fitted contact/limb metric.
+	constexpr double h=10.0/SEC_DAY;
+	double before=0.0;
+	double after=0.0;
+	if(!eval_axis_distance2_re(eph,jd_tdb-h,before)||
+	   !eval_axis_distance2_re(eph,jd_tdb+h,after)){
+		return false;
+	}
+	rate=(after-before)/(2.0*h);
+	return std::isfinite(rate);
+}
+
 bool find_axis_minimum(EphRead&eph,double jd_near,double*jd_min,GeoEval*out){
 	if(jd_min==nullptr||out==nullptr||!std::isfinite(jd_near)){
 		return false;
 	}
 
-	constexpr double span=2.0;
-	constexpr double step=1.0/24.0;
-	double best_t=std::numeric_limits<double>::quiet_NaN();
-	double best_d2=std::numeric_limits<double>::infinity();
-
-	for(double t=jd_near-span;t<=jd_near+span+1e-12;t+=step){
-		GeoEval g;
-		if(!eval_geo(eph,t,g)||!(g.x>0.0)){
-			continue;
+	// Greatest eclipse is the stationary minimum of the squared distance from
+	// the lunar-shadow axis to the geocentre.  Bracket the derivative directly
+	// around conjunction, avoiding any dependency on an hourly sampling grid.
+	constexpr double initial_span=15.0/1440.0;
+	constexpr double max_span=2.0;
+	double span=initial_span;
+	double left=0.0;
+	double right=0.0;
+	double f_left=0.0;
+	double f_right=0.0;
+	bool bracketed=false;
+	for(;;){
+		left=jd_near-span;
+		right=jd_near+span;
+		if(eval_axis_distance_rate(eph,left,f_left)&&
+		   eval_axis_distance_rate(eph,right,f_right)&&
+		   f_left<=0.0&&f_right>=0.0){
+			bracketed=true;
+			break;
 		}
-		double d2=g.d*g.d;
-		if(d2<best_d2){
-			best_d2=d2;
-			best_t=t;
+		if(span>=max_span){
+			break;
 		}
+		span=std::min(max_span,2.0*span);
 	}
-	if(!std::isfinite(best_t)||!std::isfinite(best_d2)){
+	if(!bracketed){
 		return false;
 	}
 
-	double left=std::max(jd_near-span,best_t-step);
-	double right=std::min(jd_near+span,best_t+step);
-	if(!(right>left)){
-		left=best_t-2.0*step;
-		right=best_t+2.0*step;
-	}
-
-	auto fn=[&](double jd) -> double{
-		GeoEval g;
-		if(!eval_geo(eph,jd,g)||!(g.x>0.0)){
-			return std::numeric_limits<double>::infinity();
+	for(int i=0;i<80&&right-left>1e-11;++i){
+		double mid=0.5*(left+right);
+		double f_mid=0.0;
+		if(!eval_axis_distance_rate(eph,mid,f_mid)){
+			return false;
 		}
-		return g.d*g.d;
-	};
-
-	const double gr=(std::sqrt(5.0)-1.0)*0.5;
-	double c=right-gr*(right-left);
-	double d=left+gr*(right-left);
-	double fc=fn(c);
-	double fd=fn(d);
-
-	for(int i=0;i<80&&right-left>1e-10;++i){
-		if(fc<=fd){
-			right=d;
-			d=c;
-			fd=fc;
-			c=right-gr*(right-left);
-			fc=fn(c);
+		if(f_mid<0.0){
+			left=mid;
+			f_left=f_mid;
 		}else{
-			left=c;
-			c=d;
-			fc=fd;
-			d=left+gr*(right-left);
-			fd=fn(d);
+			right=mid;
+			f_right=f_mid;
 		}
 	}
-
+	(void)f_left;
+	(void)f_right;
 	double t_min=0.5*(left+right);
 	GeoEval g_min;
-	if(!eval_geo(eph,t_min,g_min)){
+	if(!eval_geo(eph,t_min,g_min)||!(g_min.x>0.0)){
+		return false;
+	}
+
+	// Reject a numerical stationary point that is not the local minimum.  This
+	// also protects callers that provide a seed outside the intended lunation.
+	constexpr double check_step=30.0/SEC_DAY;
+	double center_d2=0.0;
+	double before_d2=0.0;
+	double after_d2=0.0;
+	if(!eval_axis_distance2_re(eph,t_min,center_d2)||
+	   !eval_axis_distance2_re(eph,t_min-check_step,before_d2)||
+	   !eval_axis_distance2_re(eph,t_min+check_step,after_d2)||
+	   center_d2>before_d2||center_d2>after_d2){
 		return false;
 	}
 
@@ -1001,7 +1022,7 @@ Vec3 apply_diurnal_aberration(const Vec3&dir,const Vec3&obs_beta){
 	return dir_ab/norm;
 }
 
-bool eval_body_ecef(EphRead&eph,double jd_tdb,double jd_utc,BodyEcefState&out){
+bool eval_body_ecef(EphRead&eph,double jd_tdb,BodyEcefState&out){
 	Vec3 sun_geo=raw_vec(AberCorr::geo_app(eph,eph.SUN,jd_tdb,3));
 	Vec3 moon_geo=raw_vec(AberCorr::geo_app(eph,eph.MOON,jd_tdb,3));
 	if(!finite_vec(sun_geo)||!finite_vec(moon_geo)){
@@ -1012,8 +1033,9 @@ bool eval_body_ecef(EphRead&eph,double jd_tdb,double jd_utc,BodyEcefState&out){
 	Vec3 sun_eq=eq*sun_geo;
 	Vec3 moon_eq=eq*moon_geo;
 
-	double uta=std::floor(jd_utc);
-	double utb=jd_utc-uta;
+	double jd_ut1=TimeScale::tdb_to_ut1(jd_tdb);
+	double uta=std::floor(jd_ut1);
+	double utb=jd_ut1-uta;
 	double tta=std::floor(jd_tdb);
 	double ttb=jd_tdb-tta;
 	double gast=lunar::precnut::gst06a(uta,utb,tta,ttb);
@@ -1023,9 +1045,9 @@ bool eval_body_ecef(EphRead&eph,double jd_tdb,double jd_utc,BodyEcefState&out){
 	return finite_vec(out.sun_ecef)&&finite_vec(out.moon_ecef);
 }
 
-bool eval_topo_from_body_with_radii(const BodyEcefState&body,
-									const PointObserver&obs,double sun_radius_km,
-									double moon_radius_km,TopoEval&out){
+bool eval_topo_from_body(const BodyEcefState&body,const PointObserver&obs,
+						 TopoEval&out,double sun_radius_km=kRsKm,
+						 double moon_radius_km=kRmKm){
 	Vec3 sun_topo=body.sun_ecef-obs.ecef;
 	Vec3 moon_topo=body.moon_ecef-obs.ecef;
 	double sun_n=sun_topo.norm();
@@ -1082,15 +1104,169 @@ bool eval_topo_from_body_with_radii(const BodyEcefState&body,
 		   std::isfinite(out.obscuration)&&std::isfinite(out.sun_alt_deg);
 }
 
-bool eval_topo_from_body(const BodyEcefState&body,const PointObserver&obs,
-						 TopoEval&out){
-	return eval_topo_from_body_with_radii(body,obs,kRsKm,kRmKm,out);
+double line_distance2(const Vec3&point,const Vec3&origin,const Vec3&direction){
+	Vec3 v=point-origin;
+	Vec3 transverse=v-Vec3::dot(v,direction)*direction;
+	return Vec3::dot(transverse,transverse);
+}
+
+Vec3 ellipsoid_point(double latitude_param,double longitude){
+	double c=std::cos(latitude_param);
+	return Vec3(kReEqA*c*std::cos(longitude),
+				kReEqA*c*std::sin(longitude),
+				kRePolA*std::sin(latitude_param));
+}
+
+Vec3 ellipsoid_up(const Vec3&point){
+	Vec3 normal(point.x/(kReEqA*kReEqA),
+				point.y/(kReEqA*kReEqA),
+				point.z/(kRePolA*kRePolA));
+	double n=normal.norm();
+	if(!(n>0.0)){
+		return Vec3(0.0,0.0,1.0);
+	}
+	return normal/n;
+}
+
+bool shadow_axis_surface_point(const BodyEcefState&body,Vec3&point,
+							   bool*axis_intersects=nullptr){
+	if(axis_intersects!=nullptr){
+		*axis_intersects=false;
+	}
+	Vec3 direction=body.moon_ecef-body.sun_ecef;
+	double dn=direction.norm();
+	if(!(dn>0.0)){
+		return false;
+	}
+	direction=direction/dn;
+	const Vec3&origin=body.moon_ecef;
+
+	double a2=kReEqA*kReEqA;
+	double b2=kRePolA*kRePolA;
+	double qa=(direction.x*direction.x+direction.y*direction.y)/a2+
+			  direction.z*direction.z/b2;
+	double qb=2.0*((origin.x*direction.x+origin.y*direction.y)/a2+
+					 origin.z*direction.z/b2);
+	double qc=(origin.x*origin.x+origin.y*origin.y)/a2+
+			  origin.z*origin.z/b2-1.0;
+	double discriminant=qb*qb-4.0*qa*qc;
+	if(qa>0.0&&discriminant>=0.0){
+		double root=std::sqrt(std::max(0.0,discriminant));
+		double t1=(-qb-root)/(2.0*qa);
+		double t2=(-qb+root)/(2.0*qa);
+		double t=std::numeric_limits<double>::infinity();
+		if(t1>=0.0){
+			t=t1;
+		}
+		if(t2>=0.0&&t2<t){
+			t=t2;
+		}
+		if(std::isfinite(t)){
+			point=origin+t*direction;
+			if(axis_intersects!=nullptr){
+				*axis_intersects=true;
+			}
+			return finite_vec(point);
+		}
+	}
+
+	// For partial and non-central eclipses the axis misses Earth.  Start from
+	// the spherical nearest-point direction, then minimize the exact distance
+	// to the line on the reference ellipsoid.  The objective is smooth and
+	// locally convex around this physically selected point.
+	Vec3 nearest_line=origin-Vec3::dot(origin,direction)*direction;
+	if(!(nearest_line.norm()>0.0)){
+		return false;
+	}
+	double longitude=std::atan2(nearest_line.y,nearest_line.x);
+	double latitude=std::atan2(nearest_line.z/kRePolA,
+							 std::hypot(nearest_line.x,nearest_line.y)/kReEqA);
+	double best=line_distance2(ellipsoid_point(latitude,longitude),origin,direction);
+	double step=5.0*kRadPerDeg;
+	for(int iter=0;iter<80&&step>1e-12;++iter){
+		bool improved=false;
+		double best_lat=latitude;
+		double best_lon=longitude;
+		for(int ilat=-1;ilat<=1;++ilat){
+			for(int ilon=-1;ilon<=1;++ilon){
+				if(ilat==0&&ilon==0){
+					continue;
+				}
+				double cand_lat=std::clamp(latitude+ilat*step,-0.5*PI,0.5*PI);
+				double cand_lon=longitude+ilon*step;
+				double value=line_distance2(ellipsoid_point(cand_lat,cand_lon),
+										 origin,direction);
+				if(value<best){
+					best=value;
+					best_lat=cand_lat;
+					best_lon=cand_lon;
+					improved=true;
+				}
+			}
+		}
+		if(improved){
+			latitude=best_lat;
+			longitude=best_lon;
+		}else{
+			step*=0.5;
+		}
+	}
+	point=ellipsoid_point(latitude,longitude);
+	return finite_vec(point)&&std::isfinite(best);
+}
+
+bool eval_catalog_magnitude(EphRead&eph,double jd_tdb,const std::string&type,
+							double&magnitude,double&obscuration){
+	BodyEcefState body;
+	if(!eval_body_ecef(eph,jd_tdb,body)){
+		return false;
+	}
+	PointObserver observer;
+	bool axis_intersects=false;
+	if(!shadow_axis_surface_point(body,observer.ecef,&axis_intersects)){
+		return false;
+	}
+	observer.up_ecef=ellipsoid_up(observer.ecef);
+	observer.beta_ecef=observer_beta_ecef(observer.ecef);
+	TopoEval topo;
+	double moon_radius=(type=="P")?kCatalogRmPenumbralKm:
+		kCatalogRmUmbralKm;
+	if(!eval_topo_from_body(body,observer,topo,kCatalogRsKm,moon_radius)||
+	   !(topo.sd_sun>0.0)){
+		return false;
+	}
+	if(type=="P"||!axis_intersects){
+		double f_any=std::numeric_limits<double>::quiet_NaN();
+		double f_central=std::numeric_limits<double>::quiet_NaN();
+		GeoEval geometry;
+		if(!eval_global_metrics(eph,jd_tdb,f_any,f_central,&geometry)||
+		   !std::isfinite(geometry.surface_dist)){
+			return false;
+		}
+		double rp=kCatalogRmPenumbralA+
+			geometry.x*(kCatalogRsA+kCatalogRmPenumbralA)/geometry.D;
+		double ru=kCatalogRmUmbralA-
+			geometry.x*(kCatalogRsA-kCatalogRmUmbralA)/geometry.D;
+		double span=rp-ru;
+		if(!(span>0.0)){
+			return false;
+		}
+		magnitude=std::max(0.0,(rp-geometry.surface_dist)/span);
+	}else{
+		magnitude=topo.sd_moon/topo.sd_sun;
+	}
+	if(type=="P"){
+		obscuration=topo.obscuration;
+	}else{
+		obscuration=(magnitude>=1.0)?1.0:magnitude*magnitude;
+	}
+	return std::isfinite(magnitude)&&magnitude>=0.0&&
+		std::isfinite(obscuration)&&obscuration>=0.0&&obscuration<=1.0;
 }
 
 bool eval_topo_at(EphRead&eph,double jd_tdb,const PointObserver&obs,TopoEval&out){
-	double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
 	BodyEcefState body;
-	if(!eval_body_ecef(eph,jd_tdb,jd_utc,body)){
+	if(!eval_body_ecef(eph,jd_tdb,body)){
 		return false;
 	}
 	return eval_topo_from_body(body,obs,out);
@@ -1280,231 +1456,6 @@ std::vector<double> build_lon_grid(double step_deg){
 	return out;
 }
 
-PointObserver surface_observer(double lat_deg,double lon_deg){
-	PointObserver obs;
-	obs.ecef=geodetic_to_ecef(lat_deg,lon_deg,0.0);
-	obs.up_ecef=up_ecef(lat_deg,lon_deg);
-	obs.beta_ecef=observer_beta_ecef(obs.ecef);
-	return obs;
-}
-
-double wrap_lon_deg(double lon_deg){
-	double lon=std::fmod(lon_deg+180.0,360.0);
-	if(lon<0.0){
-		lon+=360.0;
-	}
-	return lon-180.0;
-}
-
-// Raw diameter coverage is a smooth objective even before the solar and lunar
-// discs overlap.  This makes the surface search reliable for very small
-// partial eclipses whose visible footprint can fall between coarse grid nodes.
-double topo_magnitude_objective(const TopoEval&st){
-	if(!(st.sd_sun>0.0)){
-		return -std::numeric_limits<double>::infinity();
-	}
-	return (st.sd_sun+st.sd_moon-st.sep)/(2.0*st.sd_sun);
-}
-
-bool best_surface_magnitude(const BodyEcefState&body,double sun_radius_km,
-							double moon_radius_km,TopoEval&best){
-	double best_lat=0.0;
-	double best_lon=0.0;
-	double best_score=-std::numeric_limits<double>::infinity();
-
-	constexpr double grid_step=15.0;
-	for(double lat=-90.0;lat<=90.0+1e-12;lat+=grid_step){
-		for(double lon=-180.0;lon<180.0-1e-12;lon+=grid_step){
-			TopoEval st;
-			if(!eval_topo_from_body_with_radii(
-				   body,surface_observer(lat,lon),sun_radius_km,
-				   moon_radius_km,st)){
-				continue;
-			}
-			// At a sunrise/sunset greatest eclipse the solar centre can be
-			// below the geometric horizon while part of its disc is visible.
-			if(st.sun_alt_deg+st.sd_sun*kDegPerRad<-1e-10){
-				continue;
-			}
-			double score=topo_magnitude_objective(st);
-			if(score>best_score){
-				best_score=score;
-				best_lat=lat;
-				best_lon=lon;
-				best=st;
-			}
-		}
-	}
-	if(!std::isfinite(best_score)){
-		return false;
-	}
-
-	// Pattern search on the terrestrial ellipsoid.  Body positions are already
-	// cached, so refinement does not trigger additional ephemeris reads.
-	double step=grid_step;
-	while(step>1e-7){
-		bool improved=false;
-		for(int dlat=-1;dlat<=1;++dlat){
-			for(int dlon=-1;dlon<=1;++dlon){
-				if(dlat==0&&dlon==0){
-					continue;
-				}
-				double lat=std::clamp(best_lat+static_cast<double>(dlat)*step,
-								  -90.0,90.0);
-				double lon=wrap_lon_deg(
-					best_lon+static_cast<double>(dlon)*step);
-				TopoEval st;
-				if(!eval_topo_from_body_with_radii(
-					   body,surface_observer(lat,lon),sun_radius_km,
-					   moon_radius_km,st)){
-					continue;
-				}
-				if(st.sun_alt_deg+st.sd_sun*kDegPerRad<-1e-10){
-					continue;
-				}
-				double score=topo_magnitude_objective(st);
-				if(score>best_score+1e-15){
-					best_score=score;
-					best_lat=lat;
-					best_lon=lon;
-					best=st;
-					improved=true;
-				}
-			}
-		}
-		if(!improved){
-			step*=0.5;
-		}
-	}
-	return true;
-}
-
-bool shadow_axis_surface_observer(const BodyEcefState&body,PointObserver&best){
-	Vec3 direction=body.moon_ecef-body.sun_ecef;
-	double direction_norm=direction.norm();
-	if(!(direction_norm>0.0)){
-		return false;
-	}
-	direction=direction/direction_norm;
-
-	const Vec3&origin=body.moon_ecef;
-	const double a2=kReEqA*kReEqA;
-	const double b2=kRePolA*kRePolA;
-	double qa=(direction.x*direction.x+direction.y*direction.y)/a2+
-			  direction.z*direction.z/b2;
-	double qb=2.0*((origin.x*direction.x+origin.y*direction.y)/a2+
-					 origin.z*direction.z/b2);
-	double qc=(origin.x*origin.x+origin.y*origin.y)/a2+
-			  origin.z*origin.z/b2-1.0;
-	double disc=qb*qb-4.0*qa*qc;
-	if(!(qa>0.0)||disc<0.0){
-		return false;
-	}
-	double root=std::sqrt(std::max(0.0,disc));
-	std::array<double,2> roots{
-		(-qb-root)/(2.0*qa),
-		(-qb+root)/(2.0*qa)
-	};
-
-	double best_alt=-std::numeric_limits<double>::infinity();
-	bool found=false;
-	for(double distance : roots){
-		if(!(distance>0.0)||!std::isfinite(distance)){
-			continue;
-		}
-		Vec3 ecef=origin+distance*direction;
-		Vec3 normal(ecef.x/a2,ecef.y/a2,ecef.z/b2);
-		double nn=normal.norm();
-		if(!(nn>0.0)){
-			continue;
-		}
-		PointObserver obs;
-		obs.ecef=ecef;
-		obs.up_ecef=normal/nn;
-		obs.beta_ecef=observer_beta_ecef(ecef);
-		TopoEval st;
-		if(!eval_topo_from_body(body,obs,st)){
-			continue;
-		}
-		if(st.sun_alt_deg>best_alt){
-			best_alt=st.sun_alt_deg;
-			best=obs;
-			found=true;
-		}
-	}
-	return found;
-}
-
-bool global_eclipse_magnitude(EphRead&eph,double jd_tdb,bool central,
-							  double&mag,double&obscuration){
-	double f_any=std::numeric_limits<double>::quiet_NaN();
-	double f_central=std::numeric_limits<double>::quiet_NaN();
-	GeoEval geometry;
-	if(!eval_global_metrics(eph,jd_tdb,f_any,f_central,&geometry)){
-		return false;
-	}
-	double catalog_rp=kEclipseRmPenumbralA+
-		geometry.x*(kEclipseRsA+kEclipseRmPenumbralA)/geometry.D;
-	double catalog_ru=kEclipseRmUmbralA-
-		geometry.x*(kEclipseRsA-kEclipseRmUmbralA)/geometry.D;
-	double shadow_span=catalog_rp-catalog_ru;
-	if(!(shadow_span>0.0)||!std::isfinite(geometry.surface_dist)){
-		return false;
-	}
-	double catalog_mag=std::max(
-		0.0,(catalog_rp-geometry.surface_dist)/shadow_span);
-
-	BodyEcefState body;
-	double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
-	if(!eval_body_ecef(eph,jd_tdb,jd_utc,body)){
-		return false;
-	}
-
-	TopoEval st;
-	if(central){
-		PointObserver obs;
-		if(shadow_axis_surface_observer(body,obs)){
-			if(!eval_topo_from_body_with_radii(body,obs,kEclipseRsKm,
-										  kEclipseRmUmbralKm,st)){
-				return false;
-			}
-			if(!(st.sd_sun>0.0)){
-				return false;
-			}
-			// The catalog magnitude of a central eclipse is the apparent lunar
-			// diameter divided by the apparent solar diameter on the shadow axis.
-			mag=st.sd_moon/st.sd_sun;
-		}else{
-			// For a non-central annular/total eclipse the shadow axis misses
-			// the terrestrial ellipsoid.  Eclipse canons conventionally give
-			// the geocentric k2 diameter ratio at greatest eclipse.  A local
-			// overlap search instead produces a different (and much smaller)
-			// number for grazing events such as 1950-03-18.
-			mag=catalog_mag;
-		}
-		obscuration=(mag>=1.0)?1.0:mag*mag;
-	}else{
-		if(!best_surface_magnitude(body,kEclipseRsKm,
-									 kEclipseRmPenumbralKm,st)){
-			return false;
-		}
-		mag=catalog_mag;
-		obscuration=st.obscuration;
-	}
-	return std::isfinite(mag)&&std::isfinite(obscuration)&&mag>=0.0&&
-		   obscuration>=0.0&&obscuration<=1.0;
-}
-
-std::string catalog_central_type(const GeoEval&g){
-	double ru=kEclipseRmUmbralA-
-		g.x*(kEclipseRsA-kEclipseRmUmbralA)/g.D;
-	if(ru>=0.0){
-		return "T";
-	}
-	double ru_sub=ru+kReEqA*(kEclipseRsA-kEclipseRmUmbralA)/g.D;
-	return (ru_sub>=0.0)?"H":"A";
-}
-
 }
 
 namespace{
@@ -1523,7 +1474,7 @@ bool calc_solar_eclipse_impl(EphRead&eph,double jd_tdb_near_new_moon,
 	double jd_any_min=0.0;
 	double f_any_min=std::numeric_limits<double>::quiet_NaN();
 	GeoEval g_any;
-	if(!find_global_metric_minimum(eph,jd_tdb_near_new_moon,false,&jd_any_min,
+	if(!find_contact_metric_minimum(eph,jd_tdb_near_new_moon,false,&jd_any_min,
 								   &f_any_min,&g_any)){
 		return false;
 	}
@@ -1544,6 +1495,8 @@ bool calc_solar_eclipse_impl(EphRead&eph,double jd_tdb_near_new_moon,
 	SolarEclipse ans;
 	ans.has=true;
 	ans.jd_tdb_max=jd_max;
+	ans.mag=g_max.mag;
+	ans.obscuration=g_max.obscuration;
 	ans.gamma=g_max.gamma;
 	ans.sep_max_deg=g_max.sep*kDegPerRad;
 	ans.sun_sd_max_deg=g_max.sd_sun*kDegPerRad;
@@ -1552,34 +1505,57 @@ bool calc_solar_eclipse_impl(EphRead&eph,double jd_tdb_near_new_moon,
 	ans.moon_dist_km=g_max.moon_dist_km;
 	ans.rp_re=g_max.rp/kReA;
 	ans.ru_re=g_max.ru/kReA;
-	ans.dt_max_sec=(ans.jd_tdb_max-TimeScale::tdb_to_utc(ans.jd_tdb_max))*SEC_DAY;
+	ans.dt_max_sec=TimeScale::delta_t_seconds(TimeScale::tdb_to_tt(ans.jd_tdb_max));
 	if(!fill_solar_besselian(eph,ans.jd_tdb_max,ans.besselian)){
 		return false;
 	}
 
-	double jd_cen_min=std::numeric_limits<double>::quiet_NaN();
-	double f_cen_min=std::numeric_limits<double>::infinity();
-	GeoEval g_cen;
-	bool has_cen_min=
-		find_global_metric_minimum(eph,jd_tdb_near_new_moon,true,&jd_cen_min,
-								   &f_cen_min,&g_cen);
-	bool central=has_cen_min&&(f_cen_min<=0.0);
-	std::string central_geometry_type;
-	if(central){
-		const GeoEval&g_ref=std::isfinite(jd_cen_min)?g_cen:g_max;
-		central_geometry_type=catalog_central_type(g_ref);
+	double jd_inner_min=std::numeric_limits<double>::quiet_NaN();
+	double f_inner_min=std::numeric_limits<double>::infinity();
+	GeoEval g_inner;
+	bool has_inner_min=
+		find_contact_metric_minimum(eph,jd_tdb_near_new_moon,true,&jd_inner_min,
+								   &f_inner_min,&g_inner);
+	bool has_internal_contacts=has_inner_min&&(f_inner_min<=0.0);
+	if(has_internal_contacts){
+		const GeoEval&g_ref=std::isfinite(jd_inner_min)?g_inner:g_max;
+		double f_any_at_max=std::numeric_limits<double>::quiet_NaN();
+		double f_inner_at_max=std::numeric_limits<double>::quiet_NaN();
+		if(!eval_global_metrics(eph,ans.jd_tdb_max,f_any_at_max,
+								f_inner_at_max,nullptr)){
+			return false;
+		}
+		(void)f_inner_at_max;
+		// f_any = signed axis-to-limb distance - penumbral radius.  Removing
+		// the cone radius tells whether the axis itself intersects the Earth.
+		// A non-central eclipse cannot be hybrid: its grazing central phase is
+		// total or annular according to the cone at the fundamental plane.
+		bool axis_intersects_earth=(f_any_at_max+g_max.rp)<=0.0;
+		if(g_ref.ru>=0.0){
+			ans.type="T";
+		}else if(axis_intersects_earth){
+			double ru_sub=
+				g_ref.ru+kReEqA*(kRsA-kRmA)/g_ref.D;
+			if(ru_sub>=0.0){
+				ans.type="H";
+			}else{
+				ans.type="A";
+			}
+		}else{
+			ans.type="A";
+		}
 	}else{
 		ans.type="P";
 	}
-	if(!global_eclipse_magnitude(eph,ans.jd_tdb_max,central,
-								 ans.mag,ans.obscuration)){
+	if(!eval_catalog_magnitude(eph,ans.jd_tdb_max,ans.type,ans.catalog_mag,
+							   ans.catalog_obscuration)){
 		return false;
 	}
-	if(central){
-		if(ans.mag<1.0){
+	if(has_internal_contacts){
+		if(ans.catalog_mag<1.0){
 			ans.type="A";
-		}else{
-			ans.type=(central_geometry_type=="H")?"H":"T";
+		}else if(ans.type!="H"){
+			ans.type="T";
 		}
 	}
 
@@ -1596,7 +1572,7 @@ bool calc_solar_eclipse_impl(EphRead&eph,double jd_tdb_near_new_moon,
 		return false;
 	}
 
-	if(central){
+	if(has_internal_contacts){
 		auto inner_fn=[&](double jd) -> double{
 			double f_any=std::numeric_limits<double>::quiet_NaN();
 			double f_cen=std::numeric_limits<double>::quiet_NaN();
@@ -1607,8 +1583,8 @@ bool calc_solar_eclipse_impl(EphRead&eph,double jd_tdb_near_new_moon,
 		};
 		double c2=std::numeric_limits<double>::quiet_NaN();
 		double c3=std::numeric_limits<double>::quiet_NaN();
-		double root_center=std::isfinite(jd_cen_min)?jd_cen_min:jd_max;
-		double root_value=std::isfinite(f_cen_min)?f_cen_min:0.0;
+		double root_center=std::isfinite(jd_inner_min)?jd_inner_min:jd_max;
+		double root_value=std::isfinite(f_inner_min)?f_inner_min:0.0;
 		if(solve_contact_pair(inner_fn,root_center,root_value,c2,c3)){
 			ans.jd_tdb_c2=c2;
 			ans.jd_tdb_c3=c3;
@@ -1620,7 +1596,8 @@ bool calc_solar_eclipse_impl(EphRead&eph,double jd_tdb_near_new_moon,
 	if(!(ans.jd_tdb_c1<ans.jd_tdb_max&&ans.jd_tdb_max<ans.jd_tdb_c4)){
 		return false;
 	}
-	if(central&&std::isfinite(ans.jd_tdb_c2)&&std::isfinite(ans.jd_tdb_c3)){
+	if(has_internal_contacts&&std::isfinite(ans.jd_tdb_c2)&&
+	   std::isfinite(ans.jd_tdb_c3)){
 		if(!(ans.jd_tdb_c1<ans.jd_tdb_c2&&ans.jd_tdb_c2<ans.jd_tdb_max&&
 			 ans.jd_tdb_max<ans.jd_tdb_c3&&ans.jd_tdb_c3<ans.jd_tdb_c4)){
 			return false;
@@ -1656,23 +1633,16 @@ bool calc_solar_eclipse_magnitude_from_max(EphRead&eph,double jd_tdb_max,
 	if(type!="P"&&type!="A"&&type!="T"&&type!="H"){
 		throw std::invalid_argument("solar eclipse type must be P, A, T, or H");
 	}
-	if(corrected_type!=nullptr){
-		if(type=="P"){
-			*corrected_type="P";
-		}
-	}
-	if(!global_eclipse_magnitude(
-		   eph,jd_tdb_max,type!="P",*mag,*obscuration)){
+	SolarEclipse eclipse;
+	if(!calc_solar_eclipse_from_max(eph,jd_tdb_max,&eclipse)||!eclipse.has){
 		return false;
 	}
-	if(corrected_type!=nullptr&&type!="P"){
-		if(*mag<1.0){
-			*corrected_type="A";
-		}else{
-			*corrected_type=(type=="H")?"H":"T";
-		}
+	*mag=eclipse.catalog_mag;
+	*obscuration=eclipse.catalog_obscuration;
+	if(corrected_type!=nullptr){
+		*corrected_type=eclipse.type;
 	}
-	return true;
+	return std::isfinite(*mag)&&std::isfinite(*obscuration);
 }
 
 std::vector<EventRec> bld_solar_eclipse_events(EphRead&eph,const YearResult&yr,
@@ -1690,11 +1660,19 @@ std::vector<EventRec> bld_solar_eclipse_events(EphRead&eph,const YearResult&yr,
 		ev.kind="solar_eclipse";
 		ev.code=ecl_code(ecl.type);
 		ev.name=ecl_name(ecl.type);
-		ev.year=yr.year;
 		ev.jd_tdb=ecl.jd_tdb_max;
 		ev.jd_utc=TimeScale::tdb_to_utc(ecl.jd_tdb_max);
 		ev.utc_iso=fmt_iso(ev.jd_utc,0,true);
 		ev.loc_iso=fmt_iso(ev.jd_utc,tz_off,true);
+		int event_year=0;
+		int month=0;
+		int day=0;
+		int hour=0;
+		int minute=0;
+		double second=0.0;
+		jd2greg(ev.jd_utc+static_cast<double>(tz_off)/1440.0,event_year,month,day,
+				 hour,minute,second);
+		ev.year=event_year;
 		out.push_back(std::move(ev));
 	}
 	std::sort(out.begin(),out.end(),[](const EventRec&a,const EventRec&b){
@@ -1906,7 +1884,7 @@ bool solar_eclipse_global_visibility(EphRead&eph,const SolarEclipse&ecl,
 	for(double jd_utc : times){
 		double jd_tdb=TimeScale::utc_to_tdb(jd_utc);
 		BodyEcefState body;
-		if(!eval_body_ecef(eph,jd_tdb,jd_utc,body)){
+		if(!eval_body_ecef(eph,jd_tdb,body)){
 			return false;
 		}
 		body_series.push_back(body);

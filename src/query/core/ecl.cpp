@@ -234,6 +234,10 @@ void wr_sol_ecljson(JsonWriter&w,const SolarEclipse&ecl,int year,int tz_off){
 	w.value(ecl.type);
 	w.key("mag");
 	wr_num_or_null(w,ecl.mag);
+	w.key("catalog_mag");
+	wr_num_or_null(w,ecl.catalog_mag);
+	w.key("catalog_obscuration");
+	wr_num_or_null(w,ecl.catalog_obscuration);
 	w.key("obscuration");
 	wr_num_or_null(w,ecl.obscuration);
 	w.key("gamma");
