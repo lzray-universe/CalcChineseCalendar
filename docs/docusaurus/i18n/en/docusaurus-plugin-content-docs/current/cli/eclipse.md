@@ -65,18 +65,27 @@ penumbral lunar radius `k1=0.2724880`; total, annular, and hybrid eclipses use
 the mean-minimum lunar radius `k2=0.2722810`, matching the Five Millennium
 Canon convention. `obscuration` is the fraction of the solar-disc area covered.
 
-## Batch magnitude refresh
+## Batch solar-eclipse refresh
 
-When the greatest-eclipse `JD TDB` and type are already known, contact searches
-and Besselian polynomial reconstruction can be skipped:
+When a greatest-eclipse `JD TDB` and the previous type are already known, an
+existing catalog can be refreshed in a persistent ephemeris process:
 
 ```bash
 lunar eclipse-magnitude ./de441.bsp --input maxima.tsv --out magnitudes.tsv
 ```
 
 Input columns are `id jd_tdb_max type`, where `type` is `P`, `A`, `T`, or `H`.
-The output adds `mag` and `obscuration`. This mode refreshes an existing catalog;
-it does not redetermine the eclipse type or greatest-eclipse instant.
+The default TSV output is `id jd_tdb_max corrected_type catalog_mag
+catalog_obscuration`, including boundary-type reclassification.  With `--full
+--tz +08:00`, each line is an NDJSON object containing the complete solar
+eclipse: compatibility and catalog magnitudes, every contact, time scales,
+distances, gamma, and the complete Besselian elements/cubic polynomials.  The
+known `JD TDB` is the high-precision greatest-eclipse seed; full mode rebuilds
+and validates the remaining parameters around it.
+
+```bash
+lunar eclipse-magnitude ./de441.bsp --input maxima.tsv --out eclipses.ndjson --full --tz +08:00
+```
 
 ## Examples
 

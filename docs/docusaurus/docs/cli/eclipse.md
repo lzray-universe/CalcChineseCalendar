@@ -64,17 +64,24 @@ lunar eclipse [bsp] --visible-near <time> --point-lat <deg> --point-lon <deg>
 `k2=0.2722810` 的平均最小月球半径，与 Five Millennium Canon 的约定一致。
 `obscuration` 是太阳圆面被遮蔽的面积比例。
 
-## 批量刷新日食食分
+## 批量刷新日食数据
 
-已知最大食的 `JD TDB` 和类型时，可跳过接触点搜索与贝塞尔多项式重建：
+已知最大食的 `JD TDB` 和旧类型时，可以在一个常驻星历进程中批量刷新目录：
 
 ```bash
 lunar eclipse-magnitude ./de441.bsp --input maxima.tsv --out magnitudes.tsv
 ```
 
-输入列为 `id jd_tdb_max type`，其中 `type` 为 `P`、`A`、`T` 或 `H`；输出追加
-`mag` 和 `obscuration`。该模式只适合刷新已有目录，不负责重新判断食类型或
-最大食时刻。
+输入列为 `id jd_tdb_max type`，其中 `type` 为 `P`、`A`、`T` 或 `H`；默认 TSV
+输出为 `id jd_tdb_max corrected_type catalog_mag catalog_obscuration`，会重新判断
+边界食类型。增加 `--full --tz +08:00` 后，每行输出一个 NDJSON 对象，包含完整
+日食详情：兼容食分、标准目录食分、全部接触点、时间尺度、距离、gamma 和完整
+贝塞尔参数/三次多项式。`JD TDB` 是已知食甚的高精度种子，完整模式仍会围绕它
+重建并校验所有参数。
+
+```bash
+lunar eclipse-magnitude ./de441.bsp --input maxima.tsv --out eclipses.ndjson --full --tz +08:00
+```
 
 ## 示例
 
