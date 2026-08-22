@@ -95,12 +95,17 @@ TEST(SolarEclipseSeries, GreatestEclipseMatchesCatalogAndIsSeedInvariant){
 		double catalog_mag;
 	};
 	// Authoritative catalog values: greatest-eclipse TD, type and gamma.
-	// The 2014 event is deliberately included because it is a grazing,
-	// non-central annular eclipse (A-) and is sensitive to the old limb metric.
-	const std::array<CatalogCase,5> cases{{
+	// The one-limit events exercise both annular and total non-central geometry;
+	// 2014 also remains sensitive to the old limb-based MAX objective.
+	const std::array<CatalogCase,10> cases{{
 		{1900,5,28,14,53,56.0,"T",0.3943,1.0249},
 		{1900,11,22,7,19,43.0,"A",-0.2245,0.9421},
+		{1950,3,18,15,32,1.0,"A",-0.9988,0.9620},
+		{1957,4,30,0,5,28.0,"A",0.9992,0.9799},
+		{1957,10,23,4,54,2.0,"T",-1.0022,1.0013},
+		{1967,11,2,5,38,56.0,"T",-1.0007,1.0126},
 		{2014,4,29,6,4,33.0,"A",-1.0000,0.9868},
+		{2023,4,20,4,17,56.0,"H",-0.3952,1.0132},
 		{2025,3,29,10,48,36.0,"P",1.0405,0.93759},
 		{2029,7,11,15,37,19.0,"P",-1.4191,0.2303},
 	}};

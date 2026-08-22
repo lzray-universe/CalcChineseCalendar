@@ -45,9 +45,9 @@ struct SolarEclipse{
 	// Geocentric apparent-disc overlap depth.  Retained for compatibility;
 	// this is not the catalog magnitude measured at greatest eclipse on Earth.
 	double mag=std::numeric_limits<double>::quiet_NaN();
-	// Standard global eclipse magnitude at the terrestrial point of greatest
-	// eclipse: obscured solar-diameter fraction for partial eclipses, Moon/Sun
-	// diameter ratio for annular, total, and hybrid eclipses.
+	// Standard global magnitude at greatest eclipse: Moon/Sun apparent-diameter
+	// ratio when the shadow axis reaches the terrestrial ellipsoid, otherwise
+	// the obscured solar-diameter fraction at the closest surface point.
 	double catalog_mag=std::numeric_limits<double>::quiet_NaN();
 	double obscuration=std::numeric_limits<double>::quiet_NaN();
 	double gamma=std::numeric_limits<double>::quiet_NaN();

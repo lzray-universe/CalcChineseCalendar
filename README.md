@@ -1127,7 +1127,7 @@ Notes:
 | `pen_mag` | `lunar_eclipse` | Penumbral magnitude. |
 | `umb_mag` | `lunar_eclipse` | Umbral magnitude. |
 | `mag` | `solar_eclipse` | Compatibility geocentric apparent-disc overlap magnitude; not the standard catalog magnitude at the point of greatest eclipse. |
-| `catalog_mag` | `solar_eclipse` | Standard global magnitude at the point of greatest eclipse: obscured solar-diameter fraction for partial eclipses and Moon/Sun apparent-diameter ratio for annular, total, and hybrid eclipses. |
+| `catalog_mag` | `solar_eclipse` | Standard global magnitude at greatest eclipse: Moon/Sun apparent-diameter ratio when the shadow axis reaches the terrestrial ellipsoid; otherwise the obscured solar-diameter fraction at the closest surface point, including partial and non-central annular/total eclipses. |
 | `obscuration` | `solar_eclipse` | Geocentric apparent-disk obscuration fraction. |
 | `gamma` | `lunar_eclipse` / `solar_eclipse` | Normalized offset of eclipse center relative to the shadow axis. |
 | `eps_deg` | `lunar_eclipse` | Geometric angle parameter of the lunar eclipse, in degrees. |

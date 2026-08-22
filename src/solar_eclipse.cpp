@@ -1113,7 +1113,9 @@ Vec3 ellipsoid_up(const Vec3&point){
 	return normal/n;
 }
 
-bool shadow_axis_surface_point(const BodyEcefState&body,Vec3&point){
+bool shadow_axis_surface_point(const BodyEcefState&body,Vec3&point,
+							   bool&axis_intersects){
+	axis_intersects=false;
 	Vec3 direction=body.moon_ecef-body.sun_ecef;
 	double dn=direction.norm();
 	if(!(dn>0.0)){
@@ -1144,6 +1146,7 @@ bool shadow_axis_surface_point(const BodyEcefState&body,Vec3&point){
 		}
 		if(std::isfinite(t)){
 			point=origin+t*direction;
+			axis_intersects=true;
 			return finite_vec(point);
 		}
 	}
@@ -1193,26 +1196,34 @@ bool shadow_axis_surface_point(const BodyEcefState&body,Vec3&point){
 	return finite_vec(point)&&std::isfinite(best);
 }
 
-bool eval_catalog_magnitude(EphRead&eph,double jd_tdb,const std::string&type,
-							double&magnitude){
+bool eval_greatest_surface(EphRead&eph,double jd_tdb,TopoEval&topo,
+						   bool&axis_intersects){
 	BodyEcefState body;
 	if(!eval_body_ecef(eph,jd_tdb,body)){
 		return false;
 	}
 	PointObserver observer;
-	if(!shadow_axis_surface_point(body,observer.ecef)){
+	if(!shadow_axis_surface_point(body,observer.ecef,axis_intersects)){
 		return false;
 	}
 	observer.up_ecef=ellipsoid_up(observer.ecef);
 	observer.beta_ecef=observer_beta_ecef(observer.ecef);
-	TopoEval topo;
-	if(!eval_topo_from_body(body,observer,topo)||!(topo.sd_sun>0.0)){
+	return eval_topo_from_body(body,observer,topo)&&topo.sd_sun>0.0;
+}
+
+bool eval_catalog_magnitude(const TopoEval&topo,bool axis_intersects,
+							double&magnitude){
+	if(!(topo.sd_sun>0.0)){
 		return false;
 	}
-	if(type=="P"){
-		magnitude=topo.mag;
-	}else{
+	// Only a central line has coincident apparent centres, for which the
+	// catalog magnitude is the apparent-diameter ratio.  When the axis misses
+	// the ellipsoid (including non-central annular/total eclipses), magnitude is
+	// the obscured fraction of the solar diameter at the closest surface point.
+	if(axis_intersects){
 		magnitude=topo.sd_moon/topo.sd_sun;
+	}else{
+		magnitude=topo.mag;
 	}
 	return std::isfinite(magnitude)&&magnitude>=0.0;
 }
@@ -1470,23 +1481,15 @@ bool calc_solar_eclipse_impl(EphRead&eph,double jd_tdb_near_new_moon,
 		find_contact_metric_minimum(eph,jd_tdb_near_new_moon,true,&jd_inner_min,
 								   &f_inner_min,&g_inner);
 	bool has_internal_contacts=has_inner_min&&(f_inner_min<=0.0);
+	TopoEval greatest_surface;
+	bool axis_intersects_earth=false;
+	if(!eval_greatest_surface(eph,ans.jd_tdb_max,greatest_surface,
+							  axis_intersects_earth)){
+		return false;
+	}
 	if(has_internal_contacts){
 		const GeoEval&g_ref=std::isfinite(jd_inner_min)?g_inner:g_max;
-		double f_any_at_max=std::numeric_limits<double>::quiet_NaN();
-		double f_inner_at_max=std::numeric_limits<double>::quiet_NaN();
-		if(!eval_global_metrics(eph,ans.jd_tdb_max,f_any_at_max,
-								f_inner_at_max,nullptr)){
-			return false;
-		}
-		(void)f_inner_at_max;
-		// f_any = signed axis-to-limb distance - penumbral radius.  Removing
-		// the cone radius tells whether the axis itself intersects the Earth.
-		// A non-central eclipse cannot be hybrid: its grazing central phase is
-		// total or annular according to the cone at the fundamental plane.
-		bool axis_intersects_earth=(f_any_at_max+g_max.rp)<=0.0;
-		if(g_ref.ru>=0.0){
-			ans.type="T";
-		}else if(axis_intersects_earth){
+		if(axis_intersects_earth&&g_ref.ru<0.0){
 			double ru_sub=
 				g_ref.ru+kReEqA*(kRsA-kRmA)/g_ref.D;
 			if(ru_sub>=0.0){
@@ -1495,12 +1498,16 @@ bool calc_solar_eclipse_impl(EphRead&eph,double jd_tdb_near_new_moon,
 				ans.type="A";
 			}
 		}else{
-			ans.type="A";
+			// For a non-central eclipse the fundamental-plane cone sign is not
+			// sufficient: the nearest terrestrial point can lie on either side
+			// of the umbral apex.  Classify from the actual apparent radii there.
+			ans.type=greatest_surface.sd_moon>=greatest_surface.sd_sun?"T":"A";
 		}
 	}else{
 		ans.type="P";
 	}
-	if(!eval_catalog_magnitude(eph,ans.jd_tdb_max,ans.type,ans.catalog_mag)){
+	if(!eval_catalog_magnitude(greatest_surface,axis_intersects_earth,
+							   ans.catalog_mag)){
 		return false;
 	}
 
