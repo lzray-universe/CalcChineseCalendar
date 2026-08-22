@@ -175,6 +175,10 @@ int run_cli_args(const std::vector<std::string>&args){
 	if(first=="eclipse"){
 		return cmd_eclipse(tail_for(first));
 	}
+	if(first=="eclipse-magnitude"){
+		return cmd_eclipse_magnitude(
+			std::vector<std::string>(parsed.begin()+1,parsed.end()));
+	}
 	if(first=="festival"){
 		return cmd_fest(tail_for(first));
 	}

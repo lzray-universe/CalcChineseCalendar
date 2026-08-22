@@ -60,6 +60,13 @@ bool calc_solar_eclipse(EphRead&eph,double jd_tdb_near_new_moon,SolarEclipse*out
 
 bool calc_solar_eclipse_from_max(EphRead&eph,double jd_tdb_max,SolarEclipse*out);
 
+// Recompute only the catalog magnitude and obscuration at an already known
+// greatest-eclipse instant. This avoids repeating contact searches and
+// Besselian polynomial generation when refreshing an eclipse catalog.
+bool calc_solar_eclipse_magnitude_from_max(EphRead&eph,double jd_tdb_max,
+										   const std::string&type,double*mag,
+										   double*obscuration);
+
 std::vector<EventRec> bld_solar_eclipse_events(EphRead&eph,
 												const YearResult&yr,
 												int tz_off);

@@ -14,5 +14,6 @@
 #include "query/cmd_next_range_search.cpp"
 #include "query/cmd_zodiac.cpp"
 #include "query/cmd_eclipse.cpp"
+#include "query/cmd_eclipse_magnitude.cpp"
 #include "query/cmd_fest_alm.cpp"
 #include "query/core/spk.cpp"

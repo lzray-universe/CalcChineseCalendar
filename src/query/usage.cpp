@@ -204,6 +204,14 @@ void use_eclipse(){
 		  "121.47 --kind both --format json\n";
 }
 
+void use_eclipse_magnitude(){
+	std::cout
+		<<"Usage:\n"
+		<<"  lunar eclipse-magnitude <bsp|@series> --input <tsv> [--out <tsv>]\n"
+		<<"Input columns: id, jd_tdb_max, type(P|A|T|H). A header is optional.\n"
+		<<"Output columns: id, jd_tdb_max, type, mag, obscuration.\n";
+}
+
 void use_fest(){
 	std::cout<<"Usage:\n"
 			 <<"  lunar festival [bsp] <year>\n"

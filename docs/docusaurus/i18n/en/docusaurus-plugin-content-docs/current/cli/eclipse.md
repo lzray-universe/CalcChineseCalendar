@@ -59,6 +59,25 @@ lunar eclipse [bsp] --visible-near <time> --point-lat <deg> --point-lon <deg>
 - `txt`: readable eclipse summary.
 - `geojson`: global visibility FeatureCollection; selecting this format enables global visibility computation.
 
+Global solar-eclipse `mag` is the greatest surface magnitude at the instant of
+greatest eclipse, not geocentric disc overlap. Partial eclipses use the mean
+penumbral lunar radius `k1=0.2724880`; total, annular, and hybrid eclipses use
+the mean-minimum lunar radius `k2=0.2722810`, matching the Five Millennium
+Canon convention. `obscuration` is the fraction of the solar-disc area covered.
+
+## Batch magnitude refresh
+
+When the greatest-eclipse `JD TDB` and type are already known, contact searches
+and Besselian polynomial reconstruction can be skipped:
+
+```bash
+lunar eclipse-magnitude ./de441.bsp --input maxima.tsv --out magnitudes.tsv
+```
+
+Input columns are `id jd_tdb_max type`, where `type` is `P`, `A`, `T`, or `H`.
+The output adds `mag` and `obscuration`. This mode refreshes an existing catalog;
+it does not redetermine the eclipse type or greatest-eclipse instant.
+
 ## Examples
 
 ```bash

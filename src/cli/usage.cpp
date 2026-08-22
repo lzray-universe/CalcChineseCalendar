@@ -114,6 +114,7 @@ void use_main(){
 			 <<"  lunar range    ...\n"
 			 <<"  lunar search   ...\n"
 			 <<"  lunar eclipse  ...\n"
+			 <<"  lunar eclipse-magnitude ...\n"
 			 <<"  lunar festival ...\n"
 			 <<"  lunar almanac  ...\n"
 			 <<"  lunar info     ...\n"

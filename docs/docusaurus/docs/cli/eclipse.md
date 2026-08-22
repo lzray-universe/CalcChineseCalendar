@@ -59,6 +59,23 @@ lunar eclipse [bsp] --visible-near <time> --point-lat <deg> --point-lon <deg>
 - `txt`：人类可读的食象摘要。
 - `geojson`：全球可见性 FeatureCollection；使用该格式会开启全球可见性计算。
 
+日食全局 `mag` 是最大食时刻地表最大食分，不是地心圆面重叠量。偏食采用
+`k1=0.2724880` 的平均半影月球半径；全食、环食和全环食采用
+`k2=0.2722810` 的平均最小月球半径，与 Five Millennium Canon 的约定一致。
+`obscuration` 是太阳圆面被遮蔽的面积比例。
+
+## 批量刷新日食食分
+
+已知最大食的 `JD TDB` 和类型时，可跳过接触点搜索与贝塞尔多项式重建：
+
+```bash
+lunar eclipse-magnitude ./de441.bsp --input maxima.tsv --out magnitudes.tsv
+```
+
+输入列为 `id jd_tdb_max type`，其中 `type` 为 `P`、`A`、`T` 或 `H`；输出追加
+`mag` 和 `obscuration`。该模式只适合刷新已有目录，不负责重新判断食类型或
+最大食时刻。
+
 ## 示例
 
 ```bash

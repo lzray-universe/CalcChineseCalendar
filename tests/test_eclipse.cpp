@@ -67,6 +67,14 @@ TEST(SolarEclipseSeries, TotalEclipseRegression){
 	EXPECT_NEAR(std::hypot(ecl.besselian.x,ecl.besselian.y),
 				std::fabs(ecl.gamma),1e-10);
 	EXPECT_NEAR(ecl.jd_tdb_max,2461265.241032,10.0/86400.0);
+	EXPECT_NEAR(ecl.mag,1.0386,2e-4);
+	EXPECT_DOUBLE_EQ(ecl.obscuration,1.0);
+	double fast_mag=0.0;
+	double fast_obscuration=0.0;
+	ASSERT_TRUE(calc_solar_eclipse_magnitude_from_max(
+		eph,ecl.jd_tdb_max,ecl.type,&fast_mag,&fast_obscuration));
+	EXPECT_DOUBLE_EQ(fast_mag,ecl.mag);
+	EXPECT_DOUBLE_EQ(fast_obscuration,ecl.obscuration);
 	EXPECT_TRUE(std::isfinite(ecl.besselian.tan_f1));
 	EXPECT_TRUE(std::isfinite(ecl.besselian.tan_f2));
 
@@ -75,4 +83,22 @@ TEST(SolarEclipseSeries, TotalEclipseRegression){
 	EXPECT_DOUBLE_EQ(detail.jd_tdb_max,ecl.jd_tdb_max);
 	EXPECT_DOUBLE_EQ(detail.gamma,ecl.gamma);
 	EXPECT_DOUBLE_EQ(detail.besselian.jd_tdb_epoch,ecl.jd_tdb_max);
+
+	const double annular_jd_utc=greg2jd(2026,2,17,0,0,0.0)-UTC8DAY;
+	SolarEclipse annular;
+	ASSERT_TRUE(calc_solar_eclipse(
+		eph,TimeScale::utc_to_tdb(annular_jd_utc),&annular));
+	EXPECT_EQ(annular.type,"A");
+	EXPECT_NEAR(annular.mag,0.9630,1e-3);
+	EXPECT_GT(annular.obscuration,0.0);
+	EXPECT_LT(annular.obscuration,1.0);
+
+	const double partial_jd_utc=greg2jd(2025,3,29,0,0,0.0)-UTC8DAY;
+	SolarEclipse partial;
+	ASSERT_TRUE(calc_solar_eclipse(
+		eph,TimeScale::utc_to_tdb(partial_jd_utc),&partial));
+	EXPECT_EQ(partial.type,"P");
+	EXPECT_NEAR(partial.mag,0.9376,1.5e-3);
+	EXPECT_GT(partial.obscuration,0.0);
+	EXPECT_LT(partial.obscuration,1.0);
 }
