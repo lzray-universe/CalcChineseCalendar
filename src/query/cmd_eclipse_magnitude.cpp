@@ -101,12 +101,13 @@ int cmd_eclipse_magnitude(const std::vector<std::string>&args){
 		}
 		double mag=0.0;
 		double obscuration=0.0;
+		std::string corrected_type;
 		if(!calc_solar_eclipse_magnitude_from_max(
-			   eph,jd_tdb,fields[2],&mag,&obscuration)){
+			   eph,jd_tdb,fields[2],&mag,&obscuration,&corrected_type)){
 			throw std::runtime_error(
 				"failed eclipse magnitude at line "+std::to_string(line_number));
 		}
-		*output<<fields[0]<<'\t'<<format_num(jd_tdb)<<'\t'<<fields[2]<<'\t'
+		*output<<fields[0]<<'\t'<<format_num(jd_tdb)<<'\t'<<corrected_type<<'\t'
 			   <<format_num(mag)<<'\t'<<format_num(obscuration)<<'\n';
 	}
 	return 0;

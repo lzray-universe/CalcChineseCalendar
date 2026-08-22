@@ -65,7 +65,8 @@ bool calc_solar_eclipse_from_max(EphRead&eph,double jd_tdb_max,SolarEclipse*out)
 // Besselian polynomial generation when refreshing an eclipse catalog.
 bool calc_solar_eclipse_magnitude_from_max(EphRead&eph,double jd_tdb_max,
 										   const std::string&type,double*mag,
-										   double*obscuration);
+										   double*obscuration,
+										   std::string*corrected_type=nullptr);
 
 std::vector<EventRec> bld_solar_eclipse_events(EphRead&eph,
 												const YearResult&yr,

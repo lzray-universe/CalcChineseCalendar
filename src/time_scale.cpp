@@ -11,6 +11,18 @@ static double delta53(double year){
 	return base+corr;
 }
 
+// Observationally fitted historical Delta T polynomials from the eclipse
+// canon convention.  The long-range delta53 model remains in use outside the
+// modern historical interval and for the far-future export range.
+static double historical_delta_t(double year){
+	if(year<1961.0){
+		double t=year-1950.0;
+		return 29.07+0.407*t-t*t/233.0+t*t*t/2547.0;
+	}
+	double t=year-1975.0;
+	return 45.45+1.067*t-t*t/260.0-t*t*t/718.0;
+}
+
 }
 
 double TimeScale::tdb_to_tt(double jd_tdb){ return jd_tdb; }
@@ -74,14 +86,14 @@ double TimeScale::tdb_to_utc(double jd_tdb){
 	double jd_tt=tdb_to_tt(jd_tdb);
 	double year=2000.0+(jd_tt-2451544.5)/365.2425;
 
-	if(year<1970.0||year>2026.0){
-		double delta_t=delta53(year);
+	if(year>=1941.0&&year<1972.0){
+		double delta_t=historical_delta_t(year);
 		double jd_ut1=jd_tt-delta_t/SEC_DAY;
 		return jd_ut1;
 	}
 
-	if(year<1972.0){
-		double delta_t=deltayr(year);
+	if(year<1941.0||year>2026.0){
+		double delta_t=delta53(year);
 		double jd_ut1=jd_tt-delta_t/SEC_DAY;
 		return jd_ut1;
 	}
@@ -98,14 +110,14 @@ double TimeScale::tdb_to_utc(double jd_tdb){
 double TimeScale::utc_to_tdb(double jd_utc){
 	double year=2000.0+(jd_utc-2451544.5)/365.2425;
 
-	if(year<1970.0||year>2026.0){
-		double delta_t=delta53(year);
+	if(year>=1941.0&&year<1972.0){
+		double delta_t=historical_delta_t(year);
 		double jd_tdb=jd_utc+delta_t/SEC_DAY;
 		return jd_tdb;
 	}
 
-	if(year<1972.0){
-		double delta_t=deltayr(year);
+	if(year<1941.0||year>2026.0){
+		double delta_t=delta53(year);
 		double jd_tdb=jd_utc+delta_t/SEC_DAY;
 		return jd_tdb;
 	}

@@ -50,7 +50,7 @@ TEST(SolarEclipseSeries, TotalEclipseRegression){
 	ASSERT_TRUE(ecl.besselian.has);
 	EXPECT_NEAR(ecl.besselian.jd_tdb_epoch,ecl.jd_tdb_max,1e-12);
 	EXPECT_NEAR(ecl.besselian.l1,ecl.rp_re,1e-12);
-	EXPECT_NEAR(ecl.besselian.l2,ecl.ru_re,1e-12);
+	EXPECT_NEAR(ecl.besselian.l2,-ecl.ru_re,1e-12);
 	EXPECT_NEAR(ecl.besselian.x_coeff[0],ecl.besselian.x,1e-12);
 	EXPECT_NEAR(ecl.besselian.y_coeff[0],ecl.besselian.y,1e-12);
 	auto axis_distance2=[&](double hour){
@@ -101,4 +101,38 @@ TEST(SolarEclipseSeries, TotalEclipseRegression){
 	EXPECT_NEAR(partial.mag,0.9376,1.5e-3);
 	EXPECT_GT(partial.obscuration,0.0);
 	EXPECT_LT(partial.obscuration,1.0);
+}
+
+TEST(SolarEclipseCatalog, HistoricalBoundaryMagnitudes){
+	EphRead eph("@series");
+	struct Case{
+		double jd_tdb;
+		const char*input_type;
+		const char*expected_type;
+		double expected_mag;
+	};
+	const Case cases[]={
+		{2433359.1472370834,"A","A",0.9620},
+		{2435958.5037939330,"A","A",0.9799},
+		{2436134.7041950226,"T","T",1.0013},
+		{2439265.9021016695,"H","A",0.9991},
+		{2439796.7353726323,"T","T",1.0126},
+	};
+	for(const auto&item : cases){
+		double mag=0.0;
+		double obscuration=0.0;
+		std::string corrected_type;
+		ASSERT_TRUE(calc_solar_eclipse_magnitude_from_max(
+			eph,item.jd_tdb,item.input_type,&mag,&obscuration,&corrected_type));
+		EXPECT_EQ(corrected_type,item.expected_type);
+		EXPECT_NEAR(mag,item.expected_mag,2e-4);
+		EXPECT_GE(obscuration,0.0);
+		EXPECT_LE(obscuration,1.0);
+	}
+}
+
+TEST(TimeScale, HistoricalDeltaT1950){
+	const double jd_tdb=2433359.1472370834;
+	double delta_t=(jd_tdb-TimeScale::tdb_to_utc(jd_tdb))*SEC_DAY;
+	EXPECT_NEAR(delta_t,29.2,0.1);
 }
