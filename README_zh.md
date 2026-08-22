@@ -1123,7 +1123,7 @@ lunar eclipse --visible-near 2025-01-01T00:00:00+08:00 --point-lat 31.23 --point
 | `pen_mag` | `lunar_eclipse` | 半影食分。 |
 | `umb_mag` | `lunar_eclipse` | 本影食分。 |
 | `mag` | `solar_eclipse` | 为兼容保留的地心视圆盘重叠口径食分；不是食甚地点的标准目录食分。 |
-| `catalog_mag` | `solar_eclipse` | 食甚地点的标准全球食分：偏食为太阳直径被遮蔽比例，环食、全食和全环食为月/日视直径比。 |
+| `catalog_mag` | `solar_eclipse` | 标准全球食分：影轴命中地球椭球时取月/日视直径比；影轴未命中时取最近地表点的太阳直径遮蔽比例，包括偏食及非中心环食、全食。 |
 | `catalog_obscuration` | `solar_eclipse` | 标准食甚地点的太阳圆面面积遮掩比例。 |
 | `obscuration` | `solar_eclipse` | 地心视圆盘重叠口径的太阳被遮蔽面积比例。 |
 | `gamma` | `lunar_eclipse` / `solar_eclipse` | 食中心相对影轴的归一化偏距。 |
