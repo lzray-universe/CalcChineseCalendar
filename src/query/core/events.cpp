@@ -45,8 +45,8 @@ std::vector<std::string> el_csv_hdr(bool calc_eclipse){
 		"p4_pa_deg","p4_axis_deg"
 	}};
 	out.insert(out.end(),extra.begin(),extra.end());
-	const std::array<const char*,17> solar_extra={{
-		"solar_eclipse_type","solar_eclipse_mag",
+	const std::array<const char*,18> solar_extra={{
+		"solar_eclipse_type","solar_eclipse_mag","solar_eclipse_catalog_mag",
 		"solar_eclipse_obscuration","solar_eclipse_gamma",
 		"solar_eclipse_sep_max_deg","solar_eclipse_sun_sd_max_deg",
 		"solar_eclipse_moon_sd_max_deg","solar_eclipse_sun_dist_km",
@@ -86,7 +86,7 @@ void wr_csv_node(CsvWriter&w,const std::string&tag,double jd_tdb,
 	}
 	double jd_td=TimeScale::tdb_to_tt(jd_tdb);
 	double jd_utc=TimeScale::tdb_to_utc(jd_tdb);
-	double jd_ut1=jd_utc;
+	double jd_ut1=TimeScale::tdb_to_ut1(jd_tdb);
 	w.write_raw(tag+"_jd_ut1",format_num(jd_ut1));
 	w.write_raw(tag+"_jd_td",format_num(jd_td));
 	w.write_raw(tag+"_jd",format_num(jd_utc));
@@ -187,6 +187,7 @@ void wr_csv_ecl_blank(CsvWriter&w){
 void wr_csv_sol_ecl(CsvWriter&w,const SolarEclipse&ecl,int tz_off){
 	w.write_field("solar_eclipse_type",ecl.type);
 	wr_csv_num(w,"solar_eclipse_mag",ecl.mag);
+	wr_csv_num(w,"solar_eclipse_catalog_mag",ecl.catalog_mag);
 	wr_csv_num(w,"solar_eclipse_obscuration",ecl.obscuration);
 	wr_csv_num(w,"solar_eclipse_gamma",ecl.gamma);
 	wr_csv_num(w,"solar_eclipse_sep_max_deg",ecl.sep_max_deg);
@@ -207,6 +208,8 @@ void wr_csv_sol_ecl(CsvWriter&w,const SolarEclipse&ecl,int tz_off){
 void wr_csv_sol_ecl_blank(CsvWriter&w){
 	w.write_raw("solar_eclipse_type","");
 	wr_csv_num(w,"solar_eclipse_mag",std::numeric_limits<double>::quiet_NaN());
+	wr_csv_num(w,"solar_eclipse_catalog_mag",
+			   std::numeric_limits<double>::quiet_NaN());
 	wr_csv_num(w,"solar_eclipse_obscuration",
 			   std::numeric_limits<double>::quiet_NaN());
 	wr_csv_num(w,"solar_eclipse_gamma",std::numeric_limits<double>::quiet_NaN());
@@ -254,7 +257,7 @@ void wr_eltxt(std::ostream&os,const std::string&tz,
 	constexpr int kEclSummaryCols=33;
 	constexpr int kEclNodeCols=8*7;
 	constexpr int kEclExtraCols=kEclSummaryCols+kEclNodeCols;
-	constexpr int kSolarEclExtraCols=17;
+	constexpr int kSolarEclExtraCols=18;
 	os<<"tool=lunar format=txt type="<<type<<" tz_display="<<tz<<"\n";
 	os<<"kind\tcode\tname\tyear\tjd_tdb\tjd_utc\tutc_iso\tloc_iso";
 	if(calc_eclipse){
@@ -279,7 +282,8 @@ void wr_eltxt(std::ostream&os,const std::string&tz,
 		  <<"u4_zen_lat_deg\tu4_zen_lon_deg\tu4_pa_deg\tu4_axis_deg\t"
 		  <<"p4_jd_ut1\tp4_jd_td\tp4_jd\tp4_zen_lat_deg\tp4_zen_lon_deg\t"
 		  <<"p4_pa_deg\tp4_axis_deg"
-		  <<"\tsolar_ecl_type\tsolar_ecl_mag\tsolar_ecl_obscuration"
+		  <<"\tsolar_ecl_type\tsolar_ecl_mag\tsolar_ecl_catalog_mag"
+		  <<"\tsolar_ecl_obscuration"
 		  <<"\tsolar_ecl_gamma\tsolar_ecl_sep_max_deg"
 		  <<"\tsolar_ecl_sun_sd_max_deg\tsolar_ecl_moon_sd_max_deg"
 		  <<"\tsolar_ecl_sun_dist_km\tsolar_ecl_moon_dist_km"
@@ -393,6 +397,8 @@ void wr_eltxt(std::ostream&os,const std::string&tz,
 				os<<"\t"<<ecl.type;
 				os<<"\t";
 				out_num(ecl.mag);
+				os<<"\t";
+				out_num(ecl.catalog_mag);
 				os<<"\t";
 				out_num(ecl.obscuration);
 				os<<"\t";

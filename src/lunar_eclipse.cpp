@@ -622,7 +622,7 @@ bool fill_point_meta(EphRead&eph,double jd_tdb,bool inner_touch,
 	}
 
 	double jd_td=TimeScale::tdb_to_tt(jd_tdb);
-	double jd_ut1=TimeScale::tdb_to_utc(jd_tdb);
+	double jd_ut1=TimeScale::tdb_to_ut1(jd_tdb);
 	double uta=std::floor(jd_ut1);
 	double utb=jd_ut1-uta;
 	double tta=std::floor(jd_td);
@@ -1198,8 +1198,7 @@ bool calc_lunar_eclipse(EphRead&eph,double jd_tdb_near_full_moon,
 		ans.dur_tot_sec=(ans.jd_tdb_u3-ans.jd_tdb_u2)*SEC_DAY;
 	}
 
-	double jd_utc_max=TimeScale::tdb_to_utc(ans.jd_tdb_max);
-	ans.dt_max_sec=(ans.jd_tdb_max-jd_utc_max)*SEC_DAY;
+	ans.dt_max_sec=TimeScale::delta_t_seconds(TimeScale::tdb_to_tt(ans.jd_tdb_max));
 
 	double jd_opp=jd_tdb_near_full_moon;
 	double jd_opp_solved=std::numeric_limits<double>::quiet_NaN();
@@ -1340,8 +1339,9 @@ Vec3 moon_ecef(EphRead&eph,double jd_utc){
 	Mat3 eq_true=N*P*CoordTf::bias_mat();
 	Vec3 moon_eq=eq_true*moon_geo;
 
-	double uta=std::floor(jd_utc);
-	double utb=jd_utc-uta;
+	double jd_ut1=TimeScale::tdb_to_ut1(jd_tdb);
+	double uta=std::floor(jd_ut1);
+	double utb=jd_ut1-uta;
 	double tta=std::floor(jd_tdb);
 	double ttb=jd_tdb-tta;
 	double gast=lunar::precnut::gst06a(uta,utb,tta,ttb);
@@ -1474,11 +1474,19 @@ std::vector<EventRec> bld_lunar_eclipse_events(EphRead&eph,const YearResult&yr,
 		ev.kind="lunar_eclipse";
 		ev.code=ecl_code(ecl.type);
 		ev.name=ecl_name(ecl.type);
-		ev.year=yr.year;
 		ev.jd_tdb=ecl.jd_tdb_max;
 		ev.jd_utc=TimeScale::tdb_to_utc(ecl.jd_tdb_max);
 		ev.utc_iso=fmt_iso(ev.jd_utc,0,true);
 		ev.loc_iso=fmt_iso(ev.jd_utc,tz_off,true);
+		int event_year=0;
+		int month=0;
+		int day=0;
+		int hour=0;
+		int minute=0;
+		double second=0.0;
+		jd2greg(ev.jd_utc+static_cast<double>(tz_off)/1440.0,event_year,month,day,
+				 hour,minute,second);
+		ev.year=event_year;
 		out.push_back(std::move(ev));
 	}
 	std::sort(out.begin(),out.end(),[](const EventRec&a,const EventRec&b){

@@ -1126,7 +1126,8 @@ Notes:
 | --- | --- | --- |
 | `pen_mag` | `lunar_eclipse` | Penumbral magnitude. |
 | `umb_mag` | `lunar_eclipse` | Umbral magnitude. |
-| `mag` | `solar_eclipse` | Geocentric apparent-disk eclipse magnitude; use `max_mag` for site or grid magnitude. |
+| `mag` | `solar_eclipse` | Compatibility geocentric apparent-disc overlap magnitude; not the standard catalog magnitude at the point of greatest eclipse. |
+| `catalog_mag` | `solar_eclipse` | Standard global magnitude at the point of greatest eclipse: obscured solar-diameter fraction for partial eclipses and Moon/Sun apparent-diameter ratio for annular, total, and hybrid eclipses. |
 | `obscuration` | `solar_eclipse` | Geocentric apparent-disk obscuration fraction. |
 | `gamma` | `lunar_eclipse` / `solar_eclipse` | Normalized offset of eclipse center relative to the shadow axis. |
 | `eps_deg` | `lunar_eclipse` | Geometric angle parameter of the lunar eclipse, in degrees. |
@@ -1136,7 +1137,7 @@ Notes:
 | `dur_pen_sec` | `lunar_eclipse` | Duration of the penumbral stage in seconds. |
 | `dur_umb_sec` | `lunar_eclipse` | Duration of the umbral stage in seconds. |
 | `dur_tot_sec` | `lunar_eclipse` | Duration of totality in seconds. |
-| `dt_max_sec` | `eclipse` | `TDB-UTC` difference at maximum eclipse, in seconds. |
+| `dt_max_sec` | `eclipse` | Delta T (`TT-UT1`) at maximum eclipse, in seconds. |
 | `sep_max_deg` | `solar_eclipse` | Angular separation between sun and moon centers at maximum eclipse, in degrees. |
 | `sun_sd_max_deg` | `solar_eclipse` | Apparent solar semidiameter at maximum eclipse, in degrees. |
 | `moon_sd_max_deg` | `solar_eclipse` | Apparent lunar semidiameter at maximum eclipse, in degrees. |
@@ -1298,7 +1299,7 @@ Notes:
 | `LunarEclipsePointVis` | `stage_window`, `lat_deg`, `lon_deg`, `height_m`, `visible`, `max_alt_deg`, `first_jd_utc`, `last_jd_utc`, `sample_count` | Point-visibility result of a lunar eclipse. |
 | `LunarEclipseGlobalVis` | `stage_window`, `jd_start_utc`, `jd_end_utc`, `lat_step_deg`, `lon_step_deg`, `sample_count`, `points` | Global grid visibility result of a lunar eclipse. |
 | `SolarBesselianElements` | `x`, `y`, `d_deg`, `mu_deg`, `l1`, `l2`, `tan_f1`, `tan_f2`, `*_coeff` | Solar-eclipse Besselian elements and cubic time polynomials. |
-| `SolarEclipse` | `has`, `type`, `jd_tdb_c1/c2/c3/c4/max`, `mag`, `obscuration`, `gamma`, `sep_max_deg`, `sun_sd_max_deg`, `moon_sd_max_deg`, `moon_dist_km`, `sun_dist_km`, `besselian` | Full solar-eclipse result. |
+| `SolarEclipse` | `has`, `type`, `jd_tdb_c1/c2/c3/c4/max`, `mag`, `catalog_mag`, `obscuration`, `gamma`, `sep_max_deg`, `sun_sd_max_deg`, `moon_sd_max_deg`, `moon_dist_km`, `sun_dist_km`, `besselian` | Full solar-eclipse result. |
 | `SolarEclipsePointVis` | `stage_window`, `lat_deg`, `lon_deg`, `height_m`, `has_eclipse`, `visible`, `central`, `max_mag`, `max_obscuration`, `max_sun_alt_deg`, `c1_jd_utc/c2_jd_utc/c3_jd_utc/c4_jd_utc/max_jd_utc` | Point-visibility result of a solar eclipse. |
 | `SolarEclipseGlobalVis` | `stage_window`, `jd_start_utc`, `jd_end_utc`, `lat_step_deg`, `lon_step_deg`, `sample_count`, `points` | Global grid visibility result of a solar eclipse. |
 

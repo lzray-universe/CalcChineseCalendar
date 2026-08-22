@@ -552,6 +552,7 @@ void write_sol_txt(std::ostream&os,const EclOpt&opt,const EclRes&res){
 	os<<"[solar_eclipse]\n";
 	os<<"type="<<e.type<<"\n";
 	os<<"mag="; out_num(os,e.mag); os<<"\n";
+	os<<"catalog_mag="; out_num(os,e.catalog_mag); os<<"\n";
 	os<<"obscuration="; out_num(os,e.obscuration); os<<"\n";
 	os<<"gamma="; out_num(os,e.gamma); os<<"\n";
 	os<<"sep_max_deg="; out_num(os,e.sep_max_deg); os<<"\n";

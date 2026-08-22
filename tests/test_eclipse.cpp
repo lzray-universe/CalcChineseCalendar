@@ -6,6 +6,7 @@
 
 #include "test_common.hpp"
 
+#include<algorithm>
 #include<cmath>
 
 TEST(LunarEclipseSeries, TotalEclipseRegression){
@@ -75,4 +76,79 @@ TEST(SolarEclipseSeries, TotalEclipseRegression){
 	EXPECT_DOUBLE_EQ(detail.jd_tdb_max,ecl.jd_tdb_max);
 	EXPECT_DOUBLE_EQ(detail.gamma,ecl.gamma);
 	EXPECT_DOUBLE_EQ(detail.besselian.jd_tdb_epoch,ecl.jd_tdb_max);
+}
+
+TEST(SolarEclipseSeries, GreatestEclipseMatchesCatalogAndIsSeedInvariant){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	EphRead eph(test_ephem());
+	struct CatalogCase{
+		int year;
+		int month;
+		int day;
+		int hour_td;
+		int minute_td;
+		double second_td;
+		const char*type;
+		double gamma;
+		double catalog_mag;
+	};
+	// Authoritative catalog values: greatest-eclipse TD, type and gamma.
+	// The 2014 event is deliberately included because it is a grazing,
+	// non-central annular eclipse (A-) and is sensitive to the old limb metric.
+	const std::array<CatalogCase,5> cases{{
+		{1900,5,28,14,53,56.0,"T",0.3943,1.0249},
+		{1900,11,22,7,19,43.0,"A",-0.2245,0.9421},
+		{2014,4,29,6,4,33.0,"A",-1.0000,0.9868},
+		{2025,3,29,10,48,36.0,"P",1.0405,0.93759},
+		{2029,7,11,15,37,19.0,"P",-1.4191,0.2303},
+	}};
+
+	for(const auto&item:cases){
+		SCOPED_TRACE(std::to_string(item.year)+"-"+
+					 std::to_string(item.month)+"-"+
+					 std::to_string(item.day));
+		const double catalog_td=greg2jd(item.year,item.month,item.day,
+									   item.hour_td,item.minute_td,item.second_td);
+		SolarEclipse ecl;
+		ASSERT_TRUE(calc_solar_eclipse(eph,catalog_td,&ecl));
+		ASSERT_TRUE(ecl.has);
+		EXPECT_EQ(ecl.type,item.type);
+		EXPECT_NEAR(ecl.jd_tdb_max,catalog_td,5.0/86400.0);
+		EXPECT_NEAR(ecl.gamma,item.gamma,0.0002);
+		EXPECT_NEAR(ecl.catalog_mag,item.catalog_mag,0.0025);
+
+		SolarEclipse detail;
+		ASSERT_TRUE(calc_solar_eclipse_from_max(eph,ecl.jd_tdb_max,&detail));
+		EXPECT_DOUBLE_EQ(detail.jd_tdb_max,ecl.jd_tdb_max);
+		EXPECT_DOUBLE_EQ(detail.catalog_mag,ecl.catalog_mag);
+
+		if(item.year==2014){
+			SolarEclipse early;
+			SolarEclipse late;
+			ASSERT_TRUE(calc_solar_eclipse(eph,catalog_td-6.0/24.0,&early));
+			ASSERT_TRUE(calc_solar_eclipse(eph,catalog_td+6.0/24.0,&late));
+			EXPECT_NEAR(early.jd_tdb_max,ecl.jd_tdb_max,0.01/86400.0);
+			EXPECT_NEAR(late.jd_tdb_max,ecl.jd_tdb_max,0.01/86400.0);
+			EXPECT_EQ(early.type,ecl.type);
+			EXPECT_EQ(late.type,ecl.type);
+		}
+	}
+}
+
+TEST(EclipseEventMetadata, UsesDisplayCivilYearAcrossCalculationBoundary){
+	if(!has_test_ephem()){
+		GTEST_SKIP()<<"requires series fallback or LUNAR_TEST_BSP";
+	}
+	EphRead eph(test_ephem());
+	SolLunCal solver(eph);
+	YearResult source_year=solver.compute_year(1897,nullptr);
+	std::vector<EventRec> events=bld_lunar_eclipse_events(eph,source_year,480);
+	auto it=std::find_if(events.begin(),events.end(),[](const EventRec&ev){
+		return ev.utc_iso.rfind("1898-01-08",0)==0;
+	});
+	ASSERT_NE(it,events.end());
+	EXPECT_EQ(it->year,1898);
+	EXPECT_EQ(it->loc_iso.substr(0,4),"1898");
 }

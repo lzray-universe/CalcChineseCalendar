@@ -764,6 +764,7 @@ TEST(CliSearch, SolarEclipseCsvIncludesSolarDetails){
 	EXPECT_NE(csv.find("kind,code,name,year,jd_tdb,jd_utc,utc_iso,loc_iso"),
 			  std::string::npos);
 	EXPECT_NE(csv.find("solar_eclipse_type"),std::string::npos);
+	EXPECT_NE(csv.find("solar_eclipse_catalog_mag"),std::string::npos);
 	EXPECT_NE(csv.find("solar_eclipse,partial"),std::string::npos);
 	EXPECT_NE(csv.find(",P,"),std::string::npos);
 

@@ -269,6 +269,7 @@ TEST(SeriesVsBspSolarEclipse, TotalEclipseTracksReference){
 	expect_close_jd(series_ecl.jd_tdb_c3,bsp_ecl.jd_tdb_c3,kEclipseTimeTolSec);
 	expect_close_jd(series_ecl.jd_tdb_c4,bsp_ecl.jd_tdb_c4,kEclipseTimeTolSec);
 	EXPECT_NEAR(series_ecl.mag,bsp_ecl.mag,kEclipseScalarTol);
+	EXPECT_NEAR(series_ecl.catalog_mag,bsp_ecl.catalog_mag,kEclipseScalarTol);
 	EXPECT_NEAR(series_ecl.obscuration,bsp_ecl.obscuration,kEclipseScalarTol);
 	EXPECT_NEAR(series_ecl.gamma,bsp_ecl.gamma,kEclipseScalarTol);
 	EXPECT_NEAR(series_ecl.sep_max_deg,bsp_ecl.sep_max_deg,kAngleTolDeg);
