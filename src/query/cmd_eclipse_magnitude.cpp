@@ -6,6 +6,8 @@ struct MagnitudeBatchOptions{
 	std::string ephem;
 	std::string input;
 	std::string output;
+	std::string tz="+08:00";
+	bool full=false;
 };
 
 std::string require_magnitude_value(const std::vector<std::string>&args,
@@ -28,6 +30,11 @@ MagnitudeBatchOptions parse_magnitude_batch(const std::vector<std::string>&args)
 			options.input=require_magnitude_value(args,i,args[i]);
 		}else if(args[i]=="--out"){
 			options.output=require_magnitude_value(args,i,args[i]);
+		}else if(args[i]=="--tz"){
+			options.tz=require_magnitude_value(args,i,args[i]);
+			parse_tz(options.tz);
+		}else if(args[i]=="--full"){
+			options.full=true;
 		}else{
 			throw std::invalid_argument("unknown eclipse-magnitude option: "+args[i]);
 		}
@@ -71,7 +78,10 @@ int cmd_eclipse_magnitude(const std::vector<std::string>&args){
 	}
 
 	EphRead eph(options.ephem);
-	*output<<"id\tjd_tdb_max\ttype\tmag\tobscuration\n";
+	if(!options.full){
+		*output<<"id\tjd_tdb_max\ttype\tmag\tobscuration\n";
+	}
+	const int tz_off=parse_tz(options.tz);
 	std::string line;
 	std::size_t line_number=0;
 	while(std::getline(input,line)){
@@ -99,16 +109,34 @@ int cmd_eclipse_magnitude(const std::vector<std::string>&args){
 			throw std::invalid_argument(
 				"invalid jd_tdb_max at line "+std::to_string(line_number));
 		}
-		double mag=0.0;
-		double obscuration=0.0;
-		std::string corrected_type;
-		if(!calc_solar_eclipse_magnitude_from_max(
-			   eph,jd_tdb,fields[2],&mag,&obscuration,&corrected_type)){
+		SolarEclipse eclipse;
+		if(!calc_solar_eclipse_from_max(eph,jd_tdb,&eclipse)||!eclipse.has){
 			throw std::runtime_error(
-				"failed eclipse magnitude at line "+std::to_string(line_number));
+				"failed eclipse refresh at line "+std::to_string(line_number));
 		}
-		*output<<fields[0]<<'\t'<<format_num(jd_tdb)<<'\t'<<corrected_type<<'\t'
-			   <<format_num(mag)<<'\t'<<format_num(obscuration)<<'\n';
+		if(options.full){
+			int year=0;
+			int month=0;
+			int day=0;
+			int hour=0;
+			int minute=0;
+			double second=0.0;
+			jd2greg(TimeScale::tdb_to_utc(eclipse.jd_tdb_max)+
+					 static_cast<double>(tz_off)/1440.0,
+					 year,month,day,hour,minute,second);
+			JsonWriter writer(*output,false);
+			writer.obj_begin();
+			writer.key("id");
+			writer.value(fields[0]);
+			writer.key("data");
+			wr_sol_ecljson(writer,eclipse,year,tz_off);
+			writer.obj_end();
+			*output<<'\n';
+		}else{
+			*output<<fields[0]<<'\t'<<format_num(jd_tdb)<<'\t'<<eclipse.type<<'\t'
+				   <<format_num(eclipse.catalog_mag)<<'\t'
+				   <<format_num(eclipse.catalog_obscuration)<<'\n';
+		}
 	}
 	return 0;
 }

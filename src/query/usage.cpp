@@ -207,9 +207,9 @@ void use_eclipse(){
 void use_eclipse_magnitude(){
 	std::cout
 		<<"Usage:\n"
-		<<"  lunar eclipse-magnitude <bsp|@series> --input <tsv> [--out <tsv>]\n"
+		<<"  lunar eclipse-magnitude <bsp|@series> --input <tsv> [--out <path>] [--full] [--tz +08:00]\n"
 		<<"Input columns: id, jd_tdb_max, type(P|A|T|H). A header is optional.\n"
-		<<"Output columns: id, jd_tdb_max, type, mag, obscuration.\n";
+		<<"Output: TSV catalog magnitude rows, or complete NDJSON records with --full.\n";
 }
 
 void use_fest(){
