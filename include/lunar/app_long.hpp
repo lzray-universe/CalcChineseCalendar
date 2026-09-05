@@ -5,10 +5,11 @@
 #include "lunar/frames.hpp"
 #include "lunar/spc_ephem.hpp"
 
-struct RetProp{
+struct AberState{
 	Pos3 X;
 	Vel3 V;
 	double tr;
+	double tr_rate=1.0;
 };
 
 struct EoTData{
@@ -26,8 +27,18 @@ struct EoTData{
 struct AberCorr{
 	static double lightday(const Pos3&vec);
 
-	static RetProp geo_prop(EphRead&eph,int target,double jd_tdb,
-							int max_iter=3);
+	// Same-epoch geometric state: target(t)-Earth(t).
+	static AberState geo_geom_state(EphRead&eph,int target,double jd_tdb);
+
+	// Converged one-way light-time state: target(t_emit)-Earth(t_receive),
+	// without gravitational deflection or observer aberration.
+	static AberState geo_lt_state(EphRead&eph,int target,double jd_tdb,
+								 int max_iter=6);
+
+	// Apparent state: light time, solar gravitational deflection and
+	// reception-epoch observer aberration, in that order.
+	static AberState geo_app_state(EphRead&eph,int target,double jd_tdb,
+								  int max_iter=6);
 
 	static Pos3 geo_app(EphRead&eph,int target,double jd_tdb,double*tr_out,
 						int max_iter=3);
@@ -37,7 +48,6 @@ struct AberCorr{
 
 struct AppLon{
 	EphRead&eph;
-	Mat3 frame_bias;
 
 	bool prec_ok;
 	double prec_jd;
@@ -60,6 +70,8 @@ struct AppLon{
 	Mat3 prec_mat(double jd_tdb);
 
 	Mat3 rot_mat(double jd_tdb);
+
+	double body_lam_app(int target,double jd_tdb);
 
 	std::pair<double,double> sun_calc(double jd_tdb);
 

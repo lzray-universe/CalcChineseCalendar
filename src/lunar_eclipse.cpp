@@ -92,7 +92,7 @@ EqSph vec_to_eqsph(const Vec3&v){
 Mat3 eq_true_mat(double jd_tdb){
 	Mat3 P=PrecNut::prec_mat(jd_tdb);
 	Mat3 N=PrecNut::nut_mat(jd_tdb);
-	return N*P*CoordTf::bias_mat();
+	return N*P;
 }
 
 bool fill_geo_coord(const Vec3&geo_eq,double radius_km,EclipseGeoCoord*out){
@@ -355,7 +355,7 @@ bool earth_projected_axes(const Vec3&axis_eq,double&re1,double&re2){
 
 bool eval_shadow_state(EphRead&eph,double jd_tdb,ShadowBodyState&st){
 	constexpr int max_iter=3;
-	RetProp sun=AberCorr::geo_prop(eph,eph.SUN,jd_tdb,max_iter);
+	AberState sun=AberCorr::geo_lt_state(eph,eph.SUN,jd_tdb,max_iter);
 	auto moon=eph.get_state(eph.MOON,eph.EARTH,jd_tdb);
 	st.s=raw_vec(sun.X);
 	st.s_dot=raw_vec(sun.V);
@@ -1336,16 +1336,10 @@ Vec3 moon_ecef(EphRead&eph,double jd_utc){
 
 	Mat3 P=PrecNut::prec_mat(jd_tdb);
 	Mat3 N=PrecNut::nut_mat(jd_tdb);
-	Mat3 eq_true=N*P*CoordTf::bias_mat();
+	Mat3 eq_true=N*P;
 	Vec3 moon_eq=eq_true*moon_geo;
 
-	double jd_ut1=TimeScale::tdb_to_ut1(jd_tdb);
-	double uta=std::floor(jd_ut1);
-	double utb=jd_ut1-uta;
-	double tta=std::floor(jd_tdb);
-	double ttb=jd_tdb-tta;
-	double gast=lunar::precnut::gst06a(uta,utb,tta,ttb);
-	return CoordTf::R3(gast)*moon_eq;
+	return PrecNut::earth_rot(jd_tdb)*moon_eq;
 }
 
 double topocentric_alt_deg(const Vec3&moon_ecef,const Vec3&obs_ecef,

@@ -4,6 +4,19 @@
 #include<iomanip>
 #include<sstream>
 
+namespace{
+
+long floor_div(long value,long divisor){
+	long q=value/divisor;
+	long r=value%divisor;
+	if(r!=0&&((r<0)!=(divisor<0))){
+		--q;
+	}
+	return q;
+}
+
+}
+
 double greg2jd(int year,int month,int day,int hour,int minute,double second){
 	int Y=year;
 	int M=month;
@@ -11,8 +24,8 @@ double greg2jd(int year,int month,int day,int hour,int minute,double second){
 		Y-=1;
 		M+=12;
 	}
-	int A=Y/100;
-	int B=2-A+(A/4);
+	long A=floor_div(static_cast<long>(Y),100L);
+	long B=2L-A+floor_div(A,4L);
 
 	double day_frac=(hour+(minute+second/60.0)/60.0)/24.0;
 
@@ -27,12 +40,12 @@ void jd2greg(double jd,int&year,int&month,int&day,int&hour,int&minute,
 	double F=(jd+0.5)-Z_d;
 	long Z=static_cast<long>(Z_d);
 	long A=Z;
-	long alpha=static_cast<long>((Z-1867216.25)/36524.25);
-	A=Z+1+alpha-alpha/4;
+	long alpha=static_cast<long>(std::floor((Z-1867216.25)/36524.25));
+	A=Z+1+alpha-floor_div(alpha,4L);
 	long B=A+1524;
-	long C=static_cast<long>((B-122.1)/365.25);
-	long D=static_cast<long>(365.25*C);
-	long E=static_cast<long>((B-D)/30.6001);
+	long C=static_cast<long>(std::floor((B-122.1)/365.25));
+	long D=static_cast<long>(std::floor(365.25*C));
+	long E=static_cast<long>(std::floor((B-D)/30.6001));
 
 	double day_d=B-D-std::floor(30.6001*E)+F;
 	day=static_cast<int>(std::floor(day_d));

@@ -28,7 +28,18 @@ struct DeltaTYearSample{
 	double seconds;
 };
 
+struct EopSample{
+	double mjd;
+	double xp_arcsec;
+	double yp_arcsec;
+	double ut1_utc_seconds;
+	double dx_mas;
+	double dy_mas;
+	bool predicted;
+};
+
 #include "delta_t_data.inc"
+#include "eop_data.inc"
 
 constexpr int kMonthlyFirstYear=1973;
 constexpr int kMonthlyFirstMonth=2;
@@ -55,6 +66,33 @@ double jd_from_decimal_year(double year){
 	double y0=greg2jd(whole,1,1,0,0,0.0);
 	double y1=greg2jd(whole+1,1,1,0,0,0.0);
 	return y0+fraction*(y1-y0);
+}
+
+bool eval_recent_eop(double jd_utc,EarthOrientation&out){
+	const double mjd=jd_utc-2400000.5;
+	if(mjd<kRecentEop.front().mjd||mjd>kRecentEop.back().mjd){
+		return false;
+	}
+	auto right=std::lower_bound(kRecentEop.begin(),kRecentEop.end(),mjd,
+		[](const EopSample&s,double value){ return s.mjd<value; });
+	if(right==kRecentEop.begin()||right==kRecentEop.end()){
+		const EopSample&s=(right==kRecentEop.end())?kRecentEop.back():*right;
+		out={true,s.predicted,s.ut1_utc_seconds,s.xp_arcsec,s.yp_arcsec,
+			 s.dx_mas,s.dy_mas};
+		return true;
+	}
+	const EopSample&b=*right;
+	const EopSample&a=*std::prev(right);
+	double u=(mjd-a.mjd)/(b.mjd-a.mjd);
+	auto lerp=[&](double x,double y){ return x+u*(y-x); };
+	out.available=true;
+	out.predicted=a.predicted||b.predicted;
+	out.ut1_utc_seconds=lerp(a.ut1_utc_seconds,b.ut1_utc_seconds);
+	out.xp_arcsec=lerp(a.xp_arcsec,b.xp_arcsec);
+	out.yp_arcsec=lerp(a.yp_arcsec,b.yp_arcsec);
+	out.dx_mas=lerp(a.dx_mas,b.dx_mas);
+	out.dy_mas=lerp(a.dy_mas,b.dy_mas);
+	return true;
 }
 
 double eval_smh_spline(double year){
@@ -202,6 +240,14 @@ double delta_t_from_jd(double jd_tt){
 		return std::numeric_limits<double>::quiet_NaN();
 	}
 
+	// The recent daily EOP record supersedes the lower-cadence Delta-T
+	// prediction. This snapshot is entirely within the current 37-leap-second
+	// era, so TT-UTC is exactly 69.184 s throughout its validity window.
+	EarthOrientation eop;
+	if(eval_recent_eop(jd_tt-69.184/SEC_DAY,eop)){
+		return 69.184-eop.ut1_utc_seconds;
+	}
+
 	double seconds=0.0;
 	if(eval_usno_monthly(jd_tt,seconds)){
 		return seconds;
@@ -284,6 +330,12 @@ double TimeScale::delta_t_seconds(double jd_tt){
 
 double TimeScale::deltayr(double year){
 	return delta_t_from_jd(jd_from_decimal_year(year));
+}
+
+EarthOrientation TimeScale::earth_orientation(double jd_utc){
+	EarthOrientation out;
+	eval_recent_eop(jd_utc,out);
+	return out;
 }
 
 double TimeScale::tdb_to_ut1(double jd_tdb){

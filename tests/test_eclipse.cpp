@@ -27,9 +27,9 @@ TEST(LunarEclipseSeries, TotalEclipseRegression){
 	EXPECT_LT(ecl.jd_tdb_max,ecl.jd_tdb_u3);
 	EXPECT_LT(ecl.jd_tdb_u3,ecl.jd_tdb_u4);
 	if(is_series_ephem(test_ephem())){
-		EXPECT_NEAR(ecl.lib.l_deg,-4.0686082308,1e-5);
-		EXPECT_NEAR(ecl.lib.b_deg,0.3789342709,1e-5);
-		EXPECT_NEAR(ecl.lib.c_deg,-21.2439672118,1e-5);
+		EXPECT_NEAR(ecl.lib.l_deg,-4.0681838374,1e-5);
+		EXPECT_NEAR(ecl.lib.b_deg,0.3782181667,1e-5);
+		EXPECT_NEAR(ecl.lib.c_deg,-21.2444894900,1e-5);
 	}
 }
 

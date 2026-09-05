@@ -25,4 +25,8 @@ struct PrecNut{
 	static std::pair<double,double> nut_ang(double jd_tdb);
 
 	static Mat3 nut_mat(double jd_tdb);
+
+	// True equator/equinox of date to ITRS, including celestial-pole offsets
+	// and polar motion whenever the bundled EOP snapshot covers the epoch.
+	static Mat3 earth_rot(double jd_tdb);
 };

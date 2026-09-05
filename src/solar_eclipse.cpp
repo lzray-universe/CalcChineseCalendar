@@ -140,7 +140,7 @@ std::string to_low(std::string s){
 Mat3 eq_true_mat(double jd_tdb){
 	Mat3 P=PrecNut::prec_mat(jd_tdb);
 	Mat3 N=PrecNut::nut_mat(jd_tdb);
-	return N*P*CoordTf::bias_mat();
+	return N*P;
 }
 
 Vec3 cross_vec(const Vec3&a,const Vec3&b){
@@ -357,8 +357,11 @@ double signed_gamma_re(const Vec3&axis,const Vec3&dvec,double jd_tdb){
 }
 
 bool eval_geo(EphRead&eph,double jd_tdb,GeoEval&g){
-	Vec3 sun=raw_vec(AberCorr::geo_app(eph,eph.SUN,jd_tdb,3));
-	Vec3 moon=raw_vec(AberCorr::geo_app(eph,eph.MOON,jd_tdb,3));
+	// The shadow cone is a physical light-path construction. Keep both
+	// vectors astrometric here: converged light time, without transforming
+	// them into the reception observer's apparent directions.
+	Vec3 sun=raw_vec(AberCorr::geo_lt_state(eph,eph.SUN,jd_tdb,6).X);
+	Vec3 moon=raw_vec(AberCorr::geo_lt_state(eph,eph.MOON,jd_tdb,6).X);
 	if(!finite_vec(sun)||!finite_vec(moon)){
 		return false;
 	}
@@ -1033,13 +1036,7 @@ bool eval_body_ecef(EphRead&eph,double jd_tdb,BodyEcefState&out){
 	Vec3 sun_eq=eq*sun_geo;
 	Vec3 moon_eq=eq*moon_geo;
 
-	double jd_ut1=TimeScale::tdb_to_ut1(jd_tdb);
-	double uta=std::floor(jd_ut1);
-	double utb=jd_ut1-uta;
-	double tta=std::floor(jd_tdb);
-	double ttb=jd_tdb-tta;
-	double gast=lunar::precnut::gst06a(uta,utb,tta,ttb);
-	Mat3 R=CoordTf::R3(gast);
+	Mat3 R=PrecNut::earth_rot(jd_tdb);
 	out.sun_ecef=R*sun_eq;
 	out.moon_ecef=R*moon_eq;
 	return finite_vec(out.sun_ecef)&&finite_vec(out.moon_ecef);

@@ -23,6 +23,9 @@ add_executable(lunar_tests
     test_series_vs_bsp.cpp
     test_solar_zodiac.cpp
 	test_time_scale.cpp
+	test_math_frames.cpp
+	test_app_long.cpp
+	test_star_calc.cpp
     test_almanac_i18n.cpp
     test_interact.cpp
 )
