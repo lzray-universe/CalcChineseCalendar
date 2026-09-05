@@ -904,18 +904,6 @@ std::string code_token(const std::string&text){
 	return out;
 }
 
-double lerp_root(double t0,double f0,double t1,double f1){
-	if(!std::isfinite(t0)||!std::isfinite(t1)||!std::isfinite(f0)||
-	   !std::isfinite(f1)||!(t1>t0)){
-		return std::numeric_limits<double>::quiet_NaN();
-	}
-	if(f0==f1){
-		return 0.5*(t0+t1);
-	}
-	double t=t0-f0*(t1-t0)/(f1-f0);
-	return (t>=t0&&t<=t1)?t:0.5*(t0+t1);
-}
-
 bool zero_cross(double f0,double f1){
 	return (f0==0.0)||(f1==0.0)||(f0<0.0&&f1>0.0)||(f0>0.0&&f1<0.0);
 }
@@ -951,6 +939,14 @@ double geo_body_lam(AppLon&app,const GeoBody&b,double jd_tdb){
 		return app.sun_calc(jd_tdb).first;
 	}
 	return body_lam(app,b.eph_id,jd_tdb);
+}
+
+double star_true_ecliptic_lam(const StarRecord&st,const AppCtx&ctx,
+							  double jd_tdb){
+	Vec3 su=star_eq_u(st,ctx);
+	double eps=PrecNut::mean_obl(jd_tdb)+PrecNut::nut_ang(jd_tdb).second;
+	Vec3 xec=CoordTf::R1(eps)*su;
+	return norm2pi(std::atan2(xec.y,xec.x));
 }
 
 std::pair<std::size_t,std::size_t> orient_pair_idx(const std::vector<GeoBody>&b,
@@ -1162,14 +1158,7 @@ void find_star_body_aspect(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 		}
 		std::vector<double> lam_star(ts.size(),std::numeric_limits<double>::quiet_NaN());
 		for(std::size_t i=0;i<ts.size();++i){
-			Vec3 su=star_eq_u(st,ctxs[i]);
-			double eps=PrecNut::mean_obl(ts[i])+PrecNut::nut_ang(ts[i]).second;
-			Vec3 xec=CoordTf::R1(eps)*su;
-			double lm=std::atan2(xec.y,xec.x);
-			if(lm<0.0){
-				lm+=TWO_PI;
-			}
-			lam_star[i]=lm;
+			lam_star[i]=star_true_ecliptic_lam(st,ctxs[i],ts[i]);
 		}
 		for(std::size_t b=0;b<bodies.size();++b){
 			for(const auto&asp : aspects){
@@ -1184,7 +1173,13 @@ void find_star_body_aspect(std::vector<AstroEvt>&out,EphRead&eph,double st_utc,
 					if(!zero_cross(f0,f1)||std::fabs(f0)>1.7||std::fabs(f1)>1.7){
 						continue;
 					}
-					double tr=lerp_root(ts[k-1],f0,ts[k],f1);
+					auto phase_fn=[&](double t){
+						AppCtx ctx=make_ctx_tdb(eph,t);
+						double d=norm_pm_pi(star_true_ecliptic_lam(st,ctx,t)-
+										   geo_body_lam(app,bodies[b],t));
+						return norm_pm_pi(d-asp.target);
+					};
+					double tr=bisect_root(phase_fn,ts[k-1],ts[k]);
 					if(!std::isfinite(tr)){
 						continue;
 					}

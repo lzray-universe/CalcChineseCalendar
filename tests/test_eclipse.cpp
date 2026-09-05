@@ -26,10 +26,18 @@ TEST(LunarEclipseSeries, TotalEclipseRegression){
 	EXPECT_LT(ecl.jd_tdb_u2,ecl.jd_tdb_max);
 	EXPECT_LT(ecl.jd_tdb_max,ecl.jd_tdb_u3);
 	EXPECT_LT(ecl.jd_tdb_u3,ecl.jd_tdb_u4);
+	const double reference_ut1=greg2jd(2025,9,7,18,11,43.1);
+	EXPECT_NEAR(TimeScale::tdb_to_ut1(ecl.jd_tdb_max),reference_ut1,
+				8.0/86400.0);
+	EXPECT_NEAR(ecl.gamma,-0.2752,1e-4);
+	EXPECT_NEAR(ecl.sun_geo.ra_deg,166.53792,5e-4);
+	EXPECT_NEAR(ecl.sun_geo.dec_deg,5.76319,5e-4);
+	EXPECT_NEAR(ecl.moon_geo.ra_deg,346.66833,5e-4);
+	EXPECT_NEAR(ecl.moon_geo.dec_deg,-6.00247,5e-4);
 	if(is_series_ephem(test_ephem())){
-		EXPECT_NEAR(ecl.lib.l_deg,-4.0681838374,1e-5);
-		EXPECT_NEAR(ecl.lib.b_deg,0.3782181667,1e-5);
-		EXPECT_NEAR(ecl.lib.c_deg,-21.2444894900,1e-5);
+		EXPECT_NEAR(ecl.lib.l_deg,-4.0686082402,1e-5);
+		EXPECT_NEAR(ecl.lib.b_deg,0.3789342867,1e-5);
+		EXPECT_NEAR(ecl.lib.c_deg,-21.2439672146,1e-5);
 	}
 }
 
@@ -78,6 +86,20 @@ TEST(SolarEclipseSeries, TotalEclipseRegression){
 	EXPECT_DOUBLE_EQ(fast_obscuration,ecl.catalog_obscuration);
 	EXPECT_TRUE(std::isfinite(ecl.besselian.tan_f1));
 	EXPECT_TRUE(std::isfinite(ecl.besselian.tan_f2));
+
+	// Evaluate the fitted elements at 18:00 terrestrial time. These values
+	// are sensitive to accidentally feeding bare BCRS light-time vectors into
+	// the subsequent geocentric fundamental-plane transformation.
+	const double reference_tt=greg2jd(2026,8,12,18,0,0.0);
+	const double reference_tdb=TimeScale::tt_to_tdb(reference_tt);
+	const double hour=(reference_tdb-ecl.besselian.jd_tdb_epoch)*24.0;
+	auto eval_coeff=[&](const std::array<double,4>&coeff){
+		return ((coeff[3]*hour+coeff[2])*hour+coeff[1])*hour+coeff[0];
+	};
+	EXPECT_NEAR(eval_coeff(ecl.besselian.x_coeff),0.4755140,1.5e-5);
+	EXPECT_NEAR(eval_coeff(ecl.besselian.y_coeff),0.7711830,8e-6);
+	EXPECT_NEAR(eval_coeff(ecl.besselian.d_coeff_deg),14.796670,2e-4);
+	EXPECT_NEAR(eval_coeff(ecl.besselian.mu_coeff_deg),88.747787,2e-4);
 
 	SolarEclipse detail;
 	ASSERT_TRUE(calc_solar_eclipse_from_max(eph,ecl.jd_tdb_max,&detail));

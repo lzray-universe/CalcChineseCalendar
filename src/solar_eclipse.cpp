@@ -357,11 +357,11 @@ double signed_gamma_re(const Vec3&axis,const Vec3&dvec,double jd_tdb){
 }
 
 bool eval_geo(EphRead&eph,double jd_tdb,GeoEval&g){
-	// The shadow cone is a physical light-path construction. Keep both
-	// vectors astrometric here: converged light time, without transforming
-	// them into the reception observer's apparent directions.
-	Vec3 sun=raw_vec(AberCorr::geo_lt_state(eph,eph.SUN,jd_tdb,6).X);
-	Vec3 moon=raw_vec(AberCorr::geo_lt_state(eph,eph.MOON,jd_tdb,6).X);
+	// The downstream fundamental-plane chain is geocentric/GCRS-based, so
+	// supply reception-epoch apparent directions rather than bare BCRS
+	// light-time vectors.
+	Vec3 sun=raw_vec(AberCorr::geo_app(eph,eph.SUN,jd_tdb,6));
+	Vec3 moon=raw_vec(AberCorr::geo_app(eph,eph.MOON,jd_tdb,6));
 	if(!finite_vec(sun)||!finite_vec(moon)){
 		return false;
 	}

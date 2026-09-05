@@ -355,7 +355,9 @@ bool earth_projected_axes(const Vec3&axis_eq,double&re1,double&re2){
 
 bool eval_shadow_state(EphRead&eph,double jd_tdb,ShadowBodyState&st){
 	constexpr int max_iter=3;
-	AberState sun=AberCorr::geo_lt_state(eph,eph.SUN,jd_tdb,max_iter);
+	// The following true-equator/GCRS geometry expects a geocentric apparent
+	// state, including the reception-epoch frame transformation.
+	AberState sun=AberCorr::geo_app_state(eph,eph.SUN,jd_tdb,max_iter);
 	auto moon=eph.get_state(eph.MOON,eph.EARTH,jd_tdb);
 	st.s=raw_vec(sun.X);
 	st.s_dot=raw_vec(sun.V);
